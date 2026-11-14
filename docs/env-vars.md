@@ -14,3 +14,5 @@
 | `NETWATCH_DEV_DAEMON_ADDR` | UI (dev only) | unset | Point UI at a dev daemon; never read in packaged builds |
 
 Secrets: the per-boot API token is the only secret — auto-generated, never user-set, never logged.
+
+Dev template: `.env.example` (repo root) mirrors this list for local runs; copy it to `.env` only if you need to override defaults. Nothing reads `.env` yet — the daemon lands in Phase 1 (PLAN.md P1.1).

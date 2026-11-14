@@ -1,119 +1,184 @@
-# Net Watch Pro
+<p align="center">
+  <img src="docs/assets/net-watch-pro-logo.png" alt="Net Watch Pro logo" width="220" />
+</p>
 
-**See exactly which apps use your data and your network — privately, locally, in real time.**
+<h1 align="center">Net Watch Pro</h1>
 
-Net Watch Pro is a network traffic monitor and per-app data-usage tracker for Linux. A root daemon observes traffic with eBPF and writes local history; an unprivileged desktop UI shows live connections, per-app usage, and a searchable history. Monitor-first: firewall features arrive after V1.0, step by step.
+<p align="center">
+  <strong>A local-first Linux network-traffic monitor and per-app data-usage tracker, built with Rust, Tauri 2, Svelte 5, and Aya eBPF.</strong>
+</p>
 
-> **Status: documentation phase.** This repository currently contains the product's complete specification set (7 documents) and **no application code yet**. Everything below marked *(planned)* describes what the specs define, not what exists today.
+<p align="center">
+  <a href="https://github.com/zvirox/net-watch-pro/releases"><img src="https://img.shields.io/github/v/release/zvirox/net-watch-pro?include_prereleases&amp;label=latest%20release" alt="Latest release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/zvirox/net-watch-pro" alt="License" /></a>
+  <a href="https://github.com/zvirox/net-watch-pro/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/zvirox/net-watch-pro/ci.yml?label=CI" alt="CI status" /></a>
+</p>
 
-## Screenshots
+<p align="center">
+  <a href="https://github.com/zvirox/net-watch-pro/releases">Releases</a> ·
+  <a href="PLAN.md">Project plan</a> ·
+  <a href="CHECKLIST.md">Live progress checklist</a> ·
+  <a href="FEATURES.md">Feature build order</a> ·
+  <a href="#development-setup">Development</a> ·
+  <a href="#contributing">Contributing</a>
+</p>
 
-*(planned — placeholders until the UI exists)*
+## Project status
 
-| Dashboard | Live Connections | History |
-|---|---|---|
-| `![Dashboard](docs/img/dashboard.png)` | `![Live](docs/img/live.png)` | `![History](docs/img/history.png)` |
-| *usage timeline, top apps, totals* | *real-time per-app connection table* | *searchable 90-day history* |
+Net Watch Pro is **pre-alpha**. The repository currently contains the complete
+specification set (see [Project plan](PLAN.md) and the docs listed there) plus
+the Phase 0 foundation: a six-crate Cargo workspace, the Tauri 2 desktop
+shell, the UI workspace with the vendored design-system primitives, and CI.
+**No traffic monitoring exists yet** — the daemon observes nothing and the UI
+shows no data. Phase tracking, with per-task verification evidence, lives in
+the [progress checklist](CHECKLIST.md).
 
-## Key Features
+The [changelog](CHANGELOG.md) records what each tagged release contains. The
+first tagged release, `v0.0.1-alpha.1`, is the Phase 0 scaffold: it compiles,
+passes fmt/clippy/check, and ships no product features.
 
-- **Live Connections** — real-time table of active connections: app, PID, protocol, remote endpoint, rate (PRD §6.1 #1)
-- **Per-app usage accounting** — data used per app for today/week/month, with top-apps ranking (§6.1 #2)
-- **Dashboard** — usage timeline, top-talker chart, headline totals, per-interface breakdown (§6.1 #3)
-- **App detail pages** — per-app drill-down: usage over time, connections, endpoint summary (§6.1 #4)
-- **Local history** — 90-day default retention, automatic pruning, everything in SQLite (§6.1 #5)
-- **Freemium** — free tier as above; a Pro license key unlocks advanced history filters, CSV/JSON export, and retention up to 1 year (§6.1 #9)
-- **Local-only, verifiable** — no cloud, no telemetry, no outbound connections; the app's own Live view can prove it (PRD §4)
+## What works in the current checkout
 
-## Tech Stack
+- The workspace builds and passes the local gate: `cargo fmt --check`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, and
+  `cargo test --workspace` are green.
+- Five daemon-side crate skeletons (`netwatch-common`, `netwatch-core`,
+  `netwatchd`, `netwatch-api`, `xtask`) compile with zero external
+  dependencies and the workspace-wide lint set (`deny(unsafe_code)`,
+  `clippy::pedantic`, no `unwrap`/`expect` outside startup).
+- The Tauri 2 shell (`app/src-tauri`) compiles against system WebKit2GTK with
+  a least-privilege capability (`core:default`) and a strict CSP. It opens a
+  window showing a smoke UI; no daemon link yet.
+- The UI workspace (`app/`) runs Svelte 5 (runes-only), strict TypeScript,
+  ESLint flat config, and Prettier, with `npm run check` / `npm run lint`.
+- The DESIGN.md token system is implemented as CSS custom properties
+  (`app/src/lib/theme/tokens.css`): light and dark themes, chart palette,
+  type scale, spacing, radius, shadows, motion, with self-hosted Inter
+  Variable and JetBrains Mono — no font CDN fetches.
+- Vendored shadcn-svelte-style primitives (`button`, `input`, `table`) styled
+  strictly from those tokens; Tailwind is intentionally not a dependency.
+- CI (`.github/workflows/ci.yml`) runs the Rust and UI gates on every push
+  and pull request; the doc mirrors in `docs/` are the drift checks for
+  `API.md`, `DATABASE.md`, and the environment-variable list.
 
-| Layer | Choice |
-|---|---|
-| Desktop shell | Tauri 2 |
-| Frontend | Svelte 5 + shadcn-svelte |
-| Charts | ECharts |
-| Daemon backend | Rust + Tokio |
-| Traffic monitoring | Aya eBPF |
-| Database | SQLite (WAL) |
-| Platforms | Arch / CachyOS, deb- and rpm-based distros *(planned: AUR, apt repo, dnf repo)* |
+## Known limitations and work in progress
 
-## Quick Start
+- **No monitoring yet.** The eBPF collector, attribution, accounting, SQLite
+  persistence, and the localhost API arrive in Phases 1–3 (see
+  [PLAN.md](PLAN.md)). The UI's only screen is a Phase 0 smoke stub.
+- No packages exist. Arch, deb, and rpm packaging is planned for Phase 8;
+  until then the app runs only from a development checkout.
+- No license/Pro functionality, no exports, no history — freemium gates land
+  after the core monitoring slice (see [FEATURES.md](FEATURES.md)).
+- The reference teardown in `REAPM.md` documents a *different* product and is
+  background material only.
+- Firewall features are **out of scope until after V1.0** (PRD §12); the
+  monitor-first boundary is a product promise, not a roadmap shortcut.
 
-**Today (documentation phase):**
+## Architecture
 
-1. Clone the repository: `git clone <repo-url> && cd net-watch-pro`
-2. Read `AGENTS.md` first if you (or your AI assistant) will touch anything — it is the working rulebook.
-3. Read the specs in priority order: `PRD.md` → `DESIGN.md` → `ARCHITECTURE.md` → `DATABASE.md` → `API.md`.
+~~~mermaid
+flowchart LR
+  UI[Svelte 5 UI (unprivileged)] -->|localhost WS + REST<br/>bearer token| API[netwatch-api]
+  API --> Core[netwatch-core: accounting · attribution · retention]
+  EBPF[Aya eBPF observe-only] --> Core
+  Core --> DB[(SQLite: connections · rollups · events)]
+  DB --> API
+~~~
 
-**Later, once packages exist** *(planned — per PRD §8 Flow 1)*:
+Two processes, one boundary: a root systemd daemon (`netwatchd`) observes
+traffic with eBPF and writes local SQLite; the unprivileged Tauri UI talks
+**only** to a token-authenticated loopback API. There is no cloud, no
+telemetry, and no outbound connection — by contract, not by accident
+([AUTH_SECURITY.md](AUTH_SECURITY.md)). Details in
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
-1. Install via AUR: `paru -S net-watch-pro`, or add the apt/dnf repo and install the package.
-2. Launch Net Watch Pro from the app menu.
-3. Click **Enable monitoring** and confirm the one-time admin (`pkexec`) prompt.
-4. The dashboard shows live data within seconds.
-## Environment Variables
+## Install and try it
 
-Full list from ARCHITECTURE.md §8.3 — these are the *only* variables the product defines. *(All daemon-side; none take effect until the daemon is implemented.)*
+**There are no installable packages yet.** Pre-release builds will appear on
+the [releases page](https://github.com/zvirox/net-watch-pro/releases) once
+packaging lands (Phase 8, per the [plan](PLAN.md)). Do not install anything
+claiming to be Net Watch Pro before then.
 
-| Name | Purpose | Example value |
-|---|---|---|
-| `NETWATCH_DATA_DIR` | DB + state directory (set by systemd) | `/var/lib/netwatch-pro` |
-| `NETWATCH_LOG_DIR` | Log output directory | `/var/lib/netwatch-pro/log` |
-| `NETWATCH_LOG_LEVEL` | Log verbosity | `info` |
-| `NETWATCH_API_ADDR` | Loopback-only API bind address | `127.0.0.1:7897` |
-| `NETWATCH_API_TOKEN_FILE` | Where the per-boot API token is written (mode 0600) | `/var/lib/netwatch-pro/api-token` |
-| `NETWATCH_RETENTION_DAYS` | Default history retention | `90` |
-| `NETWATCH_DISABLE_EBPF` | Diagnostic switch: run without the eBPF collector (degraded state) | *(unset; set to any value to disable)* |
-| `NETWATCH_DEV_DAEMON_ADDR` | Dev only: point the UI at a dev daemon; never read in packaged builds | `127.0.0.1:7897` |
+## Development setup
 
-## Folder Structure
+### Requirements
 
-**Today:**
+- Linux with a current Rust toolchain (MSRV 1.99.1, pinned in
+  `rust-toolchain.toml`) and Node.js 20+.
+- Tauri 2 development dependencies: `webkit2gtk-4.1`, `gtk4`, and friends —
+  see [CONTRIBUTING.md](CONTRIBUTING.md) for per-distro package lists.
+- Root access is **not** needed for development; the daemon stub runs
+  unprivileged.
 
-```
-net-watch-pro/
-├── README.md            # this file
-├── AGENTS.md            # working rulebook for AI assistants (read first)
-├── PRD.md               # product requirements (scope, features, non-goals)
-├── DESIGN.md            # UI design system (tokens, components, screens, a11y)
-├── ARCHITECTURE.md      # stack, structure, data flow, naming, env vars
-├── DATABASE.md          # schema, indexes, migrations, access rules
-├── API.md               # endpoint reference, error format, versioning
-└── REAPM.md             # reference-app teardown (background only, not binding)
-```
+### Build and verify
 
-**Planned** *(full tree in ARCHITECTURE.md §4)*:
+~~~bash
+git clone https://github.com/zvirox/net-watch-pro.git
+cd net-watch-pro
 
-```
-├── crates/              # Cargo workspace: netwatchd, netwatch-core, netwatch-ebpf,
-│                        #   netwatch-api, netwatch-common
-├── app/                 # Tauri 2 shell (src-tauri/) + Svelte 5 frontend (src/)
-├── xtask/               # build automation (BPF compile, packaging)
-├── packaging/           # PKGBUILD, deb/, rpm/, systemd unit, license verifier
-├── docs/                # api-contract.md, db-schema.md, env-vars.md, img/
-└── tests/               # integration, accuracy harness, fixtures
-```
+# Rust gate
+cargo fmt --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 
-## Available Scripts
+# UI gate
+cd app
+npm install
+npm run check    # svelte-check (strict TS)
+npm run lint
+~~~
 
-**None exist yet** — the repository is documentation-only; there is no build system to script. Scripts will be defined when the workspace is scaffolded (ARCHITECTURE.md §4). Planned, per ARCHITECTURE.md §6 workflow: `cargo fmt` / `cargo clippy` for Rust, lint + `svelte-check` for the UI, and the `tests/accuracy/` harness for accounting verification. Do not use any command in this section until it appears in a real manifest.
+The CI workflow runs exactly these gates. Behaviour that CI cannot verify
+(eBPF attach, root-privileged flows, packaged installs) is re-checked
+manually per [TESTING.md](TESTING.md) before each release.
+
+### Documentation-first rule
+
+The specs are the contract, in priority order: `PRD.md` → `DESIGN.md` →
+`ARCHITECTURE.md` → `DATABASE.md` → `API.md`. Code that drifts from them is
+wrong. [AGENTS.md](AGENTS.md) is the binding rulebook for human and AI
+contributors alike.
+
+## Releases and feedback
+
+Release gates, tagging, and the alpha→beta→1.0 cadence are documented in
+[PLAN.md](PLAN.md); tagged changes live in the
+[changelog](CHANGELOG.md).
+
+Alpha feedback should include the release version, distribution, desktop
+session, and reproduction steps — report it through the
+[GitHub issue tracker](https://github.com/zvirox/net-watch-pro/issues). For
+security issues, follow the private disclosure process in
+[SECURITY.md](SECURITY.md); never open a public issue for those.
 
 ## Contributing
 
-1. Read `AGENTS.md` — it applies to human and AI contributors alike: follow the source-of-truth docs, keep them in sync with your change, stop and ask when a request conflicts with them.
-2. Pick work that matches `PRD.md` scope (MVP §6.1; don't build V2/Later features early).
-3. Small, reviewable diffs; Conventional Commits; tests for anything with a harness; a short summary of what changed and what you verified.
-4. New dependencies, schema changes, new endpoints, and new UI primitives all require the corresponding doc update *in the same change* — see AGENTS.md §4.5/§5.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a change. In short:
+plan first (name the governing doc sections), keep diffs small and scoped to
+one task, ship tests with the code ([TESTING.md](TESTING.md) §8 gate), sync
+the affected docs in the same change, and use Conventional Commits. New
+dependencies require maintainer approval first.
+
+### Where help is most useful
+
+| Area | Examples | Difficulty |
+|---|---|---|
+| Testing and bug reports | Run the gates on your distro and report what breaks | Easy |
+| Documentation | Clarify setup, specs, and workflows | Easy |
+| UI polish | Missing states, a11y fixes, keyboard shortcuts | Easy to medium |
+| Test coverage | Accounting/attribution accuracy tests (`tests/accuracy/`) | Medium |
+| Packaging | Arch, deb, rpm pipelines and verification (Phase 8) | Medium |
+| eBPF / kernel | Aya attach targets, kernel-version quirks | Hard |
 
 ## License
 
 Net Watch Pro is **dual-licensed**:
 
-- **AGPL-3.0-or-later** — free for everyone. Use, study, modify, and share the code under the GNU Affero General Public License v3 or later; network-use of modified versions must offer the corresponding source (this product is local-only, so this clause mostly matters for forks that grow server-side features).
-- **Commercial license** — available for contributors and users who cannot comply with AGPL terms (e.g. integrating Net Watch Pro into proprietary products or distributions). Contact the maintainer for terms and pricing.
+- **AGPL-3.0-or-later** — free to use, study, modify, and share under the GNU
+  Affero General Public License v3 or later ([LICENSE](LICENSE)).
+- **Commercial license** — for contributors and users who cannot comply with
+  AGPL terms (e.g. embedding Net Watch Pro in proprietary products or
+  distributions). Contact the maintainer for terms.
 
-*(Placeholder until the commercial-license terms document and contact channel exist — the choice between AGPL-only and dual-licensing was left open in PRD §10 OQ1 and is being resolved as dual for this README. Contributors keep copyright and license their contributions under both options.)*
-
----
-
-*End of README.md. Accurate as of 2026-11-14 — documentation-phase state.*
+By contributing you agree that your work is released under both options.
