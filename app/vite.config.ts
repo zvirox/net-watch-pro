@@ -5,6 +5,12 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 // Tauri integration (src-tauri, IPC) lands with task P0.4.
 export default defineConfig({
   plugins: [svelte()],
+  // $lib alias (SvelteKit convention) for vendored component imports.
+  resolve: {
+    alias: {
+      $lib: new URL('./src/lib', import.meta.url).pathname,
+    },
+  },
   // Strict TS lives in tsconfig.json; Vite serves app root only.
   server: {
     strictPort: true,

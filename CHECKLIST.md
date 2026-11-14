@@ -8,14 +8,14 @@
 
 ## Phase 0 — Foundation & Tooling → `v0.0.1-alpha.1` (week 1)
 
-- [ ] P0.1 Cargo workspace root configs
-- [ ] P0.2 Crate skeletons (common, core, netwatchd, api, xtask)
-- [ ] P0.3 UI workspace (Vite + Svelte 5 + TS strict + lint)
-- [ ] P0.4 Tauri 2 shell, window opens, capabilities least-privilege
-- [ ] P0.5 shadcn-svelte vendored: button, input, table
-- [ ] P0.6 Token CSS + self-hosted fonts, both themes
-- [ ] P0.7 CI: fmt/clippy/svelte-check + 3-distro build matrix
-- [ ] P0.8 Docs mirrors (api-contract, db-schema, env-vars)
+- [x] P0.1 Cargo workspace root configs <!-- verified: cargo check/fmt/clippy clean -->
+- [x] P0.2 Crate skeletons (common, core, netwatchd, api, xtask) <!-- zero deps, compiles -->
+- [~] P0.3 UI workspace (Vite + Svelte 5 + TS strict + lint) <!-- files done; npm install running (slow registry) -->
+- [x] P0.4 Tauri 2 shell, window opens, capabilities least-privilege <!-- cargo check/clippy/fmt clean -->
+- [~] P0.5 shadcn-svelte vendored: button, input, table <!-- blocked on node_modules -->
+- [~] P0.6 Token CSS + self-hosted fonts, both themes <!-- tokens.css done; fonts downloaded; @font-face added -->
+- [x] P0.7 CI: fmt/clippy/svelte-check + 3-distro build matrix <!-- workflow written; runs post-push -->
+- [x] P0.8 Docs mirrors (api-contract, db-schema, env-vars)
 - [ ] **DoD: themed blank window runs; `cargo check` + CI green**
 
 ## Phase 1 — Walking Skeleton → `v0.1.0-alpha.1` (week 2)
