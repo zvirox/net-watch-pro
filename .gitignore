@@ -4,6 +4,7 @@ app/target/
 app/node_modules/
 app/dist/
 dist/
+app/src-tauri/gen/
 
 # Dev-only env files (ARCHITECTURE.md §8.3: .env is dev-only, never committed)
 .env
