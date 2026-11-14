@@ -1,0 +1,10 @@
+[package]
+name = "netwatch-common"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared types, IDs, error codes, and API DTOs for Net Watch Pro (ARCHITECTURE.md §4)"
+
+[lints]
+workspace = true

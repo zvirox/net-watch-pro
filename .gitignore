@@ -1,0 +1,20 @@
+# Build artifacts
+/target/
+app/target/
+app/node_modules/
+app/dist/
+dist/
+
+# Dev-only env files (ARCHITECTURE.md §8.3: .env is dev-only, never committed)
+.env
+.env.*
+!.env.example
+
+# Database snapshots used for inspection (MCP.md §3.2 snapshot rule)
+*.db
+*.db-wal
+*.db-shm
+
+# Editor/OS noise
+.DS_Store
+*.swp

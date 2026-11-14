@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/netwatch-common",
+    "crates/netwatch-core",
+    "crates/netwatchd",
+    "crates/netwatch-api",
+    "xtask",
+]
+
+# ARCHITECTURE.md §2: one workspace, few crates, no micro-frameworks.
+# Dependencies are added per-feature (AGENTS.md §5: user approval first).
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/net-watch-pro/net-watch-pro"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"        # ARCHITECTURE.md §7.1: no unwrap outside startup
+expect_used = "warn"
+pedantic = "warn"
+
+[profile.release]
+lto = "thin"
+strip = "symbols"

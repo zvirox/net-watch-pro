@@ -1,0 +1,2 @@
+# clippy config — ARCHITECTURE.md §8.2
+msrv = "1.99.1"

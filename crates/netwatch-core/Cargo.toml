@@ -1,0 +1,10 @@
+[package]
+name = "netwatch-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Daemon domain logic: accounting, attribution, retention, rollups (ARCHITECTURE.md §4)"
+
+[lints]
+workspace = true

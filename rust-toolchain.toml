@@ -1,0 +1,5 @@
+# ARCHITECTURE.md §8.2: MSRV pinned.
+# Note: this file is honored by rustup toolchains; on distro-packaged Rust
+# (e.g. Arch's rust package) it is inert documentation of the pin.
+[toolchain]
+channel = "1.99.1"

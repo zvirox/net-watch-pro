@@ -1,0 +1,30 @@
+{
+  "name": "net-watch-pro-ui",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Net Watch Pro UI (Svelte 5 + Vite) — ARCHITECTURE.md §4",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "test": "echo \"vitest lands with the first component/store test (TESTING.md §8 gate)\" && exit 0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@typescript-eslint/parser": "^8.46.4",
+    "eslint": "^9.39.2",
+    "eslint-plugin-svelte": "^3.13.1",
+    "prettier": "^3.6.2",
+    "prettier-plugin-svelte": "^3.4.1",
+    "svelte": "^5.45.7",
+    "svelte-check": "^4.3.4",
+    "typescript": "^5.9.4",
+    "typescript-eslint": "^8.46.4",
+    "vite": "^7.2.7"
+  }
+}

@@ -1,0 +1,10 @@
+[package]
+name = "netwatch-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "API server: WS routes, token auth, request/validation types (API.md contract)"
+
+[lints]
+workspace = true
