@@ -1,7 +1,9 @@
 # Net Watch Pro — DESIGN.md (UI Design System)
 
-**Version:** 1.0 · **Date:** 2026-11-14  
-**Source of truth:** `PRD.md` (scope, screens, flows) · `REAPM.md` (reference teardown)  
+**Version:** 1.1 · **Date:** 2026-11-15  
+**Source of truth:** `PRD.md` (scope, screens, flows) · `REAPM.md` (reference teardown) · `docs/decisions.md` (owner decisions D1–D7)
+
+**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a).  
 **Stack context:** Tauri 2 shell · Svelte 5 · shadcn-svelte components · ECharts · localhost WS data
 
 > **STRICT RULES — every UI built later must follow this file.**
@@ -446,10 +448,12 @@ Failure state: card below button swaps to error-soft banner with reason + "View 
 │ ┌ Top apps (ECharts bars) ┐ ┌ Interfaces ┐  │
 │ │ app ▇▇▇▇▇ 4.2 GiB →click │ │ wlan0 9.1  │  │
 │ │ app ▇▇▇ 2.0   →detail   │ │ eth0  3.3  │  │
+│ │ Unattributed / system ▇▇│ │           │  │  (tooltip: gap vs interface counters)
 │ └─────────────────────────┘ └────────────┘  │
 └─────────────────────────────────────────────┘
 ```
 Loading: skeleton headline + chart placeholder. Empty (no data yet): empty state "Waiting for first data" + live hint. Error: chart-area error banner + retry.
+**Unattributed row:** status-soft tint card with status-colored dot + text label (never color-only per §9.5); tooltip explains the gap = interface counter bytes − attributed per-app bytes (headers, ACKs, retransmits, kernel-handled/VPN traffic). Shown even when zero, with "—" until first sample.
 
 ### 8.4 Live Connections
 
@@ -500,7 +504,7 @@ Free tier: Pro filter chips render disabled with `lock` + tooltip; Export opens 
 ```
 ┌ TOPBAR: Settings ┐   Sections as tabs or grouped list:
 │ General     │ theme (Light/Dark/System switch group)
-│ Data        │ retention (number input + helper), clear-data destructive
+│ Data        │ retention (number input + helper), clear-data destructive, timezone (IANA picker), billing-cycle day (1–31)
 │ Interfaces  │ metered labeling (switch list)
 │ Daemon      │ start-on-boot switch, Open diagnostics ghost
 │ License     │ key input + status badge / Upgrade card
