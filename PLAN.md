@@ -1,10 +1,11 @@
 # PLAN.md — Implementation Roadmap
 
-**Version:** 1.1 · **Date:** 2026-11-15  
-**Sources:** `PRD.md` §6 (features), `ARCHITECTURE.md` §4 (structure), `DATABASE.md` §8 (migrations), `API.md` §2 (endpoints)  
+**Version:** 1.2 · **Date:** 2026-11-15  
+**Sources:** `PRD.md` §6 (features), `ARCHITECTURE.md` §4 (structure), `DATABASE.md` §8 (migrations), `API.md` §2 (endpoints) · `docs/decisions.md` (owner decisions D1–D7)
+
 **Companion tracker:** `CHECKLIST.md` (same task IDs, ticked live)
 
-**Version history:** 1.1 (2026-11-15): expanded P1.5 security, Polkit, Tauri IPC/WS bridge, and three-family verification requirements.
+**Version history:** 1.2 (2026-11-15): apply plan-fix findings — insert Phase S (eBPF spike) and Phase D (doc fixes); reorder phases per Part 5; replace week targets with effort estimates (D7: 40+ h/week); rewrite P1.1–P1.5 for Unix-socket + peer-credential transport (D1a); defer self-hosted apt/dnf repos until after beta (F-10).
 
 > **Ordering rules:** vertical slices only — every phase ends with a runnable app; never all-backend-then-all-frontend. Each task ≤ 2 hours. Dependencies use task IDs (e.g. `dep: P1.3`). A task may start when its deps are done.
 
@@ -15,16 +16,18 @@
 | Phase | Name | Output (runnable state after phase) | Tag at phase end | Target week |
 |---|---|---|---|---|
 | 0 | Foundation & tooling | Repo scaffolded, CI green, empty Tauri window runs | `v0.0.1-alpha.1` | 1 |
-| 1 | Walking skeleton | Daemon + UI talk over token auth; status chip live | `v0.1.0-alpha.1` | 2 |
-| 2 | Live slice | Real eBPF data in the Live Connections screen | `v0.2.0-alpha.2` | 3 |
-| 3 | History slice | Connections persisted; History screen browses real data | `v0.3.0-alpha.3` | 4 |
-| 4 | Dashboard slice | Totals, timeline, top apps on the Dashboard | `v0.4.0-alpha.4` | 5 |
-| 5 | Apps slice | App registry + App detail page | `v0.5.0-alpha.5` | 6 |
-| 6 | Freemium slice | License activation, Pro gating, exports | `v0.6.0-alpha.6` | 7 |
+| **S** | **eBPF spike (new)** | `spikes/ebpf-accounting/` + `docs/spike-ebpf-report.md`; gates everything below | — | time-boxed (~25 h) |
+| **D** | **Doc fixes (new)** | All Part 4 edits merged, consistency pass done | — | before Phase 1' |
+| 1' | Walking skeleton (revised) | Daemon + UI talk over Unix socket + peer-credential; status chip live | `v0.1.0-alpha.1` | 2 |
+| 2' | Live slice | Real data from spike-chosen collector on the Live screen; accuracy harness running | `v0.2.0-alpha.2` | 3 |
+| 3' | History slice | Persistence with episode definition (F-09), raw + endpoint rollups (F-02) | `v0.3.0-alpha.3` | 4 |
+| 4' | Dashboard slice | Totals from interface counters, Unattributed row, timezone/billing-cycle correct (F-03/F-04) | `v0.4.0-alpha.4` | 5 |
+| 5 | Apps slice | Cgroup-based identity (F-05), App detail | `v0.5.0-alpha.5` | 6 |
+| 6 | Freemium slice (reduced) | License verify + simple gating (F-07) | `v0.6.0-alpha.6` | 7 |
 | 7 | System slice | Tray, settings, retention/pruning | `v0.7.0-alpha.7` | 8 |
-| 8 | Packaging slice | Installable .deb/.rpm/AUR, onboarding pkexec | `v0.8.0-alpha.8` | 9 |
+| 8' | Packaging (reduced) | GitHub Releases `.deb`/`.rpm`, AUR `-git`; hosted repos deferred (F-10) | `v0.8.0-alpha.8` | 9 |
 | 9 | Diagnostics & a11y | All degraded states + accessibility pass | `v0.9.0-beta.1` | 10 |
-| 10 | Beta hardening | Accuracy harness, perf budgets, 3-distro matrix | `v0.9.x-beta.N` | 11–12 |
+| 10' | Hardening | Kernel VM matrix, perf budgets, external review (F-08) | `v0.9.x-beta.N` | 11–12 |
 | 11 | Launch | Stable 1.0 GA + repos live | `v1.0.0` | 13 |
 
 **Tag format:** `vMAJOR.MINOR.PATCH-alpha.N` / `-beta.N` during pre-releases; plain `v1.0.0` at GA. Within a phase, patch bumps (`v0.3.1-alpha.3`) mark internal fixes worth tagging. Feature phases are MINOR bumps; the phase *number maps loosely* — the alpha/beta suffix is the real maturity signal.
@@ -33,9 +36,11 @@
 
 | Stage | Artifacts | Channels |
 |---|---|---|
-| Alpha (`v0.*.0-alpha.N`) | GitHub tarballs + `.deb` + `.rpm` (unpolished, `--profile dev`-adjacent) | GitHub Releases only, "expect breakage" banner |
+| Alpha (`v0.*.0-alpha.N`) | GitHub tarballs + `.deb` + `.rpm` (unpolished) | GitHub Releases only, "expect breakage" banner |
 | Beta (`v0.9.0-beta.N`) | Signed `.deb` + apt repo, `.rpm` + dnf repo, AUR `net-watch-pro-git` (dev channel) | GitHub Releases + beta repo subdomain; testers wanted |
 | Stable (`v1.0.0`) | Signed `.deb` (apt repo), `.rpm` (dnf repo), AUR `net-watch-pro` + `net-watch-pro-bin` | PRD §6.1 #10 complete |
+
+**Packaging deferral (F-10):** self-hosted apt/dnf repos and signing keys are deferred until after beta. Alpha/beta ship GitHub Releases artifacts + AUR `-git`; prefer hosted build services (COPR, PPA, openSUSE Build Service) over running repo infrastructure alone. External security review before 1.0, not in the first-alpha path.
 
 **Flatpak:** ⚠ flagged — not in PRD §6.1 #10 (AUR/deb/rpm only). A Flatpak build conflicts with the root-daemon model (sandboxed Flatpak can't host a root systemd service); it would be UI-only in a wrapper + separate daemon install. Per AGENTS.md §3 this needs a PRD update and your explicit go-ahead before any Flatpak work — recorded as post-1.0 optional.
 
@@ -60,22 +65,54 @@
 
 ---
 
-## 3. Phase 1 — Walking Skeleton
+## S. Phase S — eBPF Spike (new)
 
-**Goal:** daemon and UI talk to each other. No traffic data yet.
+**Goal:** replace guesses about eBPF accounting with measurements before any production collector code is written. Time box: ~25 hours (1–2 weeks). Stop at the box and report even if unfinished.
 
 | ID | Task | Files | Verify | Deps |
 |---|---|---|---|---|
-| P1.1 | Token file writer + loopback API bind (`NETWATCH_API_ADDR/TOKEN_FILE`) | `crates/netwatchd/src/{config,api}.rs` | daemon writes token (0600), curl without token → 401 `AUTH_INVALID` | P0.2 <!-- token writer unit tests and code bind checks; service-level production path behavior remains unverified --> |
-| P1.2 | `GET /health` (no auth) + `GET /status` per API.md §2.1 | `crates/netwatch-api/src/` | curl both endpoints returns §2.1 payloads | P1.1 |
-| P1.3 | Error envelope + status-code mapping as shared helpers | `crates/netwatch-api/src/` | 401 body matches API.md §1.3 exactly | P1.2 |
-| P1.4 | WS stream skeleton: `subscribe`/`unsubscribe`/`ping` on `/stream` | `crates/netwatch-api/src/` | wscat: ping→pong, bad channel → `QUERY_INVALID` frame | P1.3 |
-| P1.5 | Fixed-path Polkit token helper + secure daemon token replacement; Tauri retrieval command + authenticated native WS bridge; in-memory UI REST/WS client with capped reconnect | `crates/netwatch-token-helper/`, `crates/netwatchd/src/token.rs`, `crates/netwatch-api/src/auth.rs`, `app/src-tauri/`, `packaging/polkit/`, `app/src/lib/api/` | helper rejects args/symlinks/unsafe ownership/mode/type/malformed token; pkexec cancel/failure/no-agent handled; valid helper returns only token; API rejects missing/malformed/wrong token and accepts correct token; WS header auth works; daemon restart rotates token and UI recovers ≤ 5 s; no token persistence/logging | P1.4 <!-- full local Rust+UI suite green 2026-11-15; real pkexec, rotation recovery and distro package authorization remain unverified --> |
-| P1.6 | Status chip component (4 states) wired to `status` channel | `app/src/lib/components/`, `app/src/lib/screens/dashboard/` | flip daemon states manually → chip follows (DESIGN.md §7.5) | P1.5, P0.6 <!-- built; runtime channel state verification remains open --> |
-| P1.7 | Empty Dashboard screen shell + sidebar/topbar shell (DESIGN.md §8.1) | `app/src/screens/` | routes render; compact/wide reflow sanity | P0.5 <!-- shell implemented; preview verified at 566px without horizontal overflow; routes/navigation remain static, native Tauri launch unverified --> |
-| P1.8 | Daemon runs as systemd unit (dev unit file, no hardening yet) | `packaging/systemd/netwatchd.service` | `systemctl start netwatchd` → UI connects | P1.2 <!-- unit syntax verified; service target executable not installed, so no start/connect test --> |
+| S.1 | Spike setup: `spikes/ebpf-accounting/` with own `Cargo.toml`/`rust-toolchain.toml` (nightly + bpf-linker); deps: `aya`, `aya-ebpf`, `bpf-linker`; dev tools: `iperf3`, `bpftool` | `spikes/ebpf-accounting/` | spike crate builds on nightly | P0.2 |
+| S.2 | Implement + compare Designs 1–3 (cgroup_skb cookie / function hooks / hybrid) on workloads (S.4) | `spikes/ebpf-accounting/src/` | decision table: accuracy, overhead, kernel floor, complexity, failure modes | S.1 |
+| S.3 | Measure Q1–Q10: hook attribution vs interface counters, CPU/RSS, cgroup identity, capabilities, Secure Boot/lockdown, churn, toolchain reality, write load | `spikes/ebpf-accounting/`, `tests/` fixtures | measurement tables; each Q answered with data | S.2 |
+| S.4 | Workloads: curl down/up, iperf3 TCP/UDP, browser QUIC/HTTP3, 5k short curls, 500 idle conns, WireGuard, Docker, IPv6-only, Flatpak, Python script | `spikes/ebpf-accounting/` | per-workload: interface delta, attributed total, per-app split, unattributed remainder | S.2 |
+| S.5 | Write `docs/spike-ebpf-report.md`: Q1–Q10 answers, chosen design, rejected designs with reasons, product claims to soften/drop | `docs/spike-ebpf-report.md` | report reviewed by owner | S.3 |
 
-**DoD:** start daemon + `tauri dev` → chip shows "Monitoring" (stub state), reconnect works, CI green, helper/policy packaging permissions verified on Arch/CachyOS, Ubuntu, and Fedora, tag `v0.1.0-alpha.1`. No production-readiness claim before the three-family helper authorization checks pass.
+**DoD:** spike report exists; every kernel/eBPF claim in docs tagged `[VERIFIED: spike-ebpf-report §n]` or explicitly `[HYPOTHESIS]`; go/no-go on per-app ±5% accuracy.
+
+---
+
+## D. Phase D — Doc Fixes (new)
+
+**Goal:** apply all Part 4 findings (F-01–F-11) to planning docs with version bumps + consistency pass.
+
+| ID | Task | Files | Verify | Deps |
+|---|---|---|---|---|
+| D.1 | Record owner decisions D1–D7 in `docs/decisions.md` | `docs/decisions.md` | decisions file complete, dated | S (informational) |
+| D.2 | Apply F-01–F-11 to `PRD.md` → `DESIGN.md` → `ARCHITECTURE.md` → `DATABASE.md` → `API.md` → `AUTH_SECURITY.md` | all source-of-truth docs | each doc version bumped + rationale line | D.1 |
+| D.3 | Apply findings to `PLAN.md` → `CHECKLIST.md` → `TESTING.md` → `FEATURES.md` → `INTEGRATIONS.md`/`MCP.md`/`AGENTS.md`/`SETUP.md`/`README.md` | remaining docs | consistency; no two docs contradict on retention/accuracy/transport/capabilities/timezone | D.2 |
+| D.4 | Consistency grep pass (Part 6 step 6) for stale terms; fix every hit | all docs | grep returns no stale hits | D.3 |
+| D.5 | Cross-check: every PRD §7 story → table + endpoint; every PRD §10 risk → test | all docs | matrix complete | D.4 |
+
+**DoD:** all findings merged; consistency pass clean; owner reviews before Phase 1' code resumes.
+
+---
+
+## 3. Phase 1' — Walking Skeleton (revised)
+
+**Goal:** daemon and UI talk to each other over a Unix socket with peer-credential authorization. No traffic data yet.
+
+| ID | Task | Files | Verify | Deps |
+|---|---|---|---|---|
+| P1.1 | Unix-socket listener + peer-credential UID allowlist; allowed-UID list written during onboarding pkexec | `crates/netwatchd/src/{config,api}.rs`, `packaging/systemd/netwatchd.service` | daemon creates socket (0660, dir 0750), curl without allowed UID → connection refused; allowed UID → 200 | P0.2 |
+| P1.2 | `GET /health` (no auth) + `GET /status` per API.md §2.1 | `crates/netwatch-api/src/` | curl both endpoints returns §2.1 payloads | P1.1 |
+| P1.3 | Error envelope + status-code mapping as shared helpers | `crates/netwatch-api/src/` | error body matches API.md §1.3 exactly | P1.2 |
+| P1.4 | Socket stream skeleton: `subscribe`/`unsubscribe`/`ping` | `crates/netwatch-api/src/` | socket client: ping→pong, bad channel → `QUERY_INVALID` frame | P1.3 |
+| P1.5 | Tauri retrieval command + authenticated native socket bridge; in-memory UI REST/socket client with capped reconnect | `crates/netwatch-api/src/auth.rs`, `app/src-tauri/`, `app/src/lib/api/` | API rejects UID not in allowlist and accepts allowed UID; socket stream auth works; daemon restart rotates nothing (UID list persists) and UI recovers ≤ 5 s; no token persistence/logging | P1.4 |
+| P1.6 | Status chip component (4 states) wired to `status` channel | `app/src/lib/components/`, `app/src/lib/screens/dashboard/` | flip daemon states manually → chip follows (DESIGN.md §7.5) | P1.5, P0.6 |
+| P1.7 | Empty Dashboard screen shell + sidebar/topbar shell (DESIGN.md §8.1) | `app/src/screens/` | routes render; compact/wide reflow sanity | P0.5 |
+| P1.8 | Dev systemd unit (Unix socket path, no hardening yet) | `packaging/systemd/netwatchd.service` | `systemctl start netwatchd` → UI connects over socket | P1.2 |
+
+**DoD:** start daemon + `tauri dev` → chip shows "Monitoring" (stub state), reconnect works, CI green, socket + peer-credential verified on Arch/CachyOS. No per-launch admin prompt (D1a). No production-readiness claim before runtime + packaging checks pass.
 
 ---
 
@@ -89,8 +126,8 @@
 | P2.2 | Byte counters per socket → delta events (1 s flush) | `crates/netwatch-ebpf/src/main.rs`, `netwatch-core/src/accounting.rs` | counters move while downloading a file | P2.1 |
 | P2.3 | `/proc` attribution + `apps` registry upserts | `netwatch-core/src/attribution.rs` | new connection → row in `apps` with confidence | P2.2 |
 | P2.4 | Migration 0001+0002 applied at daemon boot (sqlx) | `crates/netwatchd/src/db/migrations/` | fresh data dir → tables + seeds exist (DATABASE.md §8) | P1.1 |
-| P2.5 | `connections` batch writer (≤1 tx/s) | `crates/netwatchd/src/db.rs` | sqlite row counts grow during traffic; tx rate ≤ 1/s | P2.3, P2.4 |
-| P2.6 | `live.connections` channel: snapshot + deltas ≤1 msg/s | `crates/netwatch-api/src/` | wscat sees snapshot then deltas | P2.5, P1.4 |
+| P2.5 | `connections` batch writer (≤ 1 tx/s equivalent from in-memory deltas, checkpoint cadence ~60 s) | `crates/netwatchd/src/db.rs` | sqlite row counts grow during traffic; tx rate ≤ 1/s | P2.3, P2.4 |
+| P2.6 | `live.connections` channel: snapshot + deltas ≤1 msg/s over socket stream | `crates/netwatch-api/src/` | socket client sees snapshot then deltas | P2.5, P1.4 |
 | P2.7 | Live Connections screen: virtualized table per DESIGN.md §8.4 | `app/src/lib/screens/live/` | browse → rows stream; pause freezes; empty/loading/error states present | P2.6, P0.5 |
 | P2.8 | `GET /connections/live` + `GET /status` show real ebpf state | `crates/netwatch-api/src/` | REST snapshot matches WS snapshot | P2.6 |
 | P2.9 | Degraded path: `NETWATCH_DISABLE_EBPF=1` → warning chip + banner | daemon + `app/src/lib/stores/` | set env → UI shows Degraded honestly | P2.1, P1.6 |
@@ -105,8 +142,8 @@
 
 | ID | Task | Files | Verify | Deps |
 |---|---|---|---|---|
-| P3.1 | Migration 0003: rollups + `idx_connections_remote_host` | `crates/netwatchd/src/db/migrations/` | apply on existing db; indexes exist (DATABASE.md §5) | P2.4 |
-| P3.2 | `GET /connections` (keyset pagination, basic filters) | `crates/netwatch-api/src/` | curl pagination walk returns stable order | P2.5, P1.3 |
+| P3.1 | Migration 0003: `usage_rollup_15m`, `usage_endpoint_day`, `usage_interface_15m` + indexes | `crates/netwatchd/src/db/migrations/` | apply on existing db; tables + indexes exist (DATABASE.md §8) | P2.4 |
+| P3.2 | `GET /connections` (keyset pagination, basic filters; aggregate rows beyond raw window) | `crates/netwatch-api/src/` | curl pagination walk returns stable order; aggregate flag works | P2.5, P1.3 |
 | P3.3 | Pro-advanced-filter gate (403 path) scaffolded but locked off | `crates/netwatch-api/src/` | advanced filter now → `EXPORT_PRO_REQUIRED` | P3.2 |
 | P3.4 | `GET /connections/{id}` incl. pruned-window 404 wording | `crates/netwatch-api/src/` | fake id → 404 message per API.md §2.2 | P3.2 |
 | P3.5 | History screen: search by app, table, empty/loading/error (§8.6) | `app/src/lib/screens/history/` | browse real history; pagination infinite-scroll | P3.2, P0.5 |
@@ -123,14 +160,15 @@
 
 | ID | Task | Files | Verify | Deps |
 |---|---|---|---|---|
-| P4.1 | Compaction job: raw > 7 days → `usage_rollup_hour/day` | `netwatch-core/src/retention.rs` | seed old rows → rollups appear, raw pruned | P3.1 |
-| P4.2 | `GET /usage/summary` (totals + top apps) | `crates/netwatch-api/src/` | totals ≈ interface counters over a day | P4.1 |
-| P4.3 | `GET /usage/timeline` (hour/day; raw+rollup union) | `crates/netwatch-api/src/` | series continuity across the 7-day seam (flag F5) | P4.1 |
-| P4.4 | `GET /usage/interfaces` | `crates/netwatch-api/src/` | excluded `lo` never counted | P4.2 |
-| P4.5 | ECharts theme wrapper from DESIGN.md §3.3 | `app/src/lib/components/charts/` | series order/colors match tokens; theme switch works | P0.6 |
-| P4.6 | Dashboard screen: headline cards + timeline + top apps + interfaces (§8.3) | `app/src/lib/screens/dashboard/` | chart → click bar → App detail stub routes | P4.2–P4.5 |
-| P4.7 | `usage.totals` WS channel wired to headline cards | `crates/netwatch-api/src/`, stores | totals tick without polling | P4.2, P1.5 |
-| P4.8 | Dashboard empty state ("Waiting for first data") | dashboard screen | fresh db → empty state, not zeros lie | P4.6 |
+| P4.1 | Compaction job: raw > 7 days → `usage_rollup_15m`; write `usage_endpoint_day` (capped N) | `netwatch-core/src/retention.rs` | seed old rows → rollups appear, raw pruned | P3.1 |
+| P4.2 | Interface-counter sampler task (reads `/sys/class/net/*/statistics`; `lo` excluded) | `netwatch-core/src/` | sampler writes `usage_interface_15m`; headline matches `vnstat` | P3.1 |
+| P4.3 | `GET /usage/summary` (total/attributed/unattributed + top apps) | `crates/netwatch-api/src/` | totals equal kernel counters by construction | P4.1, P4.2 |
+| P4.4 | `GET /usage/timeline` (15m; day/hour display in configured timezone) | `crates/netwatch-api/src/` | series continuity across 7-day seam (flag F-05) | P4.1 |
+| P4.5 | `GET /usage/interfaces` (from `usage_interface_15m`, `lo` excluded) | `crates/netwatch-api/src/` | excluded `lo` never counted | P4.2 |
+| P4.6 | ECharts theme wrapper from DESIGN.md §3.3 | `app/src/lib/components/charts/` | series order/colors match tokens; theme switch works | P0.6 |
+| P4.7 | Dashboard screen: headline cards (total/attributed/unattributed) + timeline + top apps + Unattributed row + interfaces (§8.3) | `app/src/lib/screens/dashboard/` | chart → click bar → App detail stub routes | P4.2–P4.6 |
+| P4.8 | `usage.totals` socket stream wired to headline cards | `crates/netwatch-api/src/`, stores | totals tick without polling | P4.3, P1.5 |
+| P4.9 | Dashboard empty state ("Waiting for first data") | dashboard screen | fresh db → empty state, not zeros lie | P4.7 |
 
 **DoD:** dashboard matches manual `vnstat`-style totals ±5%; charts themed; tag `v0.4.0-alpha.4`.
 
@@ -144,10 +182,10 @@
 |---|---|---|---|---|
 | P5.1 | `GET /apps` (ranking, include_deleted) | `crates/netwatch-api/src/` | top apps sort matches summary | P4.2 |
 | P5.2 | `GET /apps/{id}` + icon resource endpoint | `crates/netwatch-api/src/` | unknown icon → UI fallback (DESIGN.md §6.2) | P5.1 |
-| P5.3 | `GET /apps/{id}/usage` + `/endpoints` | `crates/netwatch-api/src/` | endpoint ranking matches manual query | P5.1 |
-| P5.4 | App Detail screen: tabs, usage chart, connections table, endpoint list (§8.5) | `app/src/lib/screens/app-detail/` | all three tabs populated from real data | P5.2, P5.3, P2.7 |
+| P5.3 | `GET /apps/{id}/usage` + `/endpoints` (from `usage_endpoint_day`) | `crates/netwatch-api/src/` | endpoint ranking matches manual query | P5.1 |
+| P5.4 | App Detail screen: tabs, usage chart, connections table, endpoint list (§8.5) | `app/src/lib/screens/app-detail/` | all three tabs populated from real data | P5.2, P5.3, P2.6 |
 | P5.5 | Route from Dashboard top-apps + Live rows to detail | dashboard/live screens | click-through lands with correct id | P5.4 |
-| P5.6 | Attribution edge cases: short-lived procs, confidence display | `netwatch-core/src/attribution.rs` | unknown procs show `heuristic/unknown` badge honestly | P2.3 |
+| P5.6 | Attribution edge cases: cgroup-first identity, short-lived procs, confidence display | `netwatch-core/src/attribution.rs` | unknown procs show `heuristic/unknown` badge honestly (F-05/D5a) | P2.3 |
 
 **DoD:** every visible app opens a meaningful detail page; no dead-end routes; tag `v0.5.0-alpha.5`.
 
@@ -167,6 +205,7 @@
 | P6.6 | Upgrade modal (§8.8) + license entry screen states | `app/src/lib/screens/upgrade/` | invalid key → inline error (§7.2); success unlocks instantly via WS `status` | P6.3, P0.5 |
 | P6.7 | History screen Pro locks: disabled filter chips + tooltips | `app/src/lib/screens/history/` | free tier sees locks; upgrade modal opens | P6.6, P3.5 |
 | P6.8 | Export menu + native save dialog in History | `app/src/lib/screens/history/` | CSV/JSON file lands via dialog | P6.5, P6.7 |
+| P6.9 | Usage budgets & alerts (MVP free tier): per-app + total daily/monthly budgets, desktop notifications | `crates/netwatch-core/src/`, `app/src/lib/screens/settings/` | budget breach → notification; metered-interface aware (D6a) | P7.2 |
 
 **DoD:** full freemium loop: activate → features unlock without restart; deactivate → locks return; no network calls at any point; tag `v0.6.0-alpha.6`.
 
@@ -199,9 +238,9 @@
 | P8.5 | Onboarding flow: pkexec enable, health checks, 3 cards (§8.2) | `app/src/lib/screens/onboarding/` | fresh install → enabled in < 3 min | P8.2, P1.6 |
 | P8.6 | Failure path: actionable error card + retry + demo-mode stub decision (OQ4) | onboarding screen | blocked kernel → guidance, not a dead end | P8.5 |
 | P8.7 | Uninstall completeness: unit + data opt-in (PRD metric) | `packaging/*` | remove package → no service residue | P8.2 |
-| P8.8 | Signing: deb/rpm repo signatures + release workflow | `.github/workflows/release.yml` | apt/dnf verify signatures | P8.2, P8.3 |
+| P8.8 | Signing: package signing + release workflow (hosted build services preferred over self-hosted repos until after beta) | `.github/workflows/release.yml` | artifacts signed; clean-VM install works | P8.2, P8.3 |
 
-**DoD:** install → onboard → monitor on all 3 distro families from repo artifacts; tag `v0.8.0-alpha.8` = first public alpha.
+**DoD:** install → onboard → monitor via GitHub Releases artifacts + AUR `-git`; self-hosted apt/dnf repos deferred until after beta (F-10); tag `v0.8.0-alpha.8` = first public alpha.
 
 ---
 
@@ -225,11 +264,11 @@
 
 | ID | Task | Files | Verify | Deps |
 |---|---|---|---|---|
-| P10.1 | Accuracy harness: daemon vs interface counters ±5% | `tests/accuracy/` | CI job green over synthetic 50-conn load | P4.2 |
+| P10.1 | Accuracy harness: daemon vs interface counters (≥95% attributed, totals equal kernel counters) | `tests/accuracy/` | CI job green over synthetic 50-conn load; moved into spike then Phase 2 | P4.2 |
 | P10.2 | Perf budget test: ≤3% CPU / ≤150 MB RSS p95 | `tests/integration/` | budget assertions in CI | P10.1 |
-| P10.3 | 1-year retention soak: size < 1.5 GB estimate | `tests/integration/` | seeded volume profile matches ARCHITECTURE.md §9 | P7.1 |
-| P10.4 | 3-distro CI matrix runs full test suite | CI | arch + ubuntu + fedora jobs green | P8.2, P8.3 |
-| P10.5 | Security review: unit sandbox, token handling, API surface | daemon | review findings fixed/closed | P8.1 |
+| P10.3 | 1-year retention soak: size < 1.5 GB | `tests/integration/` | seeded volume profile matches ARCHITECTURE.md §9 | P7.1 |
+| P10.4 | Kernel VM matrix runs full test suite (Arch/CachyOS, Ubuntu LTS, Fedora — **VMs, not containers**) | CI | VM jobs green on all 3 families | P8.2, P8.3 |
+| P10.5 | Security review: unit sandbox, socket peer-credential, API surface | daemon | review findings fixed/closed | P8.1 |
 | P10.6 | Beta feedback fixes (buffer; scope-tight only) | as needed | each fix tagged patch `v0.9.x-beta.N` | P9 |
 
 **DoD:** PRD §11 Definition of Done items #1–#8 all satisfied; crash-free ≥ 99.5% in beta; tag `v0.9.9-beta.N`.
@@ -240,7 +279,7 @@
 
 | ID | Task | Files | Verify | Deps |
 |---|---|---|---|---|
-| P11.1 | Stable repos live: apt + dnf; AUR `net-watch-pro`/`-bin` | `packaging/*`, workflows | clean-VM repo installs on all 3 | P10.4 |
+| P11.1 | Stable repos live: apt + dnf via hosted build services (COPR/PPA), AUR `net-watch-pro`/`-bin` | `packaging/*`, workflows | clean-VM repo installs on all 3 | P10.4 |
 | P11.2 | Final QA sweep against PRD §11 checklist | — | every DoD item signed off | P10.6 |
 | P11.3 | README screenshots + docs site/landing copy | `README.md`, `docs/` | no placeholders left | P9 |
 | P11.4 | Tag `v1.0.0` + release notes (zero-outbound claim verifiable) | release | GA artifacts published | P11.1–P11.3 |
@@ -255,4 +294,4 @@
 - **Docs move with code** (AGENTS.md §4.5): the task that changes an endpoint/schema/token carries its doc edit.
 - **No new dependencies** without explicit user approval (AGENTS.md §5).
 - **OQ4 (demo mode)** is deliberately deferred to P8.6 — decide there, don't pre-build it.
-- Timeline assumes a single full-time builder; parallelize only P0 UI/daemon halves.
+- Timeline assumes a single full-time builder (40+ h/week, D7); estimates are in hours, labeled estimates; parallelize only P0 UI/daemon halves.
