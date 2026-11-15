@@ -18,26 +18,44 @@
 - [x] P0.8 Docs mirrors (api-contract, db-schema, env-vars)
 - [ ] **DoD: themed blank window runs; `cargo check` + CI green**
 
-## Phase 1 — Walking Skeleton → `v0.1.0-alpha.1` (week 2)
+## Phase S — eBPF Spike → time-boxed (~25 h)
 
-- [~] P1.1 Token file + loopback API bind <!-- unit tests and loopback check exist; production root-owned path/install behavior not verified -->
-- [x] P1.2 `/health` + `/status` <!-- workspace integration tests pass -->
-- [x] P1.3 Error envelope + status mapping <!-- 401/404/405 envelopes tested -->
-- [x] P1.4 WS stream skeleton (subscribe/ping) <!-- 4401 close, snapshot/push/error frames tested -->
-- [~] P1.5 Fixed-path helper, secure token replacement, Tauri REST/WS bridge, in-memory UI client <!-- full local Rust+UI suite green 2026-11-15 (fmt/clippy -D warnings/test/check + eslint/svelte-check/vite build); real pkexec flow, daemon-rotation reconnect, and distro package auth remain unverified -->
-- [~] P1.6 Status chip (4 states) connected to `status` channel <!-- implemented; lint/svelte-check/build pass; channel-driven state transitions not runtime-verified -->
-- [~] P1.7 Dashboard shell + sidebar/topbar <!-- shell implemented; lint/build pass; preview verified at 566px without horizontal overflow; routes/navigation remain static, native Tauri launch unverified -->
-- [~] P1.8 Dev systemd unit <!-- unit syntax checked; daemon was not installed/launched as a service -->
-- [!] **DoD: UI ↔ daemon connected; reconnect ≤ 5 s; tag `v0.1.0-alpha.1`** <!-- blocked: runtime + Arch/CachyOS packaging/pkexec action, Ubuntu and Fedora authorization gates incomplete -->
+- [ ] S.1 Spike setup: spikes/ebpf-accounting/ (nightly + bpf-linker; aya, aya-ebpf, bpf-linker) <!-- not started -->
+- [ ] S.2 Implement + compare Designs 1–3 (cgroup_skb cookie / function hooks / hybrid) <!-- not started -->
+- [ ] S.3 Measure Q1–Q10 (attribution vs counters, CPU/RSS, cgroup identity, capabilities, Secure Boot, churn, toolchain, write load) <!-- not started -->
+- [ ] S.4 Workloads: curl, iperf3, browser QUIC, 5k short curls, 500 idle, WireGuard, Docker, IPv6, Flatpak, Python <!-- not started -->
+- [ ] S.5 Write docs/spike-ebpf-report.md; go/no-go on ±5% accuracy <!-- not started -->
+- [ ] **DoD: spike report exists; every kernel claim [VERIFIED] or [HYPOTHESIS]**
 
-## Phase 2 — Live Slice → `v0.2.0-alpha.2` (week 3)
+## Phase D — Doc Fixes → consistency pass done
 
-- [ ] P2.1 eBPF attach + ring buffer plumbing
-- [ ] P2.2 Byte counters → 1 s delta events
-- [ ] P2.3 `/proc` attribution + `apps` upserts
+- [ ] D.1 Record owner decisions D1–D7 in docs/decisions.md <!-- done -->
+- [ ] D.2 Apply F-01–F-11 to PRD → DESIGN → ARCHITECTURE → DATABASE → API → AUTH_SECURITY <!-- in progress -->
+- [ ] D.3 Apply findings to PLAN → CHECKLIST → TESTING → FEATURES → INTEGRATIONS/MCP/AGENTS/SETUP/README <!-- open -->
+- [ ] D.4 Consistency grep pass (Part 6 step 6); fix every stale hit <!-- open -->
+- [ ] D.5 Cross-check: PRD §7 story → table + endpoint; PRD §10 risk → test <!-- open -->
+- [ ] **DoD: all findings merged; owner reviews before Phase 1' code resumes**
+
+## Phase 1' — Walking Skeleton (revised) → `v0.1.0-alpha.1`
+
+- [ ] P1.1 Unix-socket listener + peer-credential UID allowlist <!-- replaces token file + loopback bind (D1a) -->
+- [ ] P1.2 `/health` + `/status` <!-- workspace integration tests pass -->
+- [ ] P1.3 Error envelope + status mapping <!-- 401/404/405 envelopes tested -->
+- [ ] P1.4 Socket stream skeleton (subscribe/ping) <!-- socket client: ping→pong, bad channel → QUERY_INVALID -->
+- [ ] P1.5 Tauri socket bridge + in-memory UI client with capped reconnect <!-- replaces Polkit token helper; no per-launch prompt (D1a) -->
+- [ ] P1.6 Status chip (4 states) connected to `status` channel <!-- not started -->
+- [ ] P1.7 Dashboard shell + sidebar/topbar <!-- not started -->
+- [ ] P1.8 Dev systemd unit (Unix socket path) <!-- not started -->
+- [ ] **DoD: UI ↔ daemon connected over socket; reconnect ≤ 5 s; no per-launch prompt; tag `v0.1.0-alpha.1`**
+
+## Phase 2 — Live Slice → `v0.2.0-alpha.2`
+
+- [ ] P2.1 eBPF attach + ring buffer plumbing <!-- gated on spike S go/no-go -->
+- [ ] P2.2 Byte counters → 1 s delta events <!-- gated on spike S -->
+- [ ] P2.3 `/proc` attribution + `apps` upserts <!-- cgroup-first identity per D5a; /proc fallback -->
 - [ ] P2.4 Migrations 0001+0002 at boot
-- [ ] P2.5 Batched `connections` writer
-- [ ] P2.6 `live.connections` channel (snapshot + delta)
+- [ ] P2.5 Batched `connections` writer (checkpoint cadence ~60 s, F-09)
+- [ ] P2.6 `live.connections` channel (snapshot + delta) over socket stream
 - [ ] P2.7 Live Connections screen (virtualized, pause, all states)
 - [ ] P2.8 REST `/connections/live` + real ebpf status
 - [ ] P2.9 Degraded path (`NETWATCH_DISABLE_EBPF` → honest UI)
@@ -45,8 +63,8 @@
 
 ## Phase 3 — History Slice → `v0.3.0-alpha.3` (week 4)
 
-- [ ] P3.1 Migration 0003: rollups + remote_host index
-- [ ] P3.2 `GET /connections` (keyset pagination, basic filters)
+- [ ] P3.1 Migration 0003: `usage_rollup_15m`, `usage_endpoint_day`, `usage_interface_15m` + indexes
+- [ ] P3.2 `GET /connections` (keyset pagination, basic filters; aggregate rows beyond raw window)
 - [ ] P3.3 Pro-advanced-filter 403 gate (locked off)
 - [ ] P3.4 `GET /connections/{id}` (+ pruned 404 wording)
 - [ ] P3.5 History screen (search, table, all states)
@@ -56,15 +74,16 @@
 
 ## Phase 4 — Dashboard Slice → `v0.4.0-alpha.4` (week 5)
 
-- [ ] P4.1 Compaction job (raw → rollups at 7 days)
-- [ ] P4.2 `GET /usage/summary`
-- [ ] P4.3 `GET /usage/timeline` (raw+rollup union)
-- [ ] P4.4 `GET /usage/interfaces`
-- [ ] P4.5 ECharts token theme wrapper
-- [ ] P4.6 Dashboard screen (headline, timeline, top apps, interfaces)
-- [ ] P4.7 `usage.totals` WS → headline cards
-- [ ] P4.8 Dashboard empty state
-- [ ] **DoD: totals ±5% vs interface counters; tag `v0.4.0-alpha.4`**
+- [ ] P4.1 Compaction job (raw → `usage_rollup_15m` at 7 days; write `usage_endpoint_day`)
+- [ ] P4.2 Interface-counter sampler (`/sys/class/net/*/statistics`; `lo` excluded)
+- [ ] P4.3 `GET /usage/summary` (total/attributed/unattributed + top apps)
+- [ ] P4.4 `GET /usage/timeline` (15m; day/hour in configured timezone)
+- [ ] P4.5 `GET /usage/interfaces` (from `usage_interface_15m`; `lo` excluded)
+- [ ] P4.6 ECharts token theme wrapper
+- [ ] P4.7 Dashboard screen (headline total/attributed/unattributed, timeline, top apps, Unattributed row, interfaces)
+- [ ] P4.8 `usage.totals` socket stream → headline cards
+- [ ] P4.9 Dashboard empty state
+- [ ] **DoD: totals equal kernel counters by construction; ≥95% attributed; tag `v0.4.0-alpha.4`**
 
 ## Phase 5 — Apps Slice → `v0.5.0-alpha.5` (week 6)
 
@@ -73,7 +92,7 @@
 - [ ] P5.3 `GET /apps/{id}/usage` + `/endpoints`
 - [ ] P5.4 App Detail screen (3 tabs)
 - [ ] P5.5 Click-through routes from Dashboard/Live
-- [ ] P5.6 Attribution edge cases + confidence display
+- [ ] P5.6 Attribution edge cases: cgroup-first identity, short-lived procs, confidence display (F-05/D5a)
 - [ ] **DoD: every app opens a meaningful detail page; tag `v0.5.0-alpha.5`**
 
 ## Phase 6 — Freemium Slice → `v0.6.0-alpha.6` (week 7)
@@ -86,6 +105,7 @@
 - [ ] P6.6 Upgrade modal + license states
 - [ ] P6.7 History Pro locks (chips + tooltips)
 - [ ] P6.8 Export menu + native save dialog
+- [ ] P6.9 Usage budgets & alerts (MVP free tier; D6a)
 - [ ] **DoD: activate → instant unlock; deactivate → locks return; zero network calls; tag `v0.6.0-alpha.6`**
 
 ## Phase 7 — System Slice → `v0.7.0-alpha.7` (week 8)
@@ -108,8 +128,8 @@
 - [ ] P8.5 Onboarding flow (pkexec, health checks, 3 cards, < 3 min)
 - [ ] P8.6 Failure path + demo-mode decision (PRD OQ4)
 - [ ] P8.7 Uninstall completeness
-- [ ] P8.8 Repo signing + release workflow
-- [ ] **DoD: installable via repo artifacts on all 3 distro families; tag `v0.8.0-alpha.8`**
+- [ ] P8.8 Signing: package signing + release workflow (hosted build services until after beta)
+- [ ] **DoD: install → onboard → monitor via GitHub Releases + AUR `-git`; self-hosted apt/dnf repos deferred (F-10); tag `v0.8.0-alpha.8`**
 
 ## Phase 9 — Diagnostics & Accessibility → `v0.9.0-beta.1` (week 10) — *public beta*
 
@@ -124,11 +144,11 @@
 
 ## Phase 10 — Beta Hardening → `v0.9.x-beta.N` (weeks 11–12)
 
-- [ ] P10.1 Accuracy harness ±5% in CI
+- [ ] P10.1 Accuracy harness (≥95% attributed; totals equal kernel counters) in CI
 - [ ] P10.2 Perf budget test (≤3% CPU / ≤150 MB RSS p95)
 - [ ] P10.3 1-year retention soak (< 1.5 GB)
-- [ ] P10.4 3-distro CI matrix full suite
-- [ ] P10.5 Security review closed
+- [ ] P10.4 Kernel VM matrix (Arch/CachyOS, Ubuntu LTS, Fedora — VMs not containers)
+- [ ] P10.5 Security review: unit sandbox, socket peer-credential, API surface
 - [ ] P10.6 Beta feedback fixes (patch-tagged)
 - [ ] **DoD: PRD §11 DoD #1–#8 signed off; tag `v0.9.9-beta.N`**
 
