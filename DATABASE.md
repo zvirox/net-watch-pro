@@ -1,7 +1,9 @@
 # Net Watch Pro — DATABASE.md (Database Design)
 
-**Version:** 1.0 · **Date:** 2026-11-14  
-**Source of truth:** `PRD.md` (retention, freemium, metered interfaces) · `ARCHITECTURE.md` §5.4 (table contract) · `REAPM.md` (reference history behavior)  
+**Version:** 1.1 · **Date:** 2026-11-15  
+**Source of truth:** `PRD.md` (retention, freemium, metered interfaces) · `ARCHITECTURE.md` §5.4 (table contract) · `REAPM.md` (reference history behavior) · `docs/decisions.md` (owner decisions D2a-D4a)
+
+**Version history:** 1.1 (2026-11-15): apply plan-fix findings — `usage_rollup_15m` base grain + `usage_endpoint_day` + `usage_interface_15m` tables (F-02/D2a, F-03/D3a, F-04/D4a); `timezone` + `billing_cycle_day` settings; `apps.app_key` + `identity_kind` (F-05/D5a); size estimate tagged [HYPOTHESIS]; access rules updated for endpoint-day retention tiering.  
 **Engine:** SQLite ≥ 3.40, **WAL mode**, `synchronous=NORMAL`, single file at `$NETWATCH_DATA_DIR/netwatch.db`
 
 > **Binding rules:** This file is the single source of truth for schema. DDL lives only in forward-only sqlx migrations (`crates/netwatchd/src/db/migrations/*.sql`) and must match this file exactly. Changes require a version bump here + a new migration — never edit an applied migration (ARCHITECTURE.md §8.2).
@@ -43,7 +45,9 @@ Registry of attributed applications (ARCHITECTURE.md §5.1 step 2). One row per 
 |---|---|---|---|---|
 | `id` | INTEGER | PK | auto | |
 | `name` | TEXT | | — | NOT NULL (display name) |
-| `exe_path` | TEXT | | — | NOT NULL, **UNIQUE** (attribution identity) |
+| `app_key` | TEXT | | — | NOT NULL, **UNIQUE** (identity key: cgroup path / flatpak / snap / exe) |
+| `identity_kind` | TEXT | | `'exe'` | CHECK IN (`'cgroup_app'`,`'flatpak'`,`'snap'`,`'exe'`) — how the identity was captured |
+| `exe_path` | TEXT | | — | NOT NULL, **non-unique** (display/provenance data; scripts and updated binaries share rows) |
 | `exe_hash` | TEXT | | NULL | SHA-256 of binary when resolvable; NULL allowed (updates change hash) |
 | `icon_path` | TEXT | | NULL | NULL → UI fallback container (DESIGN.md §6.2) |
 | `attribution_confidence` | TEXT | | `'exact'` | CHECK IN (`'exact'`,`'heuristic'`,`'unknown'`) — PRD R3 confidence display |
@@ -92,21 +96,55 @@ One row per connection episode (grain defined in ARCHITECTURE.md §5.4). The hig
 
 **No soft delete:** rows are deleted by the retention pruner; "deleted" history is a *product feature* (PRD §6.1 #5), not an accident.
 
-### 2.5 `usage_rollup_hour` and `usage_rollup_day`
+### 2.5 `usage_rollup_15m`
 
-Per-app aggregated usage. `connections` older than the raw window (7 days) is compacted into these (ARCHITECTURE.md §5.4 policy). Both tables share the same shape; shown once.
+Per-app aggregated usage in **15-minute buckets** (base grain per D4a). Day/week/month boundaries are computed at query time in the configured timezone — not stored as separate tables unless the spike benchmark (Q10) shows day-level queries over a year are too slow. **[HYPOTHESIS]** the 15m→day materialized-day fallback threshold is unmeasured.
 
 | Column | Type | PK/FK | Default | Constraints |
 |---|---|---|---|---|
 | `app_id` | INTEGER | **PK (part 1)**, FK → `apps.id` | — | NOT NULL, `ON DELETE RESTRICT` |
-| `bucket_start` | INTEGER | **PK (part 2)** | — | NOT NULL; hour/day-aligned epoch (UTC); grain = table name |
+| `bucket_start` | INTEGER | **PK (part 2)** | — | NOT NULL; 15-minute-aligned epoch (UTC) |
 | `bytes_up` | INTEGER | | `0` | NOT NULL, CHECK ≥ 0 |
 | `bytes_down` | INTEGER | | `0` | NOT NULL, CHECK ≥ 0 |
 | `connection_count` | INTEGER | | `0` | NOT NULL, CHECK ≥ 0 |
-| `interfaces_mask` | TEXT | | NULL | comma-separated interface names contributing (compact provenance; avoids a rollup×interface many-to-many) |
+| `interfaces_mask` | TEXT | | NULL | comma-separated interface names contributing |
 | `created_at` / `updated_at` | INTEGER | | now | NOT NULL |
 
-PK = composite `(app_id, bucket_start)` — no surrogate id: the grain *is* the key, and it makes upserts (`INSERT … ON CONFLICT DO UPDATE`) atomic. System-wide totals for the Dashboard are `SUM` over apps at query time (apps count is small); no second system-level rollup table. **No soft delete** (derived data).
+PK = composite `(app_id, bucket_start)` — no surrogate id; the grain *is* the key, atomic upserts. System-wide totals are `SUM` over apps at query time.
+
+### 2.5a `usage_endpoint_day`
+
+Per-app/day endpoint aggregates — serves searchable history **beyond the raw window** (D2a). One row per `(app_id, bucket_start, remote_ip, remote_port, protocol)` day.
+
+| Column | Type | PK/FK | Default | Constraints |
+|---|---|---|---|---|
+| `app_id` | INTEGER | **PK (part 1)**, FK → `apps.id` | — | NOT NULL, `ON DELETE RESTRICT` |
+| `bucket_start` | INTEGER | **PK (part 2)** | — | NOT NULL; day-aligned epoch (UTC) |
+| `remote_ip` | TEXT | **PK (part 3)** | — | NOT NULL |
+| `remote_port` | INTEGER | **PK (part 4)** | — | NOT NULL, CHECK 0–65535 |
+| `protocol` | TEXT | **PK (part 5)** | — | NOT NULL, CHECK IN (`'tcp'`,`'udp'`,`'icmp'`,`'other'`) |
+| `bytes_up` | INTEGER | | `0` | NOT NULL, CHECK ≥ 0 |
+| `bytes_down` | INTEGER | | `0` | NOT NULL, CHECK ≥ 0 |
+| `connection_count` | INTEGER | | `0` | NOT NULL, CHECK ≥ 0 |
+| `first_seen_at` | INTEGER | | — | NOT NULL |
+| `last_seen_at` | INTEGER | | — | NOT NULL, CHECK ≥ first_seen_at |
+| `created_at` / `updated_at` | INTEGER | | now | NOT NULL |
+
+**Cardinality cap:** keep the top N endpoints per app per day by `bytes_up + bytes_down`; fold the rest into one `other` row (`remote_ip = 'other'`). N is configured per deployment; default **50**. Reason: P2P/DNS/QUIC can create huge fan-out; unbounded rows/day would violate the size budget. **[HYPOTHESIS]** N=50 default and size estimate unmeasured until spike Q10 / soak test.
+
+### 2.5b `usage_interface_15m`
+
+Per-interface 15-minute counters — the **source of truth for headline totals** (ISP-billed bytes, D3a). Feeds the "Unattributed / system" gap row = interface total − summed per-app attributed bytes.
+
+| Column | Type | PK/FK | Default | Constraints |
+|---|---|---|---|---|
+| `interface_id` | INTEGER | **PK (part 1)**, FK → `interfaces.id` | — | NOT NULL, `ON DELETE RESTRICT` |
+| `bucket_start` | INTEGER | **PK (part 2)** | — | NOT NULL; 15-minute-aligned epoch (UTC) |
+| `rx_bytes` | INTEGER | | `0` | NOT NULL, CHECK ≥ 0 |
+| `tx_bytes` | INTEGER | | `0` | NOT NULL, CHECK ≥ 0 |
+| `created_at` / `updated_at` | INTEGER | | now | NOT NULL |
+
+`lo` (`is_excluded=1`) is never inserted. Tunnel interfaces (VPN/WireGuard) are deduplicated to avoid double-counting (PRD R6).
 
 ### 2.6 `settings`
 
@@ -114,9 +152,18 @@ Daemon-side settings mirror (PRD §6.1 #8; UI edits via API `settings.set`).
 
 | Column | Type | PK/FK | Default | Constraints |
 |---|---|---|---|---|
-| `key` | TEXT | PK | — | NOT NULL (e.g. `retention_days`, `start_on_boot`) |
+| `key` | TEXT | PK | — | NOT NULL (e.g. `retention_days`, `start_on_boot`, `timezone`, `billing_cycle_day`) |
 | `value` | TEXT | | — | NOT NULL (typed at application layer; documented per key in `docs/api-contract.md`) |
 | `created_at` / `updated_at` | INTEGER | | now | NOT NULL |
+
+**Settings keys (closed list — governed by ARCHITECTURE.md §8.3):**
+- `retention_days`: int, default `90`, free-tier max `90`, Pro max `365`
+- `start_on_boot`: bool, default `1`
+- `theme_default`: enum (`system|light|dark`), default `system`
+- `metered_policy`: enum (`ask|label|auto`), default `ask`
+- `raw_window_days`: int, default `7`
+- `timezone`: IANA tz string, default system local; day/week/month boundaries computed at query time in this tz (D4a)
+- `billing_cycle_day`: int 1–31, default `1`; "this month" = current billing cycle at query time (D4a)
 
 No soft delete (settings keys are fixed enum; removal is a migration concern).
 
@@ -158,12 +205,14 @@ Capped ring: keeps newest 5,000 rows; pruned by the same pruner task. **Exceptio
 |---|---|---|
 | `apps` → `connections` | **one-to-many** | Each connection episode belongs to exactly one app (`app_id` NOT NULL). An app accrues many connection rows over time. Deleting an app is a soft delete, so history always resolves. |
 | `interfaces` → `connections` | **one-to-many**, optional | A connection may reference the interface it traversed; NULL when the interface left the system (`ON DELETE SET NULL`). |
-| `apps` → `usage_rollup_hour` / `_day` | **one-to-many** | Rollups are per-app time buckets; compaction replaces old `connections` rows with rollup rows (grain shift, same entity). |
+| `apps` → `usage_rollup_15m` | **one-to-many** | Rollups are per-app 15-minute buckets; compaction replaces old `connections` rows with rollup rows (grain shift, same entity). |
+| `apps` → `usage_endpoint_day` | **one-to-many** | Endpoint aggregates are per-app/day/remote; compaction writes these for history beyond the raw window. |
+| `interfaces` → `usage_interface_15m` | **one-to-many** | Interface counters per 15-minute bucket; feeds headline total + Unattributed row. |
 | `connections` ↔ `remote hosts` | **no host table (by design)** | Remote hosts/IPs/ports are attributes of connections, not entities — normalizing them would add joins to the hottest table for zero integrity benefit. Endpoint summaries (App detail, DESIGN.md §8.5) aggregate in queries. |
 | `license` | **one-to-one with the database itself** | Singleton row (`CHECK id=1`). |
 | `settings`, `schema_migrations`, `daemon_events` | **standalone** | No FKs — infrastructure tables. |
 
-**No many-to-many relationships exist** in this schema. The one candidate (rollups × interfaces) is intentionally flattened into `interfaces_mask` (§2.5) to keep rollup upserts single-statement and the compaction job simple — a documented denormalization, revisited only if per-interface rollup queries become a product need.
+**No many-to-many relationships exist** in this schema. `usage_rollup_15m` × interfaces is flattened into `interfaces_mask` (§2.5); `usage_endpoint_day` and `usage_interface_15m` use direct FKs (no denormalization needed since they are not on the hot `connections` path).
 ---
 
 ## 4. ER Diagram (Mermaid)
@@ -172,13 +221,16 @@ Capped ring: keeps newest 5,000 rows; pruned by the same pruner task. **Exceptio
 erDiagram
     APPS ||--o{ CONNECTIONS : "attributed to"
     INTERFACES |o--o{ CONNECTIONS : "traversed via"
-    APPS ||--o{ USAGE_ROLLUP_HOUR : "aggregated by hour"
-    APPS ||--o{ USAGE_ROLLUP_DAY : "aggregated by day"
+    APPS ||--o{ USAGE_ROLLUP_15M : "aggregated by 15 min"
+    APPS ||--o{ USAGE_ENDPOINT_DAY : "aggregated by day/endpoint"
+    INTERFACES ||--o{ USAGE_INTERFACE_15M : "counter bucket"
 
     APPS {
         INTEGER id PK
         TEXT name
-        TEXT exe_path UK
+        TEXT app_key UK "identity key (cgroup/flatpak/snap/exe)"
+        TEXT identity_kind
+        TEXT exe_path "non-unique display/provenance"
         TEXT exe_hash
         TEXT icon_path
         TEXT attribution_confidence
@@ -217,9 +269,9 @@ erDiagram
         INTEGER created_at
         INTEGER updated_at
     }
-    USAGE_ROLLUP_HOUR {
+    USAGE_ROLLUP_15M {
         INTEGER app_id PK "composite PK part 1"
-        INTEGER bucket_start PK "composite PK part 2"
+        INTEGER bucket_start PK "composite PK part 2, 15-min aligned"
         INTEGER bytes_up
         INTEGER bytes_down
         INTEGER connection_count
@@ -227,13 +279,25 @@ erDiagram
         INTEGER created_at
         INTEGER updated_at
     }
-    USAGE_ROLLUP_DAY {
-        INTEGER app_id PK "composite PK part 1"
-        INTEGER bucket_start PK "composite PK part 2"
+    USAGE_ENDPOINT_DAY {
+        INTEGER app_id PK "part 1"
+        INTEGER bucket_start PK "part 2, day aligned"
+        TEXT remote_ip PK "part 3"
+        INTEGER remote_port PK "part 4"
+        TEXT protocol PK "part 5"
         INTEGER bytes_up
         INTEGER bytes_down
         INTEGER connection_count
-        TEXT interfaces_mask
+        INTEGER first_seen_at
+        INTEGER last_seen_at
+        INTEGER created_at
+        INTEGER updated_at
+    }
+    USAGE_INTERFACE_15M {
+        INTEGER interface_id PK "part 1"
+        INTEGER bucket_start PK "part 2, 15-min aligned"
+        INTEGER rx_bytes
+        INTEGER tx_bytes
         INTEGER created_at
         INTEGER updated_at
     }
@@ -279,10 +343,15 @@ Each index names the PRD/DESIGN query it serves. Indexes live in the same migrat
 | `idx_connections_remote_host` | `(remote_host)` | History hostname search (V2 DNS display); created in migration 0003 when the column becomes queryable |
 | `idx_daemon_events_occurred` | `(occurred_at DESC)` | Diagnostics dump (latest N) |
 | `idx_apps_last_seen` | `(last_seen_at DESC)` | Top-apps ranking; pruner's last-activity check for soft delete |
-| *(PK)* `usage_rollup_*` | composite `(app_id, bucket_start)` | Dashboard timeline (Day/Hour toggle), usage by period — PK range scan, no extra index |
-| *(UK)* `apps.exe_path` / `interfaces.name` | unique | attribution upsert path; interface registration |
+| `idx_usage_endpoint_day_app_day` | `(app_id, bucket_start DESC)` | Endpoint summary per app/day (App detail, History Pro filters) |
+| `idx_usage_endpoint_day_remote` | `(remote_ip, remote_port, protocol)` | Cross-app endpoint search (Pro advanced filters) |
+| `idx_usage_interface_15m_iface_bucket` | `(interface_id, bucket_start DESC)` | Headline totals per interface over time |
+| *(PK)* `usage_rollup_15m` | composite `(app_id, bucket_start)` | Dashboard timeline (Day/Hour toggle), usage by period — PK range scan |
+| *(PK)* `usage_endpoint_day` | composite `(app_id, bucket_start, remote_ip, remote_port, protocol)` | endpoint lookup; no extra index needed beyond PK + the two above |
+| *(PK)* `usage_interface_15m` | composite `(interface_id, bucket_start)` | interface counter lookup |
+| *(UK)* `apps.app_key` / `interfaces.name` | unique | attribution upsert path; interface registration |
 
-**Anti-indexes:** no index on `remote_port`, `local_*`, `bytes_*`, `packets_*` — no first-class query uses them alone (port filter always co-occurs with app/host in the Pro filter set, served by the filtered scan of a small result set). Every index must name its query in the migration comment or it doesn't ship.
+**Anti-indexes:** no index on `remote_port` (alone), `local_*`, `bytes_*`, `packets_*` — port filter always co-occurs with app/host in the Pro filter set (served by `idx_usage_endpoint_day_remote`). Every index must name its query in the migration comment or it doesn't ship.
 ---
 
 ## 6. Access Rules
@@ -294,7 +363,7 @@ Each index names the PRD/DESIGN query it serves. Indexes live in the same migrat
 | Filesystem | DB + WAL/SHM live in `/var/lib/netwatch-pro` (root:root, mode `0750`; DB file `0640`). Only root (`netwatchd`) can open the database. The systemd unit's sandboxing (PRD §5) protects the directory. |
 | UI | **Never opens the database.** All reads/writes go through the loopback token-authenticated API (ARCHITECTURE.md §5.3). A compromised UI can only do what the API permits. |
 | API | Writes are endpoint-scoped: `settings.set` (validated keys only), `license.activate`, `export.request` (server-side Pro check against `license.tier` — gating is never UI-only, PRD R7). Read endpoints are unprivileged within the local trust boundary. |
-| Row-level rules (application-enforced) | `connections`/rollups beyond the free tier's raw window are not withheld at row level; retention *tiering* is enforced at compaction (Pro = longer raw window + 1-year rollups, free = 90-day prune). The pruner is the enforcer, not a view. |
+| Row-level rules (application-enforced) | `connections`/rollups beyond the free tier's raw window are not withheld at row level; retention *tiering* is enforced at compaction (free = 90-day raw window prune + endpoint-day aggregates to 90 days; Pro = longer raw window + endpoint-day aggregates to 1 year). The pruner is the enforcer, not a view. |
 | Backups | `VACUUM INTO` via CLI verb, root-only; no other copy of the file is ever made by the app. |
 
 ---
@@ -310,7 +379,9 @@ INSERT INTO settings (key, value, created_at, updated_at) VALUES
   ('theme_default',    'system', strftime('%s','now'), strftime('%s','now')),
   ('start_on_boot',    '1',   strftime('%s','now'), strftime('%s','now')),
   ('metered_policy',   'ask', strftime('%s','now'), strftime('%s','now')),
-  ('raw_window_days',  '7',   strftime('%s','now'), strftime('%s','now'));
+  ('raw_window_days',  '7',   strftime('%s','now'), strftime('%s','now')),
+  ('timezone',         'local', strftime('%s','now'), strftime('%s','now')),
+  ('billing_cycle_day','1',   strftime('%s','now'), strftime('%s','now'));
 
 -- license singleton (§2.7) — free tier until activated
 INSERT INTO license (id, tier, created_at, updated_at)
@@ -352,9 +423,9 @@ Forward-only, numbered sqlx migrations; each runs in one transaction (SQLite DDL
 
 | # | File | Contents |
 |---|---|---|
-| 0001 | `0001_init_core.sql` | `schema_migrations`, `settings` (+seed), `license` (+seed), `interfaces` (+`lo` seed) |
-| 0002 | `0002_apps_connections.sql` | `apps` (+`idx_apps_last_seen`), `connections` + `idx_connections_app_first_seen`, `idx_connections_last_seen`, `idx_connections_open`, `idx_connections_remote_ip`; FKs to 0001 tables |
-| 0003 | `0003_rollups.sql` | `usage_rollup_hour`, `usage_rollup_day` (composite PKs, FKs), `idx_connections_remote_host` |
+| 0001 | `0001_init_core.sql` | `schema_migrations`, `settings` (+seed incl. `timezone`, `billing_cycle_day`), `license` (+seed), `interfaces` (+`lo` seed) |
+| 0002 | `0002_apps_connections.sql` | `apps` (+`app_key UK`, `identity_kind`, `idx_apps_last_seen`), `connections` + `idx_connections_app_first_seen`, `idx_connections_last_seen`, `idx_connections_open`, `idx_connections_remote_ip`; FKs to 0001 tables |
+| 0003 | `0003_rollups.sql` | `usage_rollup_15m`, `usage_endpoint_day`, `usage_interface_15m` (composite PKs, FKs + per-table indexes), `idx_connections_remote_host` |
 | 0004 | `0004_daemon_events.sql` | `daemon_events` + `idx_daemon_events_occurred` |
 | 0005+ | future | forward-only additive changes; destructive changes only via expand→migrate→contract with a documented release gap |
 
