@@ -1,10 +1,9 @@
 # Net Watch Pro — API.md (Local API Reference)
 
-**Version:** 1.1 · **Date:** 2026-11-15  
-**Source of truth:** `PRD.md` (features, freemium gating) · `ARCHITECTURE.md` §5.3 (transport contract) · `DATABASE.md` (tables)  
-**Base URL:** `http://127.0.0.1:7897/api/v1` (loopback only — ARCHITECTURE.md §8.3)
+**Version:** 1.2 · **Date:** 2026-11-15  
+**Source of truth:** `PRD.md` (features, freemium gating) · `ARCHITECTURE.md` §5.3 (transport contract) · `DATABASE.md` (tables) · `docs/decisions.md` (owner decisions D1a–D5a)
 
-**Version history:** 1.1 (2026-11-15): clarify fixed production token source and native Tauri WebSocket header bridge; wire authentication contract is unchanged.
+**Version history:** 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a).
 
 > **Binding:** every endpoint below maps to a PRD feature and a DATABASE.md table (§10 traceability matrix). Anything flagged as not doing so is explicitly justified there. Implementation of this file lives in `docs/api-contract.md` (ARCHITECTURE.md §4) and must not drift.
 
@@ -19,7 +18,7 @@
 | `anonymous` | any local process | `GET /health` only (bootstrapping) |
 | `local-ui` | UI process + any local tool holding the per-boot token | everything else |
 
-- **Mechanism:** `Authorization: Bearer <token>` — the random per-boot token from canonical production file `/var/lib/netwatch-pro/api-token` (mode 0600, root-owned; UI obtains it via the Tauri one-shot Polkit-authorized helper, ARCHITECTURE.md §5.3). `NETWATCH_API_TOKEN_FILE` is only a development/test daemon override and is never supplied to the helper or set in the packaged production unit.
+- **Mechanism:** peer-credential (`SO_PEERCRED`) authorization on the Unix socket — the daemon checks the connecting process's UID against a root-owned allowed-UID list written during the one-time onboarding pkexec step (D1a). No token, no bearer header, no Polkit helper, no per-launch prompt.
 - **Pro entitlement is NOT a role.** It is a license-tier check against `DATABASE.md §2.7` enforced server-side (PRD R7). Gated endpoints return `403 EXPORT_PRO_REQUIRED` (see §2.3).
 - **Yes/No per endpoint** is stated in each group's table ("Auth: yes (local-ui)" / "no").
 
@@ -27,7 +26,7 @@
 
 | Header | Required | Notes |
 |---|---|---|
-| `Authorization: Bearer <token>` | yes (except `/health`) | 401 otherwise |
+| `Authorization: Bearer <token>` | **removed** | Auth is now peer-credential on the Unix socket (D1a); no bearer header needed |
 | `Content-Type: application/json` | yes on requests with a body | |
 | `Accept` | optional | `application/json` (default) or `text/csv` on export content |
 | `X-Request-Id` | optional, client-generated | echoed in errors for log correlation |
@@ -55,7 +54,7 @@ All responses are JSON (`application/json; charset=utf-8`) unless downloading ex
 | Status | Codes |
 |---|---|
 | 400 | `QUERY_INVALID` |
-| 401 | `AUTH_INVALID` |
+| 401 | `AUTH_INVALID` (UID not in allowed-UID list; peer-cred check failed) |
 | 403 | `PERMISSION_DENIED`, `EXPORT_PRO_REQUIRED`, `LICENSE_INVALID` |
 | 404 | `NOT_FOUND` |
 | 405 | `METHOD_NOT_ALLOWED` |
@@ -72,11 +71,11 @@ All responses are JSON (`application/json; charset=utf-8`) unless downloading ex
 
 ### 1.5 Rate limits
 
-Local trust boundary, so limits are generous and exist to protect the DB and the live path:
+Single trusted local client over a Unix socket, so limits are minimal and exist mainly to prevent runaway loops from a misbehaving UI:
 
 | Scope | Limit | Exceeded |
 |---|---|---|
-| Read endpoints (default) | 120 req/min per token | 429 + `Retry-After` |
+| Read endpoints | 600 req/min per socket | 429 + `Retry-After` |
 | Export creation | 5/min | 429 |
 | Settings/license writes | 10/min | 429 |
 | Export content download | 10/min | 429 |
@@ -144,7 +143,7 @@ Errors: 401, 429.
 Errors: 400, 401, 429, 503 (daemon starting).
 
 **C2 `GET /connections`** — history episodes, keyset-paginated. Filters (whitelist):
-`app_id`, `app_name` (substring, free), `since`/`until` (epoch, Pro-set), `remote_ip`, `remote_host` (substring, Pro-set), `remote_port`, `protocol`, `interface_id`, `open` (bool). Sort whitelist: `first_seen_at`, `last_seen_at`, `bytes_up`, `bytes_down`, `remote_ip`. **Rule:** requests using ≥2 filters, or any of `since/until/remote_ip/remote_host/remote_port`, require Pro → otherwise `403 EXPORT_PRO_REQUIRED` with the missing entitlement named in `message`. Success 200: envelope; rows shaped like C1 minus rates, plus `packets_up/packets_down`.
+`app_id`, `app_name` (substring, free), `since`/`until` (epoch, Pro-set), `remote_ip`, `remote_host` (substring, Pro-set), `remote_port`, `protocol`, `interface_id`, `open` (bool). Sort whitelist: `first_seen_at`, `last_seen_at`, `bytes_up`, `bytes_down`, `remote_ip`. **Rule:** requests using ≥2 filters, or any of `since/until/remote_ip/remote_host/remote_port`, require Pro → otherwise `403 EXPORT_PRO_REQUIRED` with the missing entitlement named in `message`. **Beyond the raw window (7 days default), rows are aggregate rows from `usage_endpoint_day` (flagged `"kind": "aggregate"`), not connection episodes.** C3 `GET /connections/{id}` stays raw-window only. Success 200: envelope; rows shaped like C1 minus rates, plus `packets_up/packets_down` (raw) or `bytes_up/bytes_down/connection_count` (aggregate).
 Errors: 400 `QUERY_INVALID`, 401, 403, 429, 500 `DB_ERROR`.
 
 **C3 `GET /connections/{id}`** — single episode. Success 200: one row (C1 shape + packets). Errors: 404 `NOT_FOUND` (also when pruned by retention — message states "outside retention window"), 401, 429.
@@ -192,7 +191,7 @@ Errors: 400, 401, 429, 500.
 
 **A2 `GET /apps/{id}`** — one app. Success 200: A1 row + `exe_path` (never exposes icon bytes; icons resolve via `icon` handle → `profile/icon`-style resource served by the same server). Errors: 404 (pruned/not found), 401, 429.
 
-**A3 `GET /apps/{id}/usage`** — series for the App-detail chart. Query: `?granularity=hour|day&since=&until=&limit=` (day default 90; hour default 168). Rows come from rollups; the raw window (< 7 days) is aggregated live from `connections`. Success 200:
+**A3 `GET /apps/{id}/usage`** — series for the App-detail chart. Query: `?granularity=hour|day&since=&until=&limit=` (day default 90; hour default 168). Rows come from `usage_rollup_15m`; the raw window (< 7 days) is aggregated live from `connections`. Boundaries computed at query time in the configured timezone (`DATABASE.md §2.6`). Success 200:
 ```json
 { "granularity": "day", "data": [
     { "bucket_start": 1731504000, "up": 1048576, "down": 31457280, "connections": 412 } ] }
@@ -210,16 +209,17 @@ Errors: 400, 401, 404, 429.
 
 | # | Endpoint | Auth | PRD feature | DB table |
 |---|---|---|---|---|
-| U1 | `GET /api/v1/usage/summary` | yes | §6.1 #3 dashboard headline + top apps | `connections`, `usage_rollup_day`, `apps` |
-| U2 | `GET /api/v1/usage/timeline` | yes | §6.1 #3 usage timeline (Day/Hour toggle) | `usage_rollup_hour`, `usage_rollup_day`, `connections` |
-| U3 | `GET /api/v1/usage/interfaces` | yes | §6.1 #3 per-interface breakdown | `connections`, `interfaces` |
+| U1 | `GET /api/v1/usage/summary` | yes | §6.1 #3 dashboard headline + top apps | `usage_interface_15m`, `usage_rollup_15m`, `apps` |
+| U2 | `GET /api/v1/usage/timeline` | yes | §6.1 #3 usage timeline (Day/Hour toggle) | `usage_rollup_15m`, `connections` |
+| U3 | `GET /api/v1/usage/interfaces` | yes | §6.1 #3 per-interface breakdown | `usage_interface_15m`, `interfaces` |
 
 **U1 `GET /usage/summary`** — totals + top-talker list. Query: `?top_limit=` (default 5, max 10). Success 200:
 ```json
-{ "today": {"up": 52428800, "down": 934000000},
-  "month": {"up": 524288000, "down": 9340000000},
+{ "today": {"total": 986432000, "attributed": 912345600, "unattributed": 74086400},
+  "month": {"total": 9864320000, "attributed": 9123456000, "unattributed": 740864000},
   "top_apps": [ {"id":1,"name":"Firefox","bytes_total":986432000} ] }
 ```
+**`total`** comes from `usage_interface_15m` (interface kernel counters — ISP-billed bytes). **`attributed`** is the sum of per-app rollups; **`unattributed`** = total − attributed (headers, ACKs, retransmits, kernel-handled/VPN traffic — shown as the "Unattributed / system" row in DESIGN.md §8.3).
 Errors: 401, 429, 500, 503 (no data yet → 200 with zeroed totals + `"state":"collecting"`, DESIGN.md §8.3 empty state).
 
 **U2 `GET /usage/timeline`** — dashboard chart series. Query: `?granularity=hour|day&since=&until=&interface_id=`. Shape identical to A3 minus `app_id` (system-wide). Errors: 400, 401, 429, 500.
@@ -284,7 +284,7 @@ Errors: 401, 429.
 
 ### 3. WebSocket Channels (streaming half of the API)
 
-Same base URL, upgrade on `GET (ws) /api/v1/stream` with the standard `Authorization` header (ARCHITECTURE.md §5.3). One connection multiplexes all channels; frames are versioned JSON. Browser WebSocket cannot set this header, so the Tauri native link layer creates the socket with the bearer header and relays frames to the main webview through its native bridge; this transport adaptation does not alter the API contract.
+Same base socket, multiplexed frame stream (no HTTP upgrade — the Unix socket carries both request/response and streaming frames). One connection multiplexes all channels; frames are versioned JSON. The Tauri native link layer opens the socket and relays frames to the main webview through its native bridge; this transport adaptation does not alter the API contract.
 
 Client → server:
 ```json
@@ -311,7 +311,7 @@ Server → client:
 | `status` | `update` on change | on change | §6.1 #6 chip/banners | derived + `daemon_events` |
 | `usage.totals` | `update` | ≤ 1 msg/s | §6.1 #2/3 dashboard headline | `connections`/rollups |
 
-Rules: deltas replace by row `id` (keyed, not positional); server pushes at most one message per channel per second (UI renders from its store, DESIGN.md §7.6 in-place updates); on reconnect the client re-subscribes and receives a fresh snapshot — no gap replay (honest-state UI shows "Connecting…" until it lands). Auth failure closes with code **4401**.
+Rules: deltas replace by row `id` (keyed, not positional); server pushes at most one message per channel per second (UI renders from its store, DESIGN.md §7.6 in-place updates); on reconnect the client re-subscribes and receives a fresh snapshot — no gap replay (honest-state UI shows "Connecting…" until it lands). Socket authorization failure (UID not in allowlist) → connection refused.
 ---
 
 ## 4. Quick Reference (methods)
@@ -352,8 +352,10 @@ Coverage check (every DATABASE table is served):
 |---|---|
 | `apps` | A1–A4 (C2, U1 join) |
 | `interfaces` | I1–I2, U3 |
-| `connections` | C1–C3, E1/E3, A3/A4/U1–U3 (aggregates) |
-| `usage_rollup_hour` / `_day` | U2, A3, E1/E3 |
+| `connections` | C1–C3, E1/E3, A3/A4/U2 (raw window) |
+| `usage_rollup_15m` | U1 (attributed), U2, A3, E1/E3 |
+| `usage_endpoint_day` | C2 (aggregate rows beyond raw window), A4 |
+| `usage_interface_15m` | U1 (total), U3 |
 | `settings` | T1–T2, S3 |
 | `license` | L1–L3 (entitlement checks in C2, E1–E3, T2) |
 | `daemon_events` | S2–S4 |
