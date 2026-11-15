@@ -13,19 +13,15 @@ export default ts.config(
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: { window: 'readonly', document: 'readonly', console: 'readonly' },
-    },
-    rules: {
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
-      '@typescript-eslint/no-explicit-any': 'error',
-    },
-  },
-  {
-    files: ['**/*.svelte'],
-    languageOptions: {
+      // Typed linting for .ts and .svelte alike (tseslint projectService).
       parserOptions: {
         projectService: true,
         extraFileExtensions: ['.svelte'],
       },
+    },
+    rules: {
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      '@typescript-eslint/no-explicit-any': 'error',
     },
   },
   {
