@@ -16,14 +16,7 @@ export function cn(...classes: ClassValue[]): string {
 
 /** Mirrors clsx's `ClassValue` (re-exported by svelte/elements). */
 type ClassValue =
-  | string
-  | number
-  | bigint
-  | boolean
-  | ClassDictionary
-  | ClassArray
-  | null
-  | undefined;
+  string | number | bigint | boolean | ClassDictionary | ClassArray | null | undefined;
 type ClassDictionary = Record<string, unknown>;
 type ClassArray = ClassValue[];
 
