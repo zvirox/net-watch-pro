@@ -1,10 +1,12 @@
 # Net Watch Pro — Product Requirements Document
 
-**Version:** 1.0 (MVP scope)  
-**Date:** 2026-11-14  
+**Version:** 1.1 (MVP scope)  
+**Date:** 2026-11-15  
 **Status:** Draft for build  
 **Owner:** Product  
-**Related docs:** `REAPM.md` (competitive/technical teardown of the reference application firewall)
+**Related docs:** `REAPM.md` (competitive/technical teardown of the reference application firewall), `docs/decisions.md` (owner decisions D1–D7 from the plan-fix effort)
+
+**Version history:** 1.1 (2026-11-15): apply plan-fix findings F-01–F-11 — Unix-socket + peer-credential transport (D1a), daily endpoint rollups for long-term history (D2a), interface-counter headline totals with Unattributed row (D3a), 15-minute rollup grain + timezone/billing-cycle (D4a), cgroup-first app identity (D5a), metered-connection positioning with budgets/alerts in MVP (D6a), 40+ h/week timeline assumption (D7).
 
 ---
 
@@ -23,11 +25,22 @@ Net Watch Pro is a network traffic monitor and data-usage tracker for Linux. It 
 Linux users today have no simple, trustworthy answer to basic questions:
 
 - **Which app is using my data right now?** Existing tools are either terminal-only (`iftop`, `nethogs`, `vnstat`), per-interface rather than per-application, or require assembling several tools.
-- **How much data did this app use this month?** Data caps, metered connections (mobile hotspots, satellite, capped ISP plans) are common, but Linux lacks a per-app usage tracker with history.
+- **How much data did this app use this month?** Data caps, metered connections (mobile hotspots, satellite, capped ISP plans) are common, but Linux lacks a per-app usage tracker with history and budgets.
 - **What is this app connecting to?** Discovering an app's remote endpoints requires `ss`/`netstat` spelunking and correlating with `/proc` by hand.
 - **Can I trust the tool itself?** Privacy-conscious users are wary of network tools that phone home. There is demand for a strictly local, auditable, open monitoring app.
 
-The reference app analyzed in REAPM.md proves demand for a polished desktop UI over per-app network data, but it is firewall-first (root interception with verdict engine), heavyweight, and Go/Angular-based. No leading product occupies the "lightweight, monitor-only, modern-stack, privacy-first" niche on Linux.
+Existing tools overlap but do not close the gap (starting points; verify each row before publishing):
+
+| Tool | What it does | License | What it lacks for our personas |
+|---|---|---|---|
+| picosnitch | Python; per-executable traffic via BPF; byte accounting over time; SQLite history (30-day default); web + terminal UI | GPL-3.0-or-later | No budgets/alerts; 30-day history cap; terminal-first UI |
+| Little Snitch for Linux | Rust; eBPF; web UI; per-process monitoring plus blocking rules | Free; backend not fully open source | Kernel 6.12+ floor; no documented data-usage history; firewall-first |
+| Portmaster / OpenSnitch | Application firewalls with monitoring | Mixed | Blocking-first; no per-app metered-usage history |
+| nethogs / bandwhich / vnstat | Terminal tools: per-process live view, or per-interface history | Various | No GUI, no history search, no export, no budgets |
+
+The reference app analyzed in REAPM.md proves demand for a polished desktop UI over per-app network data, but it is firewall-first (root interception with verdict engine), heavyweight, and Go/Angular-based. **Net Watch Pro's differentiator (D6a): data-usage tracking for metered-connection users** — per-app totals against a cap, budgets/alerts, searchable local history — delivered as a lightweight, monitor-only, modern-stack, privacy-first desktop app.
+
+**Product strategy:** Monitor-first. V1.0 ships as a stable, polished, monitor-only product with per-app data-usage accounting, budgets/alerts, and 90-day+ searchable history. Full application-firewall capability (blocking, rules, prompts, DNS control) is added step by step in later major versions, reusing the same interception foundation.
 
 ---
 
@@ -57,13 +70,14 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 
 ### Goals (MVP)
 
-1. **Accurate per-app accounting:** bytes up/down attributed to the correct application, verified against system counters within ±5%.
+1. **Accurate per-app accounting:** bytes up/down attributed to the correct application. The **headline total** comes from per-interface kernel counters (`/sys/class/net/*/statistics` or netlink stats — what an ISP bills); per-app numbers are attributions of that total, and the gap is shown as an explicit **"Unattributed / system"** row. Accuracy goal: at least **95% of bytes attributed** on the reference workloads measured in the eBPF spike (`docs/spike-ebpf-report.md`); totals equal kernel counters by construction. **[HYPOTHESIS]** header/ACK overhead is "a few percent" of payload for typical TCP workloads (Appendix B, item 6).
 2. **Live visibility:** a real-time connections view (app, PID, protocol, remote endpoint, rate) with sub-second refresh.
-3. **Local-only data:** everything in a local SQLite database; no network calls by the app itself; default 90-day retention (configurable), automatic pruning.
-4. **Effortless install:** one-command install on Arch/CachyOS (AUR), deb-based (apt repo), and rpm-based (dnf repo) distros; daemon runs as a systemd service; UI is unprivileged.
-5. **Low overhead:** < 3% CPU and < 150 MB RSS for the daemon under typical desktop load; negligible packet path cost (eBPF observe, no blocking).
+3. **Local-only data:** everything in a local SQLite database; no network calls by the app itself; default 90-day retention (configurable), automatic pruning; connection-level detail for the raw window (7 days default), endpoint-level aggregates (`app × remote host/port/proto per day`) for the full retention period (90 days free; up to 1 year Pro).
+4. **Effortless install:** one-command install on Arch/CachyOS (AUR), deb-based (apt repo), and rpm-based (dnf repo) distros; daemon runs as a systemd service; **UI is unprivileged and talks to the daemon over a Unix domain socket with peer-credential (UID allowlist) authorization — one admin prompt at enable-time during onboarding, never per launch** (D1a).
+5. **Low overhead:** < 3% CPU and < 150 MB RSS for the daemon under typical desktop load; negligible packet path cost (eBPF observe, no blocking). **[HYPOTHESIS]** the overhead budget's workload is undefined until the spike measures it (Appendix B, item 10).
 6. **Modern, fast UI:** Svelte 5 + shadcn-svelte design system, ECharts visualizations, dark/light themes.
-7. **Freemium foundation:** free tier = full live monitoring + per-app usage + basic history; Pro tier (license key) = advanced history search + data export. License validation ships in MVP.
+7. **Freemium foundation:** free tier = full live monitoring + per-app usage + basic history (connection-level for raw window, endpoint-level aggregates beyond) **plus budgets & alerts**; Pro tier (license key) = advanced history search (multi-filter: app, date range, remote host/IP, port, protocol) + CSV/JSON export + retention beyond 90 days (up to 1 year). License validation ships in MVP.
+8. **Usage budgets & alerts:** per-app and total daily/monthly budgets with desktop notifications; metered-interface aware. Ships in MVP per the metered-connection positioning (D6a).
 
 ### Non-Goals (MVP)
 
@@ -90,11 +104,10 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 | Platforms | **Arch / CachyOS; deb & rpm distros** | AUR PKGBUILD + native package + apt repo + dnf repo |
 
 **Architecture shape (no code, contract only):**
-- `netwatchd` (root systemd service, Rust): loads Aya eBPF programs, attributes traffic to processes via eBPF metadata + `/proc` enrichment, writes usage records to SQLite, serves a localhost-only authenticated WS/HTTP API to the UI, exposes a healthy-status endpoint. Hardened unit (like the reference app: `ProtectSystem`, `PrivateTmp`, `RestrictAddressFamilies`, capability bounding to `CAP_BPF`/`CAP_PERFMON`/`CAP_NET_ADMIN` where supported).
-- UI (Tauri 2, user context): connects to the daemon's local WS API; graceful degraded states when daemon is stopped or lacks privileges.
-- IPC contract: versioned JSON over localhost WS with token auth; UI never requires root.
-
-**Kernel requirements (documented, checked at install):** CO-RE BTF available (typical on Arch/CachyOS current kernels, Ubuntu 22.04+, Fedora 36+); installer verifies and warns with actionable guidance otherwise.
+- `netwatchd` (root systemd service, Rust): loads Aya eBPF programs, attributes traffic to processes via cgroup identity + `/proc` enrichment (fallback), writes usage records to SQLite, serves a Unix-socket JSON API to the UI, exposes a healthy-status endpoint. Hardened unit (like the reference app: `ProtectSystem`, `PrivateTmp`, `RestrictAddressFamilies`, capability bounding to `CAP_BPF`/`CAP_PERFMON`/`CAP_NET_ADMIN` where supported).
+- UI (Tauri 2, user context): connects to the daemon's Unix-socket JSON API; graceful degraded states when daemon is stopped or lacks privileges.
+- IPC contract: **versioned JSON over a Unix domain socket** (`/run/netwatch-pro/api.sock` by default, `NETWATCH_API_SOCKET` env var) with peer-credential (`SO_PEERCRED`) authorization against a root-owned allowed-UID list; UI never requires root. Loopback TCP + bearer token removed (D1a). `NETWATCH_API_TOKEN_FILE` and the Polkit token helper are retired; the allowed-UID list is written during the one-time onboarding pkexec step.
+- Kernel requirements (documented, checked at install): **cgroup v2** (required for cgroup-based eBPF hooks per D5a); CO-RE BTF available (typical on Arch/CachyOS current kernels, Ubuntu 22.04+, Fedora 36+); per-hook kernel floor set by the spike (F-01); installer verifies and warns with actionable guidance otherwise. **[HYPOTHESIS]** cgroup-attached programs require cgroup v2 on all target distros (Appendix B, item 3); socket cookies usable in `cgroup_skb` on the target kernel floor (item 2); Secure Boot / lockdown does not block chosen hooks on Ubuntu/Fedora (item 8).
 
 ---
 
@@ -103,11 +116,11 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 ### 6.1 MVP — Must-have (ships V1.0)
 
 1. **Live Connections view** — real-time table of active connections: app name/icon, PID, protocol (TCP/UDP), local/remote IP:port, current rate, cumulative bytes; pause/freeze snapshot; sort and search within view.
-2. **Per-app usage accounting** — data used per application for today / this week / this month, with up/down split; "Top apps" ranked list and total system usage.
-3. **Dashboard** — ECharts timeline of usage (hour/day granularity toggle), top-talker bar chart, total-usage headline, per-interface breakdown (treat metered interfaces distinctly, e.g. hotspot detection is informational).
+2. **Per-app usage accounting** — data used per application for today / this week / this month, with up/down split; "Top apps" ranked list; the headline **total system usage** comes from per-interface kernel counters with an explicit **"Unattributed / system"** gap row; per-app numbers are attributions of that total (D3a).
+3. **Dashboard** — ECharts timeline of usage (hour/day granularity toggle; boundaries computed at query time in the configured timezone, D4a), top-talker bar chart, **total-usage headline from interface counters + Unattributed row** (D3a), per-interface breakdown (treat metered interfaces distinctly, e.g. hotspot detection is informational).
 4. **App detail page** — per-app drill-down: usage over time, open connections, endpoint summary (remote IPs/hosts seen), first/last seen.
-5. **Local history** — SQLite-backed connection log with the fields above; default 90-day retention, user-configurable, automatic pruning; basic search by app name.
-6. **Daemon + install experience** — systemd service install/enable via pkexec (once), health check, clear degraded states ("Daemon stopped", "eBPF unavailable", "Permissions missing") with self-help text.
+5. **Local history** — SQLite-backed connection log with the fields above; default 90-day retention, user-configurable, automatic pruning; basic search by app name; **connection-level detail for the raw window (7 days default), endpoint-level aggregates (`app × remote host/port/proto per day`) for the full retention period (90 days free; up to 1 year Pro)** (D2a).
+6. **Daemon + install experience** — systemd service install/enable via pkexec (**once**, at onboarding), health check, clear degraded states ("Daemon stopped", "eBPF unavailable", "Permissions missing") with self-help text; **the allowed-UID list is registered during the one-time pkexec step — no per-launch admin prompt** (D1a).
 7. **Tray integration** — tray icon with today's total usage tooltip; menu: open dashboard, pause UI notifications, quit UI (does not stop daemon — mirrors the reference app's safe pattern).
 8. **Settings (lean)** — retention length, theme, start-minimized, tray behavior, metered-interface labeling, daemon start on boot.
 9. **Freemium mechanics** — free tier as above; Pro license key unlocks: advanced history search (multi-filter: app, date range, remote host/IP, port, protocol), CSV/JSON export, retention beyond 90 days (up to 1 year). Pro features clearly gated in-UI with upgrade prompt.
@@ -115,13 +128,12 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 
 ### 6.2 V2 — Should-have (next release train)
 
-1. **Usage alerts/budgets** — per-app and total daily/monthly budgets with desktop notifications; metered-interface aware.
-2. **Advanced history search (free-tier visibility, Pro depth)** — saved filters/queries.
-3. **DNS name resolution display** — resolve remote IPs to PTR/hostnames shown alongside IPs (no interception).
-4. **Scheduled reports** — weekly usage summary as notification or file.
-5. **Interface niceties** — per-interface filters, speedtest-aware "current interface" widget, import of process icons for unknown apps.
-6. **Process-tree attribution improvements** — better handling of Flatpak/Snap/AppImage, script interpreters, systemd services.
-7. **Pause/resume monitoring** — temporarily suspend recording (privacy mode) with tray toggle.
+1. **Advanced history search (free-tier visibility, Pro depth)** — saved filters/queries.
+2. **DNS name resolution display** — resolve remote IPs to PTR/hostnames shown alongside IPs (no interception).
+3. **Scheduled reports** — weekly usage summary as notification or file.
+4. **Interface niceties** — per-interface filters, speedtest-aware "current interface" widget, import of process icons for unknown apps.
+5. **Process-tree attribution improvements** — better handling of Flatpak/Snap/AppImage, script interpreters, systemd services.
+6. **Pause/resume monitoring** — temporarily suspend recording (privacy mode) with tray toggle.
 
 ### 6.3 Later — Nice-to-have
 
@@ -145,9 +157,12 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 - As a privacy-conscious user, I want each connection labeled with the owning application, so that I don't have to map PIDs to programs myself.
 - As a metered-connection user, I want to see today's and this month's data usage total, so that I can stay under my cap.
 - As a metered-connection user, I want per-app usage ranking, so that I can find the app draining my data.
+- As a user, I want to see the **total system usage from interface counters**, plus an explicit **"Unattributed / system"** row explaining any gap, so that my headline number matches what my ISP bills (D3a).
 - As a user, I want a dashboard chart of usage over time, so that I can understand patterns at a glance.
 - As a user, I want to click any app and see its detail page, so that I can investigate what it connects to and when.
-- As a user, I want a 90-day searchable history, so that I can answer "which app used data last week?" without maintaining anything.
+- As a user, I want a **90-day searchable history: connection-level detail for the raw window (7 days), endpoint-level aggregates (host/port/proto per day) beyond**, so that I can answer "which app used data last week?" and "where did my data go last month?" without maintaining anything (D2a).
+- As a metered-connection user, I want to set a monthly total budget and get a notification near the limit, so that I avoid overage charges.
+- As a metered-connection user, I want per-app budgets, so that I can contain a specific data-hungry app.
 - As a user, I want clear status when the daemon isn't running or lacks permissions, so that I can fix it without reading logs.
 - As a user, I want to install once with a package manager and never think about permissions again, so that monitoring "just works" after reboot.
 - As a privacy-conscious user, I want all data stored locally with automatic pruning, so that my history is mine and doesn't grow forever.
@@ -159,8 +174,6 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 
 ### V2 (should-have)
 
-- As a metered-connection user, I want to set a monthly total budget and get a notification near the limit, so that I avoid overage charges.
-- As a metered-connection user, I want per-app budgets, so that I can contain a specific data-hungry app.
 - As a user, I want remote IPs shown with resolved hostnames, so that connection lists are readable.
 - As a user, I want a weekly usage summary, so that I can review without opening the app.
 - As a privacy-conscious user, I want a "pause recording" toggle, so that I can temporarily stop history capture.
@@ -174,7 +187,7 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 1. User installs via AUR (`paru -S net-watch-pro`), or adds the apt/dnf repo and installs the package.
 2. Package post-install registers `netwatchd.service` (disabled by default) and the desktop entry.
 3. User launches Net Watch Pro from the app menu.
-4. UI detects daemon not active → onboarding card explains monitoring requires a system service → user clicks "Enable monitoring" → `pkexec` prompt (one admin authorization) → daemon installed/enabled/started.
+4. UI detects daemon not active → onboarding card explains monitoring requires a system service → user clicks "Enable monitoring" → `pkexec` prompt (one admin authorization) → daemon installed/enabled/started **and the current user's UID added to the root-owned allowed-UID list**; subsequent UI launches connect over the Unix socket with no further prompt.
 5. Health check verifies: service active, eBPF programs attached, SQLite writable, kernel compatible.
 6. On success: onboarding shows a 3-card summary (What we collect / Where it's stored (local) / How to remove), then lands on Dashboard with live data. First data appears within seconds.
 7. On failure: specific error state with actionable guidance (e.g., "Kernel 5.15 lacks BTF — see docs link"), retry button, and a "Run without monitoring" demo mode using seeded sample data so the UI remains explorable.
@@ -228,7 +241,7 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 
 ### Quality
 - **Daemon crash-free sessions ≥ 99.5%** (7-day window).
-- **Accounting accuracy:** per-app daily totals within ±5% of system interface counters in test harness; zero unresolved mis-attribution reports at launch.
+- **Accounting accuracy:** headline totals equal kernel interface counters by construction; at least **95% of bytes attributed** on the reference spike workloads (`docs/spike-ebpf-report.md`); zero unresolved mis-attribution reports at launch. **[HYPOTHESIS]** header/ACK overhead is "a few percent" of payload for typical TCP workloads (Appendix B, item 6).
 - **Overhead:** ≤ 3% CPU / ≤ 150 MB RSS daemon p95 under synthetic 50-connection load.
 - **WS reconnect:** UI auto-recovers within 5 s of daemon restart, no stale-state bugs.
 
@@ -249,9 +262,9 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 
 | # | Risk | Impact | Mitigation |
 |---|---|---|---|
-| R1 | Kernel variance across Arch (rolling) vs Ubuntu LTS vs Fedora breaks eBPF attach | High — core function fails | Pin supported kernel floor (5.10+ w/ BTF), CI matrix across the 3 distro families, installer pre-flight checks, graceful degraded mode |
-| R2 | Root daemon attack surface (local WS API, file I/O) | High — security/PR | Localhost-only bind, token auth, hardened systemd unit, capability bounding, minimal endpoints; external security review before 1.0 |
-| R3 | Mis-attribution edge cases (short-lived processes, containers, Flatpak/Snap, scripts) | Medium — trust | Attribution via eBPF socket metadata + `/proc` enrichment; mark confidence levels in UI; process improvements in V2 |
+| R1 | Kernel variance across Arch (rolling) vs Ubuntu LTS vs Fedora breaks eBPF attach | High — core function fails | Per-hook kernel floor from the eBPF spike (F-01), CI matrix across the 3 distro families using **VMs** (containers share the host kernel — F-08), installer pre-flight checks, graceful degraded mode. **[HYPOTHESIS]** spike results pending Q1–Q10 (Appendix B). |
+| R2 | Root daemon attack surface (local socket API, file I/O) | High — security/PR | Unix socket only (no loopback TCP), peer-credential UID allowlist, hardened systemd unit, capability bounding, minimal endpoints; external security review before 1.0 (D1a). |
+| R3 | Mis-attribution edge cases (short-lived processes, containers, Flatpak/Snap, scripts) | Medium — trust | **Cgroup-derived identity first** at exec/connect time; `/proc` as fallback; mark confidence levels in UI; process improvements in V2 (D5a). **[HYPOTHESIS]** exec-time capture reliability unmeasured until spike Q4/Q5. |
 | R4 | Data growth in SQLite (90-day connection log) | Medium — disk/perf | WAL + aggressive indexing, record compaction (aggregate old connections into rollups), configurable retention |
 | R5 | Wayland/X11 tray & window quirks across DEs (GNOME tray, KDE) | Medium — UX | Tauri tray with DE-specific test matrix; document GNOME extension requirement |
 | R6 | VPN/overlay interfaces distort per-app attribution or totals (tunnel double-count) | Medium — accuracy | Treat tunnel interfaces explicitly; deduplicate tun traffic; label VPN sessions |
@@ -261,7 +274,7 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 ### Assumptions
 
 1. Target distros ship kernels ≥ 5.10 with BTF (verified for Arch/CachyOS current; Ubuntu 22.04+, Fedora 36+).
-2. One-time admin authorization (pkexec) is acceptable UX for install/enable.
+2. One-time admin authorization (pkexec) at onboarding to register the allowed-UID list is acceptable UX; no per-launch prompt (D1a).
 3. SQLite is sufficient for 90-day-per-host connection logs on desktop hardware.
 4. Aya + Tokio stack can meet the < 3% CPU overhead bar in observe-only mode.
 5. Users tolerate per-app attribution at process granularity (not per-tab/per-service within a browser).
@@ -280,9 +293,9 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 ## 11. MVP Definition of Done (release criteria)
 
 1. All §6.1 items implemented and QA'd on Arch/CachyOS, Ubuntu LTS (deb), Fedora (rpm).
-2. Accounting accuracy validated in automated harness against interface counters (±5%).
-3. Daemon passes hardening review (systemd sandbox active, localhost-only API, token auth).
-4. Onboarding flow completes in < 3 min on a clean VM for all 3 package paths.
+2. Accounting accuracy validated in automated harness: headline totals equal kernel interface counters by construction; ≥95% of bytes attributed on reference workloads.
+3. Daemon passes hardening review (systemd sandbox active, Unix-socket-only API, peer-credential UID allowlist).
+4. Onboarding flow completes in < 3 min on a clean VM for all 3 package paths; one pkexec prompt only.
 5. Degraded states (no daemon, no eBPF, permission denied) each have a tested UX path.
 6. Pro license validation works offline; free/Pro gating verified.
 7. Uninstall removes service; data removal tested.
