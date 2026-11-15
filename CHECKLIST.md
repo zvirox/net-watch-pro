@@ -20,14 +20,14 @@
 
 ## Phase 1 — Walking Skeleton → `v0.1.0-alpha.1` (week 2)
 
-- [ ] P1.1 Token file + loopback API bind
-- [ ] P1.2 `/health` + `/status`
-- [ ] P1.3 Error envelope + status mapping
-- [ ] P1.4 WS stream skeleton (subscribe/ping)
-- [ ] P1.5 UI WS client + reconnect backoff
-- [ ] P1.6 Status chip (4 states) on `status` channel
-- [ ] P1.7 Dashboard screen shell + app shell (sidebar/topbar)
-- [ ] P1.8 Dev systemd unit
+- [~] P1.1 Token file + loopback API bind <!-- token 0600 verified; loopback-only bind enforced -->
+- [x] P1.2 `/health` + `/status` <!-- integration tests + live curl -->
+- [x] P1.3 Error envelope + status mapping <!-- 401/404/405 envelopes tested -->
+- [x] P1.4 WS stream skeleton (subscribe/ping) <!-- 4401 close, snapshot/push/error frames tested -->
+- [~] P1.5 UI WS client + reconnect backoff <!-- blocked: npm install never completed locally -->
+- [~] P1.6 Status chip (4 states) on `status` channel <!-- blocked: npm -->
+- [~] P1.7 Dashboard screen shell + app shell (sidebar/topbar) <!-- blocked: npm -->
+- [~] P1.8 Dev systemd unit <!-- written; not started on a real system yet -->
 - [ ] **DoD: UI ↔ daemon connected; reconnect ≤ 5 s; tag `v0.1.0-alpha.1`**
 
 ## Phase 2 — Live Slice → `v0.2.0-alpha.2` (week 3)

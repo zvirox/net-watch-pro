@@ -6,5 +6,11 @@ license.workspace = true
 repository.workspace = true
 description = "Shared types, IDs, error codes, and API DTOs for Net Watch Pro (ARCHITECTURE.md §4)"
 
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
+
 [lints]
 workspace = true

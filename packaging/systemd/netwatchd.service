@@ -1,0 +1,30 @@
+# netwatchd — development systemd unit (PLAN.md P1.8).
+#
+# ⚠ DEV UNIT: no hardening directives yet. The hardened production unit
+# (ProtectSystem, PrivateTmp, RestrictAddressFamilies, CAP_BPF/PERFMON/
+# NET_ADMIN) ships with packaging in Phase 8 (AUTH_SECURITY.md §9).
+#
+# Install for local testing:
+#   sudo cp packaging/systemd/netwatchd.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl start netwatchd
+#
+# Point the UI at it with NETWATCH_DEV_DAEMON_ADDR once P1.5 lands.
+# The UI reads the token via the Tauri shell (P1.5); for manual testing:
+#   sudo cat /var/lib/netwatch-pro/api-token
+
+[Unit]
+Description=Net Watch Pro traffic monitor daemon (dev)
+Documentation=https://github.com/zvirox/net-watch-pro
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/netwatchd
+Environment=NETWATCH_DATA_DIR=/var/lib/netwatch-pro
+Environment=NETWATCH_LOG_LEVEL=info
+# §7.1: fail-fast startup classes (exit 2/3/4/5) surface here as failures
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

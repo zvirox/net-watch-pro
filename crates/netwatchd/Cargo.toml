@@ -6,9 +6,16 @@ license.workspace = true
 repository.workspace = true
 description = "Net Watch Pro daemon: composition root (root systemd service, ARCHITECTURE.md §3)"
 
-[[bin]]
-name = "netwatchd"
-path = "src/main.rs"
+[dependencies]
+netwatch-api = { path = "../netwatch-api" }
+netwatch-common = { path = "../netwatch-common" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "signal", "sync"] }
+getrandom = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+# None yet; integration tests live in netwatch-api (TESTING.md §4 rows for P1).
 
 [lints]
 workspace = true

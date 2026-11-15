@@ -6,5 +6,21 @@ license.workspace = true
 repository.workspace = true
 description = "API server: WS routes, token auth, request/validation types (API.md contract)"
 
+[dependencies]
+netwatch-common = { path = "../netwatch-common" }
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["sync"] }
+thiserror = "2"
+getrandom = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio-tungstenite = "0.30"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+
 [lints]
 workspace = true
