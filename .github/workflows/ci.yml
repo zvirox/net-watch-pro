@@ -13,6 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: 1.99.1
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: fmt
@@ -32,9 +33,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: app/package-lock.json
-      - run: npm ci --no-audit --no-fund
+      # P0 stopgap: package-lock.json not yet committed (npm resolution churn
+      # on the TypeScript peer range). Restore `npm ci` + npm cache as soon as
+      # the lockfile lands (tracked in CHECKLIST.md P0.3).
+      - run: npm install --no-audit --no-fund
       - name: svelte-check
         run: npm run check
       - name: lint
