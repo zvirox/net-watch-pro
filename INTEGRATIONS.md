@@ -1,7 +1,9 @@
 # INTEGRATIONS.md — Third-Party Service Registry
 
-**Version:** 1.0 · **Date:** 2026-11-14  
-**Sources:** `PRD.md` §4 (non-goals), §6.1 #9 (license) · `ARCHITECTURE.md` §5.2 ("third-party services: none at runtime"), §8.3 (env vars) · `AUTH_SECURITY.md` §2.3 (license flow)
+**Version:** 1.1 · **Date:** 2026-11-15  
+**Sources:** `PRD.md` §4 (non-goals), §6.1 #9 (license) · `ARCHITECTURE.md` §5.2 ("third-party services: none at runtime"), §8.3 (env vars) · `AUTH_SECURITY.md` §2.3 (license flow) · `docs/decisions.md` (owner decisions D1–D7)
+
+**Version history:** 1.1 (2026-11-15): §4 Future Integration Contract marked non-binding/archived per finding F-10; §4.2 Payments pre-written spec is reference only, not MVP path.
 
 > **⚠ Source-of-truth note (AGENTS.md §3):** the PRD's core promise is **local-only, zero-outbound**. Payments, AI, file storage, and email are therefore **not integrated** — this file records each requested category as N/A with a reason, documents the two real seams that do exist (license purchase handoff, package repos), and defines the service-layer contract any *future* integration must follow. **Adding any N/A category is a PRD change requiring user approval first** — never a code-first decision.
 
@@ -59,6 +61,8 @@
 ---
 
 ## 4. Future Integration Contract (gated — requires PRD change + user approval)
+
+> ⚠ **Non-binding / archived guidance.** Per plan-fix finding F-10, §4.2 (pre-written Payments spec) and §4.1 are **not part of the MVP path**. They are retained only as a reference contract should the owner ever decide to add a third-party API. Any addition requires a PRD change + user approval (AGENTS.md §3) — never a code-first decision.
 
 If a future version legitimately needs a third-party API (e.g. an opt-in update-check channel resolving PRD OQ3, or in-app license provisioning), it must be built exactly this way — decided **now** so a swap later is cheap:
 

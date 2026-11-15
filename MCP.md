@@ -1,7 +1,9 @@
 # MCP.md — AI Assistant Tooling via Model Context Protocol
 
-**Version:** 1.0 · **Date:** 2026-11-14  
-**Related:** `AGENTS.md` (assistant behavior rulebook) · `ARCHITECTURE.md` §8.3 (env vars) · `DATABASE.md` (schema the DB tools may read)
+**Version:** 1.1 · **Date:** 2026-11-15  
+**Related:** `AGENTS.md` (assistant behavior rulebook) · `ARCHITECTURE.md` §8.3 (env vars) · `DATABASE.md` (schema the DB tools may read) · `docs/decisions.md` (owner decisions D1–D7)
+
+**Version history:** 1.1 (2026-11-15): no product-transport changes (MCP is dev tooling only); version bumped for consistency with plan-fix effort.
 
 > **Important distinction:** the *product* Net Watch Pro makes zero outbound connections (PRD, AGENTS.md §5). MCP servers here are **developer tooling for the assistant working on the repo**, not part of the product — they never ship in the app, never run as root, and never touch `/var/lib/netwatch-pro` except through the explicitly allowed read-only DB connection below.
 

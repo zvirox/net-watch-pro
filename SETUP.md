@@ -1,12 +1,14 @@
 # SETUP.md — Run Net Watch Pro Locally
 
+**Version:** 1.1 · **Date:** 2026-11-15
+
 Exact steps to get the repository building on your machine. Every command
 below was verified against this repository's real `package.json`,
 `tauri.conf.json`, `Cargo.toml`, and CI workflow.
 
 > **Read this first:** Net Watch Pro is **pre-alpha, Linux-only** (see status
 > in [README.md](README.md)). The daemon does not monitor traffic yet and
-> there is no database to initialize — those arrive in Phases 1–2
+> there is no database to initialize — those arrive in Phases S/D/1'–2'
 > ([PLAN.md](PLAN.md)). This guide gets the Phase 0 scaffold building and
 > running, which is everything that exists today.
 

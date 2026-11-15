@@ -1,5 +1,6 @@
 # AGENTS.md — Rulebook for AI Coding Assistants
 
+**Version:** 1.1 · **Date:** 2026-11-15  
 **Every AI assistant working in this repo must follow these rules.** They are binding, not suggestions. When a rule is unclear, ask the user. When a rule conflicts with a source-of-truth file, see §3.
 
 ---
@@ -60,6 +61,12 @@ Exception: if the docs contradict each other, the priority order in §2 decides 
 
 ### 4.5 Docs stay in sync
 - Changed an endpoint? Update API.md (+ `docs/api-contract.md`). Changed the schema? DATABASE.md first, then a migration. Changed tokens/components? DESIGN.md. The doc update is part of the same change, not a follow-up.
+
+### 4.6 Certainty convention: [HYPOTHESIS] / [VERIFIED]
+- Any claim about kernel/eBPF behavior that is **not yet measured** must be tagged `[HYPOTHESIS]` in the docs (see `docs/decisions.md` D1–D7 and Appendix B of `PLAN-FIX-INSTRUCTIONS.md`).
+- After the eBPF spike (`spikes/ebpf-accounting/` + `docs/spike-ebpf-report.md`), re-tag as `[VERIFIED: spike-ebpf-report §n]` or `[REFUTED]`.
+- Do not present guesses as contracts; code must not follow unmeasured `[HYPOTHESIS]` claims.
+
 
 ---
 
