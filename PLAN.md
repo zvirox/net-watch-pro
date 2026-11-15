@@ -1,8 +1,10 @@
 # PLAN.md — Implementation Roadmap
 
-**Version:** 1.0 · **Date:** 2026-11-14  
+**Version:** 1.1 · **Date:** 2026-11-15  
 **Sources:** `PRD.md` §6 (features), `ARCHITECTURE.md` §4 (structure), `DATABASE.md` §8 (migrations), `API.md` §2 (endpoints)  
 **Companion tracker:** `CHECKLIST.md` (same task IDs, ticked live)
+
+**Version history:** 1.1 (2026-11-15): expanded P1.5 security, Polkit, Tauri IPC/WS bridge, and three-family verification requirements.
 
 > **Ordering rules:** vertical slices only — every phase ends with a runnable app; never all-backend-then-all-frontend. Each task ≤ 2 hours. Dependencies use task IDs (e.g. `dep: P1.3`). A task may start when its deps are done.
 
@@ -64,16 +66,16 @@
 
 | ID | Task | Files | Verify | Deps |
 |---|---|---|---|---|
-| P1.1 | Token file writer + loopback API bind (`NETWATCH_API_ADDR/TOKEN_FILE`) | `crates/netwatchd/src/{config,api}.rs` | daemon writes token (0600), curl without token → 401 `AUTH_INVALID` | P0.2 |
+| P1.1 | Token file writer + loopback API bind (`NETWATCH_API_ADDR/TOKEN_FILE`) | `crates/netwatchd/src/{config,api}.rs` | daemon writes token (0600), curl without token → 401 `AUTH_INVALID` | P0.2 <!-- token writer unit tests and code bind checks; service-level production path behavior remains unverified --> |
 | P1.2 | `GET /health` (no auth) + `GET /status` per API.md §2.1 | `crates/netwatch-api/src/` | curl both endpoints returns §2.1 payloads | P1.1 |
 | P1.3 | Error envelope + status-code mapping as shared helpers | `crates/netwatch-api/src/` | 401 body matches API.md §1.3 exactly | P1.2 |
 | P1.4 | WS stream skeleton: `subscribe`/`unsubscribe`/`ping` on `/stream` | `crates/netwatch-api/src/` | wscat: ping→pong, bad channel → `QUERY_INVALID` frame | P1.3 |
-| P1.5 | UI WS client: reconnect w/ capped backoff, auth header | `app/src/lib/api/` | kill daemon → chip "Connecting…", restart ≤ 5 s recovery | P1.4 |
-| P1.6 | Status chip component (4 states) wired to `status` channel | `app/src/lib/components/`, `app/src/lib/screens/dashboard/` | flip daemon states manually → chip follows (DESIGN.md §7.5) | P1.5, P0.6 |
-| P1.7 | Empty Dashboard screen shell + sidebar/topbar shell (DESIGN.md §8.1) | `app/src/lib/screens/` | routes render; compact/wide reflow sanity | P0.5 |
-| P1.8 | Daemon runs as systemd unit (dev unit file, no hardening yet) | `packaging/systemd/netwatchd.service` | `systemctl start netwatchd` → UI connects | P1.2 |
+| P1.5 | Fixed-path Polkit token helper + secure daemon token replacement; Tauri retrieval command + authenticated native WS bridge; in-memory UI REST/WS client with capped reconnect | `crates/netwatch-token-helper/`, `crates/netwatchd/src/token.rs`, `crates/netwatch-api/src/auth.rs`, `app/src-tauri/`, `packaging/polkit/`, `app/src/lib/api/` | helper rejects args/symlinks/unsafe ownership/mode/type/malformed token; pkexec cancel/failure/no-agent handled; valid helper returns only token; API rejects missing/malformed/wrong token and accepts correct token; WS header auth works; daemon restart rotates token and UI recovers ≤ 5 s; no token persistence/logging | P1.4 <!-- full local Rust+UI suite green 2026-11-15; real pkexec, rotation recovery and distro package authorization remain unverified --> |
+| P1.6 | Status chip component (4 states) wired to `status` channel | `app/src/lib/components/`, `app/src/lib/screens/dashboard/` | flip daemon states manually → chip follows (DESIGN.md §7.5) | P1.5, P0.6 <!-- built; runtime channel state verification remains open --> |
+| P1.7 | Empty Dashboard screen shell + sidebar/topbar shell (DESIGN.md §8.1) | `app/src/screens/` | routes render; compact/wide reflow sanity | P0.5 <!-- shell implemented; preview verified at 566px without horizontal overflow; routes/navigation remain static, native Tauri launch unverified --> |
+| P1.8 | Daemon runs as systemd unit (dev unit file, no hardening yet) | `packaging/systemd/netwatchd.service` | `systemctl start netwatchd` → UI connects | P1.2 <!-- unit syntax verified; service target executable not installed, so no start/connect test --> |
 
-**DoD:** start daemon + `tauri dev` → chip shows "Monitoring" (stub state), reconnect works, CI green, tag `v0.1.0-alpha.1`.
+**DoD:** start daemon + `tauri dev` → chip shows "Monitoring" (stub state), reconnect works, CI green, helper/policy packaging permissions verified on Arch/CachyOS, Ubuntu, and Fedora, tag `v0.1.0-alpha.1`. No production-readiness claim before the three-family helper authorization checks pass.
 
 ---
 

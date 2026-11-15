@@ -20,15 +20,15 @@
 
 ## Phase 1 — Walking Skeleton → `v0.1.0-alpha.1` (week 2)
 
-- [~] P1.1 Token file + loopback API bind <!-- token 0600 verified; loopback-only bind enforced -->
-- [x] P1.2 `/health` + `/status` <!-- integration tests + live curl -->
+- [~] P1.1 Token file + loopback API bind <!-- unit tests and loopback check exist; production root-owned path/install behavior not verified -->
+- [x] P1.2 `/health` + `/status` <!-- workspace integration tests pass -->
 - [x] P1.3 Error envelope + status mapping <!-- 401/404/405 envelopes tested -->
 - [x] P1.4 WS stream skeleton (subscribe/ping) <!-- 4401 close, snapshot/push/error frames tested -->
-- [~] P1.5 UI WS client + reconnect backoff <!-- blocked: npm install never completed locally -->
-- [~] P1.6 Status chip (4 states) on `status` channel <!-- blocked: npm -->
-- [~] P1.7 Dashboard screen shell + app shell (sidebar/topbar) <!-- blocked: npm -->
-- [~] P1.8 Dev systemd unit <!-- written; not started on a real system yet -->
-- [ ] **DoD: UI ↔ daemon connected; reconnect ≤ 5 s; tag `v0.1.0-alpha.1`**
+- [~] P1.5 Fixed-path helper, secure token replacement, Tauri REST/WS bridge, in-memory UI client <!-- full local Rust+UI suite green 2026-11-15 (fmt/clippy -D warnings/test/check + eslint/svelte-check/vite build); real pkexec flow, daemon-rotation reconnect, and distro package auth remain unverified -->
+- [~] P1.6 Status chip (4 states) connected to `status` channel <!-- implemented; lint/svelte-check/build pass; channel-driven state transitions not runtime-verified -->
+- [~] P1.7 Dashboard shell + sidebar/topbar <!-- shell implemented; lint/build pass; preview verified at 566px without horizontal overflow; routes/navigation remain static, native Tauri launch unverified -->
+- [~] P1.8 Dev systemd unit <!-- unit syntax checked; daemon was not installed/launched as a service -->
+- [!] **DoD: UI ↔ daemon connected; reconnect ≤ 5 s; tag `v0.1.0-alpha.1`** <!-- blocked: runtime + Arch/CachyOS packaging/pkexec action, Ubuntu and Fedora authorization gates incomplete -->
 
 ## Phase 2 — Live Slice → `v0.2.0-alpha.2` (week 3)
 

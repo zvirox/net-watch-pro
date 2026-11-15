@@ -26,6 +26,8 @@
 | F9 | Freemium mechanics | §6.1 #9 | Phase 6 | `/license*`, `POST /exports`, gating on C2/T2 | `license` | Upgrade modal (§8.8), History locks |
 | F10 | Updates & packaging | §6.1 #10 | Phase 8, 11 | `GET /health` (version) | `schema_migrations` | Onboarding, About |
 
+Phase 1 status note (2026-11-15): full local Rust+UI verification suite passes (cargo fmt/clippy -D warnings/test/check, eslint, svelte-check, vite build); API/token/UI skeleton exists. Daemon/UI service launch, real pkexec handoff, daemon-restart reconnect, and three-family packaging/Polkit authorization are not verified, so F6 remains in progress.
+
 Status tracker (update after each confirmed feature):
 
 | # | Feature | Status |
