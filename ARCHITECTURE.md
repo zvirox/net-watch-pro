@@ -267,7 +267,7 @@ Retry policy: user-initiated retries everywhere except WS reconnect (automatic, 
 | Rust crates | kebab-case | `netwatch-core` |
 | Rust modules/files | snake_case | `accounting.rs` |
 | Rust types | UpperCamelCase | `ConnectionEvent` |
-| SQLite tables/columns | snake_case, plural tables | `usage_rollup_hour` |
+| SQLite tables/columns | snake_case, plural tables | `usage_rollup_15m` |
 | WS routes/channels | dot-namespaced kebab | `live.connections` |
 | Env vars | `NETWATCH_` + UPPER_SNAKE | `NETWATCH_DATA_DIR` |
 | TS files | kebab-case | `daemon-link.ts` |

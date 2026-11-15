@@ -178,7 +178,7 @@ Errors: 400 (empty/invalid filters), 401, 403 `EXPORT_PRO_REQUIRED`, 429, 500.
 |---|---|---|---|---|
 | A1 | `GET /api/v1/apps` | yes | §6.1 #2 per-app usage ranking / Top apps | `apps` (+ rollup join) |
 | A2 | `GET /api/v1/apps/{id}` | yes | §6.1 #4 App detail page | `apps` |
-| A3 | `GET /api/v1/apps/{id}/usage` | yes | §6.1 #4 per-app usage over time | `usage_rollup_hour`, `usage_rollup_day`, `connections` (raw window) |
+| A3 | `GET /api/v1/apps/{id}/usage` | yes | §6.1 #4 per-app usage over time | `usage_rollup_15m`, `connections` (raw window) |
 | A4 | `GET /api/v1/apps/{id}/endpoints` | yes | §6.1 #4 endpoint summary | `connections` (aggregate) |
 
 **A1 `GET /apps`** — ranked list. Query: `?sort=usage_month|usage_today|last_seen_at&order=`, `?limit=` (max 200), `?include_deleted=true` (history joins after soft delete). Success 200:

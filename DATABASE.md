@@ -409,8 +409,8 @@ INSERT INTO connections (app_id, interface_id, pid, process_name, protocol,
    '151.101.1.1', 443, 240000, 1980000, 1731567000, 1731570600, 0,
    1731567000, 1731570600);
 
--- rollups: hourly compaction of the above
-INSERT INTO usage_rollup_hour (app_id, bucket_start, bytes_up, bytes_down,
+-- rollups: 15-minute compaction of the above
+INSERT INTO usage_rollup_15m (app_id, bucket_start, bytes_up, bytes_down,
   connection_count, interfaces_mask, created_at, updated_at) VALUES
   (1, 1731565200, 240000, 1980000, 1, 'wlan0', 1731574200, 1731574200);
 ```

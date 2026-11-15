@@ -6,9 +6,8 @@
 
 ## Base & transport
 
-- `ws(s)://127.0.0.1:7897/api/v1` — loopback only; HTTP GET for queries, WS for streams (`/api/v1/stream`).
-- Auth: `Authorization: Bearer <per-boot token>` from canonical production `/var/lib/netwatch-pro/api-token` (mode 0600); UI obtains it via the one-shot Polkit-authorized native helper. `NETWATCH_API_TOKEN_FILE` is daemon-only for dev/test and never changes the helper path; anonymous: `GET /health` only.
-- WebSocket clients must send the Authorization header on upgrade. Browser clients use the Tauri native link bridge because the WebSocket API cannot set custom headers; the wire contract remains unchanged.
+- `unix:/run/netwatch-pro/api.sock` by default (`NETWATCH_API_SOCKET` env var) — Unix domain socket only; HTTP GET for queries, multiplexed frame stream for live channels.
+- Auth: peer-credential (`SO_PEERCRED`) UID check vs root-owned allowed-UID list; one admin prompt at onboarding pkexec, none per launch. No bearer token, no Polkit helper, no `NETWATCH_API_TOKEN_FILE`; anonymous: `GET /health` only.
 - All payloads versioned JSON; unknown fields ignored on read, rejected on write.
 - Version: path-based `/api/v1`; additive-only; breaking → `/api/v2` + 90-day deprecation.
 
@@ -38,6 +37,6 @@ Status mapping: 400 QUERY_INVALID · 401 AUTH_INVALID · 403 PERMISSION_DENIED/E
 | Interfaces | `GET /interfaces` · `PATCH /interfaces/{id}` |
 | Settings | `GET /settings` · `PUT /settings/{key}` |
 | License | `GET /license` · `POST /license/activate` · `DELETE /license` |
-| Stream | `(ws) /stream` → channels `live.connections`, `status`, `usage.totals` |
+| Stream | socket frame stream → channels `live.connections`, `status`, `usage.totals` |
 
-Rate limits: 120/min reads · 5/min export create · 10/min writes & downloads → 429 + `Retry-After`.
+Rate limits: 600/min reads · 5/min export create · 10/min writes & downloads → 429 + `Retry-After`.
