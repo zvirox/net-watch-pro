@@ -1,7 +1,9 @@
 # TESTING.md — Test Plan
 
-**Version:** 1.0 · **Date:** 2026-11-14  
-**Sources:** `PRD.md` §9/§11 (metrics, DoD) · `FEATURES.md` (per-feature behavior + acceptance criteria) · `API.md` §1–2 (contracts, error codes) · `ARCHITECTURE.md` §4/§9 (tests/ layout, budgets)
+**Version:** 1.1 · **Date:** 2026-11-15  
+**Sources:** `PRD.md` §9/§11 (metrics, DoD) · `FEATURES.md` (per-feature behavior + acceptance criteria) · `API.md` §1–2 (contracts, error codes) · `ARCHITECTURE.md` §4/§9 (tests/ layout, budgets) · `docs/decisions.md` (owner decisions D1–D7)
+
+**Version history:** 1.1 (2026-11-15): apply plan-fix findings — accuracy harness redefined (F-03/D3a), auth matrix → UID allowlist (F-06/D1a), timezone/billing-cycle cases (F-04/D4a), cgroup identity cases (F-05/D5a), kernel VM matrix not containers (F-08), write-rate test (F-09).
 
 > **Working rule (binding):** tests are generated **for one feature at a time**, together with the feature code, and **must pass before the next feature starts** — same gate as FEATURES.md §11 (build → test green → update PLAN/CHECKLIST → user confirmation).
 
@@ -31,7 +33,7 @@
 
 | P | What | Why |
 |---|---|---|
-| **P0** | Accounting accuracy (F2/F3 harness); token auth matrix (401/403 paths); license gating server-side (F9); WS reconnect ≤ 5 s (F1); persistence across restart (F5); migration forward-only integrity | These are the product's promises; a failure here is a launch blocker (PRD §11). |
+| **P0** | Accounting accuracy (F2/F3 harness; totals equal kernel counters, ≥95% attributed); socket peer-credential auth matrix (UID in/out of allowlist); license gating server-side (F9); socket reconnect ≤ 5 s (F1); persistence across restart (F5); migration forward-only integrity | These are the product's promises; a failure here is a launch blocker (PRD §11). |
 | **P1** | Feature acceptance criteria F1–F10 (§4 tables); error/loading/empty states; pagination/sort/filter contracts; rate limits | Core UX correctness per API.md contracts. |
 | **P2** | Edge cases (§5); i18n-ish formatting; theme switching; virtualization at scale; reduced-motion | Polish-level; still tested, later in each feature. |
 
@@ -45,8 +47,8 @@
 | Process attribution | Fixture `/proc` trees (fake pids/exe paths) mounted via test config; confidence levels exercised exactly (exact/heuristic/unknown). |
 | History volumes | `tests/fixtures/db/seed_*.sql`: 10 k rows (UI virtualization), 90-day spread (pagination), 1-year soak profile (P10.3), empty db, single-row db. |
 | Clock | Injectable `Clock` trait in `netwatch-core`; tests pin `now` — rollup buckets, retention pruning, month boundaries all deterministic (F2 timezone cases). |
-| Daemon down / errors | Kill/deferred-start in integration tests; UI e2e uses a **mock WS server** serving canned snapshots/deltas/errors from fixtures (F1 frozen/disconnect states). |
-| Pro gating | Vendor test keys (valid/expired/tampered/malformed) as fixture files + the **unsigned-key** negative set; export jobs run against seeded DB snapshots (`VACUUM INTO` copies per DATABASE.md §6). |
+| Daemon down / errors | Kill/deferred-start in integration tests; UI e2e uses a **mock socket server** serving canned snapshots/deltas/errors from fixtures (F1 frozen/disconnect states). Auth is peer-credential — tests run as allowed UID vs denied UID. |
+| Kernel matrix | **VMs** (QEMU/virtme-ng/Vagrant) for Arch/CachyOS, Ubuntu LTS, Fedora — containers share the host kernel and cannot catch kernel-specific eBPF failures (F-08). Containers only for userspace tests. |
 | Rate limits | Integration tests fire 6th export / 121st read and assert 429 + `Retry-After` shape. |
 | Theme/screenshots | Playwright runs in light+dark; baseline screenshots stored per breakpoint (960/1280/1600 widths) for DESIGN.md §5.4 reflow review. |
 
@@ -64,21 +66,23 @@
 | IPv6 + ICMP rows | `::1` conn, icmp conn | Compressed IPv6 renders; port `—` for icmp; no column jitter |
 | Sort/filter | `?sort=rate`, `?protocol=udp` | Ordered per contract; unknown filter → 400 `QUERY_INVALID` shown |
 | Pause | click freeze | Banner "Frozen at HH:MM"; WS deltas ignored until resume |
-| Daemon killed mid-stream | stop daemon | Chip "Connecting…", data marked stale (caption), recovers ≤ 5 s |
-| High churn (5 k adds/s fixture) | burst fixture | Virtualized list holds 60 fps scroll; deltas batched |
+| Daemon killed mid-stream | stop daemon | Chip "Connecting…", data marked stale (caption), recovers ≤ 5 s over socket reconnect |
 | Degraded mode | `NETWATCH_DISABLE_EBPF=1` | Warning chip + banner; table opens empty with hint |
-| Empty db | fresh install, no traffic | Empty state "Waiting for first data" — not zeros |
+| Auth: UID in allowlist | run UI as allowed UID | Socket connect succeeds; endpoints return 200 |
+| Auth: UID not in allowlist | run UI as non-allowed UID | Socket connection refused; chip "Stopped" |
 
 ### F2 — Per-app usage accounting
 
 | Scenario | Input | Expected |
 |---|---|---|
-| Daily totals ±5% | accuracy harness, 50-conn synthetic load | Per-app totals within ±5% of injected counters |
+| Daily totals | accuracy harness, 50-conn synthetic load | Headline total equals kernel interface counters by construction; ≥95% of bytes attributed; unattributed row shows the gap |
 | Compaction preserves totals | force raw window expiry | raw+rollup sum constant across the seam |
 | Soft-deleted app | expire last activity, query history | Name/icon still resolve; `deleted_at` set |
 | Renamed binary | same path, new hash | New `apps` row; old history untouched |
 | Month boundary | clock pinned at UTC month edge | "This month" excludes last month's tail; tz caption correct |
 | Clock skew/DST | pinned offsets ±1 h | UTC buckets stable; local labels shift visibly |
+| Half-hour/45-min TZ | `Asia/Kolkata` (+5:30), `Asia/Kathmandu` (+5:45) | "today" resets at local midnight, not 05:30/05:45 |
+| Billing-cycle day | set `billing_cycle_day` ≠ 1 | "this month" = billing cycle, not calendar month |
 | Top ranking vs summary | query `/apps` + `/usage/summary` | Order and totals agree |
 | top_limit bounds | `?top_limit=99` | 400 `QUERY_INVALID` (max 10) |
 
@@ -102,6 +106,8 @@
 | Tabs populated | app with full history | Overview/Connections/Endpoints all real data |
 | Soft-deleted app | open deleted app | Renders with "No longer active — last seen …" caption |
 | Pruned window | old rows expired | Connections tab shows retained only + retention caption |
+| Cgroup identity | Flatpak, Snap, script interpreter, systemd service | `identity_kind` set; `app_key` unique; no exe_path collapse |
+| Deleted binary | `/proc/<pid>/exe` shows `(deleted)` | `exe_path` stored as provenance; `app_key` remains stable |
 | No icon | app without icon path | Fallback container, never broken image |
 | Endpoints cap | app with 300 remote IPs | Top 100 + "and N more" |
 | 404 | unknown id | 404 with honest message |
@@ -186,7 +192,7 @@
 | Class | Cases | Where |
 |---|---|---|
 | Invalid input | unknown params → 400 naming field; bad types; out-of-range limits; `since>until`; oversized body (>16 KB) | API contract tests, all write/query endpoints |
-| Unauthorized | no token → 401 everywhere but `/health`; wrong token; expired (post-restart) token; WS without token → close 4401 | Auth matrix test (P0) |
+| Unauthorized | UID not in allowlist → socket refused; allowed UID → 200 everywhere but `/health`; WS without valid UID → refused | Socket auth matrix test (P0) |
 | Forbidden | free tier: advanced filters/export/retention>90 → 403 with correct code distinction | Gating matrix (P0) |
 | Network failure | daemon killed; WS drop mid-snapshot; token file gone; API addr refused | Integration + e2e (F1/F6 states) |
 | Storage failure | read-only data dir; disk-full write; corrupted db page → fail-fast exit codes | Integration fault-injection |
@@ -224,7 +230,7 @@ npm run test                                # vitest unit + component
 npm run test:e2e                            # playwright (light+dark, 3 widths)
 
 # Accuracy & budgets (gates for DoD)
-cargo run -p accuracy-harness -- --profile 50conn   # ±5% check (P10.1)
+cargo run -p accuracy-harness -- --profile 50conn   # totals equal kernel counters, ≥95% attributed (P10.1)
 cargo run -p accuracy-harness -- --budget           # CPU/RSS p95 (P10.2)
 
 # Full pre-release gate (CI = same order)
@@ -245,15 +251,16 @@ Run on clean VMs (Arch, Ubuntu LTS, Fedora) with the packaged build. Tick per di
 
 **Install & onboarding**
 - [ ] Install via each channel works; no dependency surprises
-- [ ] Onboarding completes < 3 min; pkexec prompt once; failure paths show guidance
+- [ ] Onboarding completes < 3 min; pkexec prompt once (UID allowlist registration); failure paths show guidance
 - [ ] Uninstall leaves no residue; data opt-in works both ways
 
 **Core flows**
-- [ ] Dashboard numbers plausible vs `vnstat`/interface counters (±5% eyeball + harness)
+- [ ] Dashboard numbers plausible vs `vnstat`/interface counters (totals equal kernel counters; unattributed row shows gap)
 - [ ] Live view labels apps correctly during: browsing, downloads, streaming, VPN on/off
 - [ ] History answers "what used data yesterday/last week"; pagination feels instant
 - [ ] App detail tabs all populated for top 5 real apps + 1 unknown process
 - [ ] Pro: activate test key → instant unlock → export → deactivate → locks return
+- [ ] Socket auth: allowed UID connects; non-allowed UID refused; no per-launch pkexec prompt
 
 **States & honesty**
 - [ ] Kill daemon → banner + chip honest; recovery ≤ 5 s, no stale-data lies
