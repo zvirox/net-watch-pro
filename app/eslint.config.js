@@ -13,15 +13,30 @@ export default ts.config(
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: { window: 'readonly', document: 'readonly', console: 'readonly' },
-      // Typed linting for .ts and .svelte alike (tseslint projectService).
+      // Typed linting for .ts files; config .js files sit outside the
+      // tsconfig project, so they get the default project instead.
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ['eslint.config.js', 'svelte.config.js'],
+        },
         extraFileExtensions: ['.svelte'],
       },
     },
     rules: {
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       '@typescript-eslint/no-explicit-any': 'error',
+    },
+  },
+  {
+    files: ['**/*.svelte'],
+    languageOptions: {
+      // eslint-plugin-svelte parses the file; TS script contents need the
+      // TS parser explicitly (documented setup for Svelte 5 + TS).
+      parserOptions: {
+        parser: ts.parser,
+        projectService: true,
+        extraFileExtensions: ['.svelte'],
+      },
     },
   },
   {

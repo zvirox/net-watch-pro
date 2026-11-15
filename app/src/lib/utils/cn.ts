@@ -26,7 +26,9 @@ function flatten(classes: ClassArray): Array<string | number | bigint | boolean 
     if (Array.isArray(c)) {
       out.push(...flatten(c));
     } else if (c && typeof c === 'object') {
-      for (const [key, on] of Object.entries(c as ClassDictionary)) {
+      // Narrowed: arrays were handled above; the only remaining object
+      // member of ClassValue is the dictionary.
+      for (const [key, on] of Object.entries(c)) {
         if (on) out.push(key);
       }
     } else {
