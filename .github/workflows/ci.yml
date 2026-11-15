@@ -15,6 +15,13 @@ jobs:
         with:
           toolchain: 1.99.1
           components: rustfmt, clippy
+      # Tauri shell (netwatch-app) is a workspace member: its system deps
+      # must be present for clippy/test of the whole workspace (P0.4).
+      - name: install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev
       - uses: Swatinem/rust-cache@v2
       - name: fmt
         run: cargo fmt --check
