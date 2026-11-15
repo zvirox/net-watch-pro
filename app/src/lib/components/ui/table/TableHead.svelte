@@ -11,7 +11,10 @@
   let { class: className, numeric = false, children, ...rest }: Props = $props();
 </script>
 
-<th class={cn('nwp-table-head-cell', numeric && 'nwp-table-head-cell--numeric', className)} {...rest}>
+<th
+  class={cn('nwp-table-head-cell', numeric && 'nwp-table-head-cell--numeric', className)}
+  {...rest}
+>
   {@render children?.()}
 </th>
 

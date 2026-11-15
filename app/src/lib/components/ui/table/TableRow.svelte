@@ -13,7 +13,12 @@
 </script>
 
 <tr
-  class={cn('nwp-table-row', dense && 'nwp-table-row--dense', selected && 'nwp-table-row--selected', className)}
+  class={cn(
+    'nwp-table-row',
+    dense && 'nwp-table-row--dense',
+    selected && 'nwp-table-row--selected',
+    className,
+  )}
   {...rest}
 >
   {@render children?.()}

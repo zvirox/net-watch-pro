@@ -12,7 +12,12 @@
 </script>
 
 <td
-  class={cn('nwp-table-cell', numeric && 'nwp-table-cell--numeric', mono && 'nwp-table-cell--mono', className)}
+  class={cn(
+    'nwp-table-cell',
+    numeric && 'nwp-table-cell--numeric',
+    mono && 'nwp-table-cell--mono',
+    className,
+  )}
   {...rest}
 >
   {@render children?.()}

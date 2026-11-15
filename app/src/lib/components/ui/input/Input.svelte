@@ -43,10 +43,22 @@
     <label class="nwp-field__label" for={inputId}>{label}</label>
   {/if}
 
-  <div class="nwp-field__control" class:nwp-field__control--search={search} class:nwp-field__control--error={!!error}>
+  <div
+    class="nwp-field__control"
+    class:nwp-field__control--search={search}
+    class:nwp-field__control--error={!!error}
+  >
     {#if search}
       <!-- §7.2: leading search icon 16px (icon set lands per DESIGN.md §6.1) -->
-      <svg class="nwp-field__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <svg
+        class="nwp-field__icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        aria-hidden="true"
+      >
         <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
       </svg>
     {/if}

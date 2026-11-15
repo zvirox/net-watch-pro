@@ -15,12 +15,22 @@ export function cn(...classes: ClassValue[]): string {
 }
 
 /** Mirrors clsx's `ClassValue` (re-exported by svelte/elements). */
-type ClassValue = string | number | bigint | boolean | ClassDictionary | ClassArray | null | undefined;
+type ClassValue =
+  | string
+  | number
+  | bigint
+  | boolean
+  | ClassDictionary
+  | ClassArray
+  | null
+  | undefined;
 type ClassDictionary = Record<string, unknown>;
 type ClassArray = ClassValue[];
 
 /** Flatten nested class values depth-first, honoring dictionary truthiness. */
-function flatten(classes: ClassArray): Array<string | number | bigint | boolean | null | undefined> {
+function flatten(
+  classes: ClassArray,
+): Array<string | number | bigint | boolean | null | undefined> {
   const out: Array<string | number | bigint | boolean | null | undefined> = [];
   for (const c of classes) {
     if (Array.isArray(c)) {
