@@ -33,6 +33,14 @@ shell, the UI workspace with the vendored design-system primitives, and CI.
 shows no data. Phase tracking, with per-task verification evidence, lives in
 the [progress checklist](CHECKLIST.md).
 
+**Current work (2026-11-15):** the planning docs are being revised per
+`PLAN-FIX-INSTRUCTIONS.md` findings F-01–F-11 (eBPF spike inserted as Phase S,
+Unix-socket + peer-credential transport replacing loopback+token, endpoint-day
+aggregates for long-term history, interface-counter headline totals, and
+certainty tagging of unmeasured kernel claims). Owner decisions D1–D7 are
+recorded in `docs/decisions.md`. No product code is being written during this
+fix effort except inside `spikes/`.
+
 The [changelog](CHANGELOG.md) records what each tagged release contains. The
 first tagged release, `v0.0.1-alpha.1`, is the Phase 0 scaffold: it compiles,
 passes fmt/clippy/check, and ships no product features.
