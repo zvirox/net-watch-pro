@@ -21,7 +21,7 @@
 | DB tests | sqlx test macros against temp DBs + `VACUUM INTO` snapshots | Forward-only migrations exercised exactly as in production (DATABASE.md §8). |
 | UI unit tests | Vitest + `@testing-library/svelte` | Standard Svelte 5 stack; stores/components tested with runes. |
 | UI e2e | Playwright (already in MCP.md §3.4) driving the `tauri dev` webview | Real app, real WS, real states — screenshots double as DESIGN.md review artifacts. |
-| Accuracy harness | Custom binary in `tests/accuracy/` + synthetic traffic generator | Proves PRD ±5% accounting (DoD #2) repeatably in CI. |
+| Accuracy harness | Custom binary in `tests/accuracy/` + synthetic traffic generator | Proves PRD accuracy: totals equal kernel interface counters by construction; ≥95% of bytes attributed (DoD #2) repeatably in CI. |
 | Performance | Perf assertions inside integration tests (CPU/RSS sampled) | Budgets are gates, not vibes (PRD ≤3% CPU / ≤150 MB RSS). |
 | Static gates | `cargo fmt --check`, `cargo clippy -D warnings`, `svelte-check`, eslint, `cargo deny`, `npm audit` | Already mandated by ARCHITECTURE.md §8.2 / P0.7. |
 
@@ -241,7 +241,7 @@ just gate   # fmt+clippy+test+cov+lint+svelte-check+vitest+playwright+harness
 
 - **On every PR:** fmt, clippy, unit tests, svelte/vitest, contract tests — minutes, cheap.
 - **On merge to main:** + integration suite, e2e (light+dark), coverage gates.
-- **Nightly:** 3-distro matrix, accuracy + budget harnesses, soak profile, `cargo deny`/`npm audit`.
+- **Nightly:** 3-distro matrix on VMs, accuracy + budget harnesses, soak profile, `cargo deny`/`npm audit`.
 
 ---
 

@@ -6,7 +6,7 @@
 
 ---
 
-## Phase 0 — Foundation & Tooling → `v0.0.1-alpha.1` (week 1)
+## Phase 0 — Foundation & Tooling → `v0.0.1-alpha.1` (~40 h)
 
 - [x] P0.1 Cargo workspace root configs <!-- verified: cargo check/fmt/clippy clean -->
 - [x] P0.2 Crate skeletons (common, core, netwatchd, api, xtask) <!-- zero deps, compiles -->
@@ -14,12 +14,11 @@
 - [x] P0.4 Tauri 2 shell, window opens, capabilities least-privilege <!-- cargo check/clippy/fmt clean -->
 - [~] P0.5 shadcn-svelte vendored: button, input, table <!-- blocked on node_modules -->
 - [~] P0.6 Token CSS + self-hosted fonts, both themes <!-- tokens.css done; fonts downloaded; @font-face added -->
-- [x] P0.7 CI: fmt/clippy/svelte-check + 3-distro build matrix <!-- workflow written; runs post-push -->
+- [x] P0.7 CI: fmt/clippy/svelte-check + 3-distro build matrix on VMs <!-- workflow written; runs post-push -->
 - [x] P0.8 Docs mirrors (api-contract, db-schema, env-vars)
 - [ ] **DoD: themed blank window runs; `cargo check` + CI green**
 
 ## Phase S — eBPF Spike → time-boxed (~25 h)
-
 - [ ] S.1 Spike setup: spikes/ebpf-accounting/ (nightly + bpf-linker; aya, aya-ebpf, bpf-linker) <!-- not started -->
 - [ ] S.2 Implement + compare Designs 1–3 (cgroup_skb cookie / function hooks / hybrid) <!-- not started -->
 - [ ] S.3 Measure Q1–Q10 (attribution vs counters, CPU/RSS, cgroup identity, capabilities, Secure Boot, churn, toolchain, write load) <!-- not started -->
@@ -27,7 +26,7 @@
 - [ ] S.5 Write docs/spike-ebpf-report.md; go/no-go on ±5% accuracy <!-- not started -->
 - [ ] **DoD: spike report exists; every kernel claim [VERIFIED] or [HYPOTHESIS]**
 
-## Phase D — Doc Fixes → consistency pass done
+## Phase D — Doc Fixes → consistency pass done (~20 h)
 
 - [ ] D.1 Record owner decisions D1–D7 in docs/decisions.md <!-- done -->
 - [ ] D.2 Apply F-01–F-11 to PRD → DESIGN → ARCHITECTURE → DATABASE → API → AUTH_SECURITY <!-- in progress -->
@@ -36,7 +35,7 @@
 - [ ] D.5 Cross-check: PRD §7 story → table + endpoint; PRD §10 risk → test <!-- open -->
 - [ ] **DoD: all findings merged; owner reviews before Phase 1' code resumes**
 
-## Phase 1' — Walking Skeleton (revised) → `v0.1.0-alpha.1`
+## Phase 1' — Walking Skeleton (revised) → `v0.1.0-alpha.1` (~40 h)
 
 - [ ] P1.1 Unix-socket listener + peer-credential UID allowlist <!-- replaces token file + loopback bind (D1a) -->
 - [ ] P1.2 `/health` + `/status` <!-- workspace integration tests pass -->
@@ -48,7 +47,7 @@
 - [ ] P1.8 Dev systemd unit (Unix socket path) <!-- not started -->
 - [ ] **DoD: UI ↔ daemon connected over socket; reconnect ≤ 5 s; no per-launch prompt; tag `v0.1.0-alpha.1`**
 
-## Phase 2 — Live Slice → `v0.2.0-alpha.2`
+## Phase 2 — Live Slice → `v0.2.0-alpha.2` (~40 h)
 
 - [ ] P2.1 eBPF attach + ring buffer plumbing <!-- gated on spike S go/no-go -->
 - [ ] P2.2 Byte counters → 1 s delta events <!-- gated on spike S -->
@@ -61,7 +60,7 @@
 - [ ] P2.9 Degraded path (`NETWATCH_DISABLE_EBPF` → honest UI)
 - [ ] **DoD: real traffic visible, app-labeled, pause/sort work; tag `v0.2.0-alpha.2`**
 
-## Phase 3 — History Slice → `v0.3.0-alpha.3` (week 4)
+## Phase 3 — History Slice → `v0.3.0-alpha.3` (~40 h)
 
 - [ ] P3.1 Migration 0003: `usage_rollup_15m`, `usage_endpoint_day`, `usage_interface_15m` + indexes
 - [ ] P3.2 `GET /connections` (keyset pagination, basic filters; aggregate rows beyond raw window)
@@ -72,7 +71,7 @@
 - [ ] P3.7 `apps` soft delete on last activity
 - [ ] **DoD: restart keeps history; free history search works; tag `v0.3.0-alpha.3`**
 
-## Phase 4 — Dashboard Slice → `v0.4.0-alpha.4` (week 5)
+## Phase 4 — Dashboard Slice → `v0.4.0-alpha.4` (~40 h)
 
 - [ ] P4.1 Compaction job (raw → `usage_rollup_15m` at 7 days; write `usage_endpoint_day`)
 - [ ] P4.2 Interface-counter sampler (`/sys/class/net/*/statistics`; `lo` excluded)
@@ -85,7 +84,7 @@
 - [ ] P4.9 Dashboard empty state
 - [ ] **DoD: totals equal kernel counters by construction; ≥95% attributed; tag `v0.4.0-alpha.4`**
 
-## Phase 5 — Apps Slice → `v0.5.0-alpha.5` (week 6)
+## Phase 5 — Apps Slice → `v0.5.0-alpha.5` (~40 h)
 
 - [ ] P5.1 `GET /apps` (ranking, include_deleted)
 - [ ] P5.2 `GET /apps/{id}` + icon resource
@@ -95,7 +94,7 @@
 - [ ] P5.6 Attribution edge cases: cgroup-first identity, short-lived procs, confidence display (F-05/D5a)
 - [ ] **DoD: every app opens a meaningful detail page; tag `v0.5.0-alpha.5`**
 
-## Phase 6 — Freemium Slice → `v0.6.0-alpha.6` (week 7)
+## Phase 6 — Freemium Slice → `v0.6.0-alpha.6` (~40 h)
 
 - [ ] P6.1 Migration 0004: `daemon_events`
 - [ ] P6.2 License verifier (offline signature, no network)
@@ -108,7 +107,7 @@
 - [ ] P6.9 Usage budgets & alerts (MVP free tier; D6a)
 - [ ] **DoD: activate → instant unlock; deactivate → locks return; zero network calls; tag `v0.6.0-alpha.6`**
 
-## Phase 7 — System Slice → `v0.7.0-alpha.7` (week 8)
+## Phase 7 — System Slice → `v0.7.0-alpha.7` (~40 h)
 
 - [ ] P7.1 Retention pruner (free/Pro aware)
 - [ ] P7.2 `GET/PUT /settings` (typed, bounded)
@@ -119,7 +118,7 @@
 - [ ] P7.7 metered_policy + start_on_boot plumbed
 - [ ] **DoD: tray quit keeps daemon; retention correct per tier; tag `v0.7.0-alpha.7`**
 
-## Phase 8 — Packaging Slice → `v0.8.0-alpha.8` (week 9) — *first public alpha*
+## Phase 8 — Packaging Slice → `v0.8.0-alpha.8` (~40 h) — *first public alpha*
 
 - [ ] P8.1 Hardened systemd unit
 - [ ] P8.2 `.deb` package + post-install
@@ -131,7 +130,7 @@
 - [ ] P8.8 Signing: package signing + release workflow (hosted build services until after beta)
 - [ ] **DoD: install → onboard → monitor via GitHub Releases + AUR `-git`; self-hosted apt/dnf repos deferred (F-10); tag `v0.8.0-alpha.8`**
 
-## Phase 9 — Diagnostics & Accessibility → `v0.9.0-beta.1` (week 10) — *public beta*
+## Phase 9 — Diagnostics & Accessibility → `v0.9.0-beta.1` (~40 h) — *public beta*
 
 - [ ] P9.1 Diagnostics endpoint + modal
 - [ ] P9.2 All degraded states end-to-end
@@ -142,7 +141,7 @@
 - [ ] P9.7 Reduced motion + 200% zoom
 - [ ] **DoD: PRD DoD #3/#5/#6 pass; zero a11y blockers; tag `v0.9.0-beta.1`**
 
-## Phase 10 — Beta Hardening → `v0.9.x-beta.N` (weeks 11–12)
+## Phase 10 — Beta Hardening → `v0.9.x-beta.N` (~80 h)
 
 - [ ] P10.1 Accuracy harness (≥95% attributed; totals equal kernel counters) in CI
 - [ ] P10.2 Perf budget test (≤3% CPU / ≤150 MB RSS p95)
@@ -152,7 +151,7 @@
 - [ ] P10.6 Beta feedback fixes (patch-tagged)
 - [ ] **DoD: PRD §11 DoD #1–#8 signed off; tag `v0.9.9-beta.N`**
 
-## Phase 11 — Launch → `v1.0.0` (week 13)
+## Phase 11 — Launch → `v1.0.0` (~40 h)
 
 - [ ] P11.1 Stable repos live (apt, dnf, AUR `-`/`-bin`)
 - [ ] P11.2 Final QA vs PRD §11 checklist

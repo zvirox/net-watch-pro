@@ -13,22 +13,22 @@
 
 ## 1. Phase Overview & Release Timeline
 
-| Phase | Name | Output (runnable state after phase) | Tag at phase end | Target week |
+| Phase | Name | Output (runnable state after phase) | Tag at phase end | Est. hours |
 |---|---|---|---|---|
-| 0 | Foundation & tooling | Repo scaffolded, CI green, empty Tauri window runs | `v0.0.1-alpha.1` | 1 |
+| 0 | Foundation & tooling | Repo scaffolded, CI green, empty Tauri window runs | `v0.0.1-alpha.1` | ~40 h |
 | **S** | **eBPF spike (new)** | `spikes/ebpf-accounting/` + `docs/spike-ebpf-report.md`; gates everything below | — | time-boxed (~25 h) |
-| **D** | **Doc fixes (new)** | All Part 4 edits merged, consistency pass done | — | before Phase 1' |
-| 1' | Walking skeleton (revised) | Daemon + UI talk over Unix socket + peer-credential; status chip live | `v0.1.0-alpha.1` | 2 |
-| 2' | Live slice | Real data from spike-chosen collector on the Live screen; accuracy harness running | `v0.2.0-alpha.2` | 3 |
-| 3' | History slice | Persistence with episode definition (F-09), raw + endpoint rollups (F-02) | `v0.3.0-alpha.3` | 4 |
-| 4' | Dashboard slice | Totals from interface counters, Unattributed row, timezone/billing-cycle correct (F-03/F-04) | `v0.4.0-alpha.4` | 5 |
-| 5 | Apps slice | Cgroup-based identity (F-05), App detail | `v0.5.0-alpha.5` | 6 |
-| 6 | Freemium slice (reduced) | License verify + simple gating (F-07) | `v0.6.0-alpha.6` | 7 |
-| 7 | System slice | Tray, settings, retention/pruning | `v0.7.0-alpha.7` | 8 |
-| 8' | Packaging (reduced) | GitHub Releases `.deb`/`.rpm`, AUR `-git`; hosted repos deferred (F-10) | `v0.8.0-alpha.8` | 9 |
-| 9 | Diagnostics & a11y | All degraded states + accessibility pass | `v0.9.0-beta.1` | 10 |
-| 10' | Hardening | Kernel VM matrix, perf budgets, external review (F-08) | `v0.9.x-beta.N` | 11–12 |
-| 11 | Launch | Stable 1.0 GA + repos live | `v1.0.0` | 13 |
+| **D** | **Doc fixes (new)** | All Part 4 edits merged, consistency pass done | — | ~20 h |
+| 1' | Walking skeleton (revised) | Daemon + UI talk over Unix socket + peer-credential; status chip live | `v0.1.0-alpha.1` | ~40 h |
+| 2' | Live slice | Real data from spike-chosen collector on the Live screen; accuracy harness running | `v0.2.0-alpha.2` | ~40 h |
+| 3' | History slice | Persistence with episode definition (F-09), raw + endpoint rollups (F-02) | `v0.3.0-alpha.3` | ~40 h |
+| 4' | Dashboard slice | Totals from interface counters, Unattributed row, timezone/billing-cycle correct (F-03/F-04) | `v0.4.0-alpha.4` | ~40 h |
+| 5 | Apps slice | Cgroup-based identity (F-05), App detail | `v0.5.0-alpha.5` | ~40 h |
+| 6 | Freemium slice (reduced) | License verify + simple gating (F-07) | `v0.6.0-alpha.6` | ~40 h |
+| 7 | System slice | Tray, settings, retention/pruning | `v0.7.0-alpha.7` | ~40 h |
+| 8' | Packaging (reduced) | GitHub Releases `.deb`/`.rpm`, AUR `-git`; hosted repos deferred (F-10) | `v0.8.0-alpha.8` | ~40 h |
+| 9 | Diagnostics & a11y | All degraded states + accessibility pass | `v0.9.0-beta.1` | ~40 h |
+| 10' | Hardening | Kernel VM matrix, perf budgets, external review (F-08) | `v0.9.x-beta.N` | ~80 h |
+| 11 | Launch | Stable 1.0 GA + repos live | `v1.0.0` | ~40 h |
 
 **Tag format:** `vMAJOR.MINOR.PATCH-alpha.N` / `-beta.N` during pre-releases; plain `v1.0.0` at GA. Within a phase, patch bumps (`v0.3.1-alpha.3`) mark internal fixes worth tagging. Feature phases are MINOR bumps; the phase *number maps loosely* — the alpha/beta suffix is the real maturity signal.
 
@@ -170,7 +170,7 @@
 | P4.8 | `usage.totals` socket stream wired to headline cards | `crates/netwatch-api/src/`, stores | totals tick without polling | P4.3, P1.5 |
 | P4.9 | Dashboard empty state ("Waiting for first data") | dashboard screen | fresh db → empty state, not zeros lie | P4.7 |
 
-**DoD:** dashboard matches manual `vnstat`-style totals ±5%; charts themed; tag `v0.4.0-alpha.4`.
+**DoD:** dashboard totals equal kernel interface counters by construction; ≥95% attributed; Unattributed row shows gap; charts themed; tag `v0.4.0-alpha.4`.
 
 ---
 

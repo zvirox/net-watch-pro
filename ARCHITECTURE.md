@@ -35,7 +35,7 @@
 | DB access (daemon) | **sqlx (Rust)** | Compile-time-checked SQL with plain SQLite — no ORM magic, migrations built in. |
 | Distribution | **AUR + .deb repo + .rpm repo** | The package manager is the "hosting": users install/update with tools they already trust (PRD §6.1 #10). |
 | Hosting | **None (local-only product)** | Everything runs on-device per PRD non-goals; repos + offline-signed license keys replace any server dependency. |
-| CI | **GitHub Actions + Earthly-style recipes** | One build definition produces the Linux binaries + packages and runs the 3-distro test matrix (PRD DoD). |
+| CI | **GitHub Actions + Earthly-style recipes** | One build definition produces the Linux binaries + packages and runs the 3-distro test matrix on **VMs** (PRD DoD; containers share the host kernel — F-08). |
 
 Explicitly **not** used (avoid over-engineering): Kubernetes/any server, GraphQL, gRPC (local WS + JSON is enough), Redis/queues (Tokio channels suffice), ORM entities, micro-frontends, Electron.
 
@@ -130,7 +130,7 @@ net-watch-pro/
 │
 └── tests/
     ├── integration/                 # daemon<->db<->api on **VMs** (F-08: containers share host kernel, cannot test kernel variance)
-    ├── accuracy/                    # accounting vs interface counters harness (PRD ±5%)
+    ├── accuracy/                    # accounting vs interface counters harness (PRD accuracy: totals equal kernel counters, ≥95% attributed)
     └── fixtures/                    # seeded sample data (demo mode, PRD OQ4)
 ```
 

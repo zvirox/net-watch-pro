@@ -127,7 +127,7 @@ Covers: *"As a metered-connection user, I want to see today's and this month's d
 - **Error:** chart-area error banner + retry; totals cards degrade to "—" not fake zeros.
 
 ### Acceptance criteria
-- [ ] Daily per-app totals within ±5% of interface counters (accuracy harness)
+- [ ] Daily totals equal kernel interface counters by construction; ≥95% of bytes attributed; unattributed row shows gap (accuracy harness)
 - [ ] Top apps order matches summary; click-through routes to F4
 - [ ] Compaction preserves totals (raw + rollup = constant across the seam)
 - [ ] Soft-deleted app's history still resolves name/icon
