@@ -4,18 +4,14 @@ version = "0.1.0"
 edition = "2024"
 description = "Time-boxed eBPF accounting spike (Part 3 of PLAN-FIX-INSTRUCTIONS.md). Throwaway code — not part of the Cargo workspace, never imported by product crates."
 
-[dependencies]
-# Aya eBPF dependencies added when implementing Designs 1-3 on target VMs.
-#   aya = "0.16"
-#   aya-log = "0.4"
-# bpf-linker (build-time tool, installed separately via `cargo install bpf-linker`)
-
 [workspace]
 # Intentionally NOT a member of the root Cargo workspace.
 members = []
 
 [profile.dev]
 opt-level = 0
+panic = "abort"
 
 [profile.release]
 opt-level = 3
+panic = "abort"
