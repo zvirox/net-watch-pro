@@ -1,7 +1,9 @@
 # FEATURES.md — MVP Feature Build Guides
 
-**Version:** 1.0 · **Date:** 2026-11-14  
-**Sources:** `PRD.md` §6.1 (the 10 MVP features) · `PLAN.md`/`CHECKLIST.md` (task mapping) · `DESIGN.md` (UI) · `API.md`/`DATABASE.md` (contracts)
+**Version:** 1.1 · **Date:** 2026-11-15  
+**Sources:** `PRD.md` §6.1 (the 10 MVP features) · `PLAN.md`/`CHECKLIST.md` (task mapping) · `DESIGN.md` (UI) · `API.md`/`DATABASE.md` (contracts) · `docs/decisions.md` (owner decisions D1–D7)
+
+**Version history:** 1.1 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential (F-06/D1a), endpoint-day aggregates (F-02/D2a), interface-counter totals + Unattributed row (F-03/D3a), 15m rollup grain + timezone/cycle (F-04/D4a), cgroup-first identity (F-05/D5a), budgets/alerts in MVP free tier (D6a).
 
 > **Working agreement (binding):**
 > 1. Build **one feature at a time**, top to bottom in the order below.
@@ -15,18 +17,18 @@
 
 | # | Feature | PRD | PLAN phase | Key API | Key DB tables | Screens (DESIGN.md §8) |
 |---|---|---|---|---|---|---|
-| F1 | Live Connections view | §6.1 #1 | Phase 2 | `WS live.connections`, `GET /connections/live`, `/status` | `connections`, `apps` | Live (§8.4) |
-| F2 | Per-app usage accounting | §6.1 #2 | Phase 2–4 | `GET /usage/summary`, `/apps`, `/apps/{id}/usage` | `usage_rollup_*`, `connections`, `apps` | Dashboard, App detail |
-| F3 | Dashboard | §6.1 #3 | Phase 4 | `GET /usage/summary`, `/usage/timeline`, `/usage/interfaces`, `WS usage.totals` | `usage_rollup_*`, `interfaces` | Dashboard (§8.3) |
-| F4 | App detail page | §6.1 #4 | Phase 5 | `GET /apps/{id}`, `/apps/{id}/usage`, `/apps/{id}/endpoints` | `apps`, `connections` | App detail (§8.5) |
-| F5 | Local history | §6.1 #5 | Phase 3 (+P7.1 prune) | `GET /connections`, `/connections/{id}` | `connections` (+indexes) | History (§8.6) |
-| F6 | Daemon + install experience | §6.1 #6 | Phases 1, 8, 9 | `GET /health`, `/status`, `/diagnostics`, `/events` | `daemon_events`, `settings` | Onboarding (§8.2), Diagnostics (§8.9) |
+| F1 | Live Connections view | §6.1 #1 | Phase 2' | `WS live.connections`, `GET /connections/live`, `/status` | `connections`, `apps` | Live (§8.4) |
+| F2 | Per-app usage accounting | §6.1 #2 | Phase 2'–4' | `GET /usage/summary`, `/apps`, `/apps/{id}/usage` | `usage_rollup_15m`, `usage_interface_15m`, `connections`, `apps` | Dashboard, App detail |
+| F3 | Dashboard | §6.1 #3 | Phase 4' | `GET /usage/summary`, `/usage/timeline`, `/usage/interfaces`, `WS usage.totals` | `usage_rollup_15m`, `usage_interface_15m`, `interfaces` | Dashboard (§8.3) |
+| F4 | App detail page | §6.1 #4 | Phase 5 | `GET /apps/{id}`, `/apps/{id}/usage`, `/apps/{id}/endpoints` | `apps`, `connections`, `usage_endpoint_day` | App detail (§8.5) |
+| F5 | Local history | §6.1 #5 | Phase 3' (+P7.1 prune) | `GET /connections`, `/connections/{id}` | `connections`, `usage_endpoint_day` | History (§8.6) |
+| F6 | Daemon + install experience | §6.1 #6 | Phases 1', 8', 9 | `GET /health`, `/status`, `/diagnostics`, `/events` | `daemon_events`, `settings` | Onboarding (§8.2), Diagnostics (§8.9) |
 | F7 | Tray integration | §6.1 #7 | Phase 7 | `WS usage.totals` (cached) | — (reads cache) | Tray (no screen) |
 | F8 | Settings (lean) | §6.1 #8 | Phase 7 | `GET/PUT /settings`, `PATCH /interfaces/{id}` | `settings`, `interfaces` | Settings (§8.7) |
 | F9 | Freemium mechanics | §6.1 #9 | Phase 6 | `/license*`, `POST /exports`, gating on C2/T2 | `license` | Upgrade modal (§8.8), History locks |
-| F10 | Updates & packaging | §6.1 #10 | Phase 8, 11 | `GET /health` (version) | `schema_migrations` | Onboarding, About |
+| F10 | Updates & packaging | §6.1 #10 | Phase 8', 11 | `GET /health` (version) | `schema_migrations` | Onboarding, About |
 
-Phase 1 status note (2026-11-15): full local Rust+UI verification suite passes (cargo fmt/clippy -D warnings/test/check, eslint, svelte-check, vite build); API/token/UI skeleton exists. Daemon/UI service launch, real pkexec handoff, daemon-restart reconnect, and three-family packaging/Polkit authorization are not verified, so F6 remains in progress.
+Phase 1 status note: Phase S (eBPF spike) and Phase D (doc fixes) are in progress before Phase 1' code resumes. F6 remains not started pending socket + peer-credential implementation (D1a).
 
 Status tracker (update after each confirmed feature):
 
@@ -102,20 +104,20 @@ Covers: *"As a metered-connection user, I want to see today's and this month's d
 - Components: usage bars (§7.14, mono % text), sparkline, cards (§7.3).
 
 ### Data contracts
-- **DB:** `usage_rollup_hour`/`usage_rollup_day` (compacted), `connections` (raw window), `apps`.
-- **API:** `GET /usage/summary`, `GET /apps` (ranking), `GET /apps/{id}/usage`.
+- **DB:** `usage_rollup_15m` (compacted, 15-min grain), `usage_interface_15m` (headline totals), `connections` (raw window), `apps`.
+- **API:** `GET /usage/summary` (total/attributed/unattributed), `GET /apps` (ranking), `GET /apps/{id}/usage`.
 
 ### Build order
 1. Compaction job raw → rollups at 7-day seam (PLAN P4.1 — pull into this feature's critical path)
 2. `GET /usage/summary` with top apps (P4.2)
 3. `GET /apps` ranking + `GET /apps/{id}/usage` (P5.1/P5.3 backend halves)
 4. Dashboard headline + Top apps UI (P4.6 partial) + stat cards
-5. Week/month boundaries decided: **calendar buckets in UTC** (db grain) displayed in **local time** labels; document in `docs/api-contract.md`.
+5. Week/month boundaries computed at query time in the configured **timezone**; "this month" = billing cycle; document in `docs/api-contract.md` (D4a).
 
 ### Edge cases & validation
 - **Soft-deleted apps** still aggregate (rollups FK-join `apps` — soft delete keeps history intact, DATABASE.md §2.2).
-- **Clock changes:** UTC buckets are immune to DST; day boundaries *displayed* in local time — edge-day totals may look ±1 h; caption the timezone.
-- **Month boundary:** "this month" = current UTC calendar month at query time; verify a mid-month query never includes last month's tail.
+- **Clock changes:** 15-minute UTC buckets are immune to DST; day boundaries *displayed* in local time per configured timezone — edge-day totals may look ±1 h; caption the timezone (D4a).
+- **Month boundary:** "this month" = current billing cycle at query time (not UTC calendar month); verify a mid-cycle query never includes last cycle's tail (D4a).
 - **Renamed/replaced binaries** (hash change): new `apps` row via `exe_path` uniqueness; old history stays attributed to the old row — never rewrite history.
 - **Validation:** `top_limit` ≤ 10 (API.md §2.5); granularity enum enforced.
 
@@ -143,8 +145,8 @@ Covers: *"As a user, I want a dashboard chart of usage over time, so that I can 
 - **Dashboard** (§8.3) only. Components: headline cards, ECharts wrappers (theme from §3.3 — download=series 1, upload=series 2), Day|Hour tabs (§7.13), interfaces card, empty state, chart error banner, chart data-table fallback (§9.4).
 
 ### Data contracts
-- **DB:** `usage_rollup_hour`/`_day`, `connections` (raw window), `interfaces` (`is_excluded`).
-- **API:** `GET /usage/summary`, `GET /usage/timeline`, `GET /usage/interfaces`, `WS usage.totals`.
+- **DB:** `usage_rollup_15m`/`usage_interface_15m`, `connections` (raw window), `interfaces` (`is_excluded`).
+- **API:** `GET /usage/summary` (total/attributed/unattributed), `GET /usage/timeline`, `GET /usage/interfaces`, `WS usage.totals`.
 
 ### Build order
 1. `GET /usage/timeline` with raw+rollup union (PLAN P4.3, flag F5)
@@ -222,8 +224,8 @@ Covers: *"As a user, I want a 90-day searchable history"* (PRD §7).
 - Components: tables (§7.6), search input (§7.2), pagination via infinite keyset scroll, empty/error/loading states.
 
 ### Data contracts
-- **DB:** `connections` + the §5 index set (`app_first_seen`, `remote_ip`, `open` partial, `remote_host`); retention pruner (P7.1) enforces the tier policy.
-- **API:** `GET /connections` (keyset pagination, basic filters free; advanced set 403 until F9), `GET /connections/{id}`.
+- **DB:** `connections` + endpoint-day rollups (`usage_endpoint_day` for history beyond raw window); retention pruner (P7.1) enforces the tier policy.
+- **API:** `GET /connections` (keyset pagination, basic filters free; advanced set 403 until F9), `GET /connections/{id}`. **Beyond the raw window, rows are aggregate rows from `usage_endpoint_day` (flagged `"kind": "aggregate"`), not connection episodes.**
 
 ### Build order
 1. Migration 0003 + index set (PLAN P3.1)
@@ -269,19 +271,19 @@ Covers: *"As a user, I want clear status when the daemon isn't running or lacks 
 - **API:** `GET /health` (no auth), `GET /status`, `GET /diagnostics`, `GET /events`; hardened unit (PRD §5).
 
 ### Build order
-1. Token file + loopback bind (PLAN P1.1) + `/health`, `/status` (P1.2) — mostly exists from Phase 1
+1. Unix-socket listener + peer-credential UID allowlist; allowed-UID list written during onboarding pkexec (PLAN P1.1) + `/health`, `/status` (P1.2)
 2. Hardened systemd unit (P8.1): sandboxing, capability bounding
 3. Packages + post-install registering unit disabled-by-default (P8.2–P8.4)
-4. Onboarding flow: pkexec enable → health checks → 3 cards → Dashboard (P8.5)
+4. Onboarding flow: pkexec enable (registers UID allowlist, one prompt) → health checks → 3 cards → Dashboard (P8.5)
 5. Failure paths: missing BTF, denied pkexec, unwritable data dir (P8.6)
 6. Diagnostics endpoint + modal + copy-report (P9.1–P9.3)
 
 ### Edge cases & validation
 - **pkexec cancelled/denied:** failure card with reason + retry; no silent retry loop.
 - **Kernel without BTF:** exact error class (`EBPF_UNSUPPORTED_KERNEL`) → guidance link + "Run without monitoring" path.
-- **Token file unreadable:** UI treats as `AUTH_INVALID` → daemon-stopped banner, not crash.
+- **UID not in allowlist:** socket refused → "Stopped" chip, not crash; re-run onboarding to add UID.
 - **systemd absent/non-Linux:** pre-flight check in installer; onboarding explains.
-- **WS 4401** (auth fail after daemon restart): auto re-auth via one-shot helper, then reconnect.
+- **Socket reconnect:** UI auto-recovers ≤ 5 s after daemon restart; UID list persists (no token rotation).
 - **Validation:** onboarding blocks navigation until enabled *or* user explicitly picks degraded/demo path.
 
 ### States
@@ -358,6 +360,8 @@ Covers settings-related stories (PRD §7) and OQ5 (metered detection: manual lab
 - **Concurrent edits** (two windows): last-write-wins per key; UI refreshes on WS `status`/settings change — no merge UI.
 - **Out-of-range/wrong type:** 400 with field name → inline error (§7.2); value never half-applied (single-row tx).
 - **Retention > 90 on free tier:** 403 → upgrade modal (§8.8), input reverts.
+- **Timezone change:** day/week/month boundaries recomputed at query time; charts re-query (D4a).
+- **Billing-cycle day change:** "this month" boundary shifts; caption reflects new cycle (D4a).
 - **Theme change:** applies live, ECharts re-registers theme (no restart).
 - **Clear data:** destructive confirm naming the consequence ("Deletes 90 days of local history"); undo toast only until pruner next pass? No — clear-data is immediate+irreversible → confirm only, no undo toast (§7.4).
 
