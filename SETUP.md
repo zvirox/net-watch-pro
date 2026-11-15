@@ -74,7 +74,7 @@ cp .env.example .env   # optional — defaults work without it
 ~~~
 
 `.env.example` mirrors the closed variable list in `ARCHITECTURE.md §8.3` /
-`docs/env-vars.md` (`NETWATCH_DATA_DIR`, `NETWATCH_API_ADDR`, …). **Nothing
+`docs/env-vars.md` (`NETWATCH_DATA_DIR`, `NETWATCH_API_SOCKET`, …). **Nothing
 reads `.env` yet** — the daemon lands in Phase 1 (PLAN.md P1.1). Do not add
 variables to this file; the list is closed by governance (AGENTS.md §5).
 
