@@ -3,8 +3,9 @@
 import js from '@eslint/js';
 import ts from 'typescript-eslint';
 import svelte from 'eslint-plugin-svelte';
+import { defineConfig } from 'eslint/config';
 
-export default ts.config(
+export default defineConfig(
   js.configs.recommended,
   ...ts.configs.strictTypeChecked,
   ...svelte.configs['flat/recommended'],
