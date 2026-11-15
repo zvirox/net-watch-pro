@@ -1,7 +1,9 @@
 # Net Watch Pro — ARCHITECTURE.md (Technical Architecture)
 
-**Version:** 1.0 · **Date:** 2026-11-14  
-**Source of truth:** `PRD.md` (scope, contracts, non-goals) · `DESIGN.md` (UI system) · `REAPM.md` (reference teardown)  
+**Version:** 1.2 · **Date:** 2026-11-15  
+**Source of truth:** `PRD.md` (scope, contracts, non-goals) · `DESIGN.md` (UI system) · `REAPM.md` (reference teardown)
+
+**Version history:** 1.2 (2026-11-15): fixed production token helper/Polkit handoff, native WebSocket bridge, and development-only token-path override.  
 **Rule:** This file defines structure and contracts only. **No application code is written as part of this document.**
 
 > **Strict rules:** Every implementation decision must trace to this file. Stack, folder layout, data flow, naming, and env vars below are binding. Deviations require updating this file first (version bump), like DESIGN.md §11.
@@ -78,8 +80,10 @@ net-watch-pro/
 │   │   ├── src/{ebpf_loader,db,api,health,config}.rs
 │   │   ├── src/db/migrations/*.sql  # embedded by sqlx
 │   │   └── src/bin/                 # CLI verbs: --export-config, --recover-fw (future)
-│   └── netwatch-api/                # API server: WS routes, auth token, request/validation types
-│       └── src/lib.rs
+│   ├── netwatch-api/                # API server: WS routes, auth token, request/validation types
+│   │   └── src/lib.rs
+│   └── netwatch-token-helper/       # fixed-path, no-argument pkexec token reader
+│       └── src/main.rs
 │
 ├── app/                             # UI workspace (npm)
 │   ├── package.json · vite.config.ts · tsconfig.json
@@ -87,7 +91,7 @@ net-watch-pro/
 │   ├── src-tauri/                   # Tauri 2 shell (Rust, thin)
 │   │   ├── Cargo.toml · tauri.conf.json
 │   │   ├── capabilities/            # Tauri permission grants (least privilege)
-│   │   └── src/{main.rs,tray,window_state,daemon_link}.rs
+│   │   └── src/{main.rs,tray,window_state,daemon_link,token_link}.rs
 │   └── src/                         # Svelte 5 frontend
 │       ├── main.ts · App.svelte
 │       ├── lib/
@@ -106,6 +110,7 @@ net-watch-pro/
 ├── xtask/                           # build automation crate: BPF compile, package, release
 │
 ├── packaging/
+│   ├── polkit/org.netwatchpro.token-helper.policy
 │   ├── arch/PKGBUILD
 │   ├── deb/                         # debian control + repo tooling
 │   ├── rpm/                         # spec file + repo tooling
@@ -157,7 +162,8 @@ Rules: no shared code by copy — shared types live in `netwatch-common`. The Ta
 ### 5.3 API contract (summary — details in `docs/api-contract.md`)
 
 - Base: `ws://127.0.0.1:<port>/api/v1` (HTTP GET for queries on the same port). Loopback bind only.
-- Auth: daemon writes a per-boot random token to a root-only-readable file; the UI reads it via the Tauri shell's one-shot privileged helper at link time — the UI process never gets broader file access.
+- Auth: daemon writes a per-boot random token to `/var/lib/netwatch-pro/api-token` (root-owned mode `0600`). The UI requests one-shot Polkit authorization through Tauri's fixed `/usr/bin/pkexec` → `/usr/bin/netwatch-token-helper` invocation. The no-argument helper opens only the canonical path, verifies the opened regular file is root-owned mode `0600`, validates 64 hex characters, and prints only the token. The helper and parents are root-owned and not user-writable; authorization requires admin authentication, with no implicit local-user grant or retained authorization. `NETWATCH_API_TOKEN_FILE` is a daemon-only development/test override and never changes the packaged helper path.
+- WebSocket transport: browser WebSocket cannot set an Authorization header. Tauri's native link module opens `/api/v1/stream` with the documented bearer header and relays frames to the main webview over a narrowly scoped command/event bridge; API authentication remains unchanged.
 - Channels (WS): `live.connections` (snapshot + delta stream), `status` (daemon/eBPF/recording state → DESIGN.md chip), `usage.totals`. Commands: `subscribe`, `unsubscribe`, `history.query`, `export.request` (Pro-gated server-side, not just UI-gated), `settings.get/set`, `diagnostics.dump`.
 - All payloads are versioned JSON; unknown fields ignored (forward compatible). Error payloads carry stable string codes (§8.2).
 
@@ -255,7 +261,7 @@ Retry policy: user-initiated retries everywhere except WS reconnect (automatic, 
 | `NETWATCH_LOG_DIR` | netwatchd | `NETWATCH_DATA_DIR/log` | Log output |
 | `NETWATCH_LOG_LEVEL` | netwatchd | `info` | `error/warn/info/debug/trace` |
 | `NETWATCH_API_ADDR` | netwatchd | `127.0.0.1:7897` | Loopback-only API bind address |
-| `NETWATCH_API_TOKEN_FILE` | netwatchd | `<data>/api-token` | Where the per-boot token is written (mode 0600) |
+| `NETWATCH_API_TOKEN_FILE` | netwatchd (development/test only) | unset → `/var/lib/netwatch-pro/api-token` | Optional non-production token-file override; packaged production clears/does not set this variable and always uses the canonical helper path |
 | `NETWATCH_RETENTION_DAYS` | netwatchd | `90` | Default retention; user setting overrides (Pro > 90) |
 | `NETWATCH_DISABLE_EBPF` | netwatchd | unset | Diagnostic switch: run with empty collector (degraded chip) |
 | `NETWATCH_DEV_DAEMON_ADDR` | UI (dev only) | unset | Point the UI at a dev daemon; never read in packaged builds |

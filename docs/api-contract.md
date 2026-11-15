@@ -7,7 +7,8 @@
 ## Base & transport
 
 - `ws(s)://127.0.0.1:7897/api/v1` — loopback only; HTTP GET for queries, WS for streams (`/api/v1/stream`).
-- Auth: `Authorization: Bearer <per-boot token>` (mode 0600 file); anonymous: `GET /health` only.
+- Auth: `Authorization: Bearer <per-boot token>` from canonical production `/var/lib/netwatch-pro/api-token` (mode 0600); UI obtains it via the one-shot Polkit-authorized native helper. `NETWATCH_API_TOKEN_FILE` is daemon-only for dev/test and never changes the helper path; anonymous: `GET /health` only.
+- WebSocket clients must send the Authorization header on upgrade. Browser clients use the Tauri native link bridge because the WebSocket API cannot set custom headers; the wire contract remains unchanged.
 - All payloads versioned JSON; unknown fields ignored on read, rejected on write.
 - Version: path-based `/api/v1`; additive-only; breaking → `/api/v2` + 90-day deprecation.
 

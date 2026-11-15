@@ -41,9 +41,15 @@ impl Config {
             ));
         }
 
-        let token_file = match std::env::var("NETWATCH_API_TOKEN_FILE") {
-            Ok(v) => PathBuf::from(v),
-            Err(_) => data_dir.join("api-token"),
+        // Packaged release builds always use the helper's fixed production
+        // path. Debug builds may override it for isolated local tests.
+        let token_file = if cfg!(debug_assertions) {
+            std::env::var("NETWATCH_API_TOKEN_FILE").map_or_else(
+                |_| PathBuf::from("/var/lib/netwatch-pro/api-token"),
+                PathBuf::from,
+            )
+        } else {
+            PathBuf::from("/var/lib/netwatch-pro/api-token")
         };
 
         Ok(Self {

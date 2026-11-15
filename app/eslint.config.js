@@ -29,6 +29,18 @@ export default defineConfig(
     },
   },
   {
+    ignores: ['dist/**', 'src-tauri/gen/**'],
+  },
+  {
+    files: ['**/*.ts'],
+    languageOptions: {
+      parser: ts.parser,
+      parserOptions: {
+        projectService: true,
+      },
+    },
+  },
+  {
     files: ['**/*.svelte'],
     languageOptions: {
       // eslint-plugin-svelte parses the file; TS script contents need the

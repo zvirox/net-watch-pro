@@ -1,12 +1,12 @@
 //! Per-boot API token — `AUTH_SECURITY.md` §2.3 / `ARCHITECTURE.md` §8.3.
 //!
 //! The token is the only secret in the product: auto-generated at every
-//! boot, never user-set, never logged, written mode 0600 so only root (the
-//! daemon) can read it; the Tauri shell reads it once at link time.
+//! boot, never user-set, never logged, and atomically replaced at mode 0600.
+//! Packaged builds use the helper's fixed production path.
 
 use std::fmt::Write as _;
 use std::io::Write;
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 /// Generate a fresh per-boot token: 32 random bytes, hex-encoded (64 chars).
@@ -26,33 +26,126 @@ pub fn generate() -> Result<String, getrandom::Error> {
     Ok(token)
 }
 
-/// Write the token to `path` with mode 0600, creating parent dirs 0700.
+/// Atomically replace the token at `path` with a root-owned mode-0600 file.
 ///
-/// Called every boot (per-boot rotation); an existing file is truncated.
+/// Uses a same-directory temporary file and rename so the helper can never
+/// observe a truncated/partially-written token during daemon restart.
 pub fn write_token_file(path: &Path, token: &str) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-        // Best-effort tightening of the state dir; packaging sets the
-        // canonical permissions (AUTH_SECURITY.md §9), this guards dev runs.
-        let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+    use std::os::unix::fs::MetadataExt;
+
+    if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "token must be exactly 64 hexadecimal characters",
+        ));
     }
 
-    // OpenOptionsExt: create/truncate with 0600 from the start — no window
-    // where the token file is world-readable.
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)?;
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "token path has no parent")
+    })?;
+    std::fs::create_dir_all(parent)?;
+    let parent_meta = std::fs::symlink_metadata(parent)?;
+    let production_path = path == Path::new("/var/lib/netwatch-pro/api-token");
+    if parent_meta.file_type().is_symlink() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "token directory cannot be a symlink",
+        ));
+    }
+    if !parent_meta.is_dir()
+        || (production_path && parent_meta.uid() != 0)
+        || parent_meta.mode() & 0o022 != 0
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "token directory must be a root-owned directory not writable by group or others",
+        ));
+    }
+
+    if let Ok(existing) = std::fs::symlink_metadata(path) {
+        let file_type = existing.file_type();
+        if file_type.is_symlink() || !file_type.is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "existing token path must be a regular file, not a symlink",
+            ));
+        }
+        if production_path && (existing.uid() != 0 || existing.mode() & 0o7777 != 0o600) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "existing production token file must be root-owned with exact mode 0600",
+            ));
+        }
+    }
+
+    let name = path.file_name().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "token path has no filename",
+        )
+    })?;
+    let (temporary, mut file) = create_temporary_file(parent, name.to_string_lossy().as_ref())?;
+    let result = write_atomic_file(&mut file, &temporary, path, token);
+    drop(file);
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
+}
+
+fn create_temporary_file(
+    parent: &Path,
+    name: &str,
+) -> std::io::Result<(std::path::PathBuf, std::fs::File)> {
+    for attempt in 0..32_u8 {
+        let temporary = parent.join(format!(".{name}.{}.{}.tmp", std::process::id(), attempt));
+        match std::fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .mode(0o600)
+            .open(&temporary)
+        {
+            Ok(file) => return Ok((temporary, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "unable to allocate a unique temporary token file",
+    ))
+}
+
+fn write_atomic_file(
+    file: &mut std::fs::File,
+    temporary: &Path,
+    path: &Path,
+    token: &str,
+) -> std::io::Result<()> {
+    use std::os::unix::fs::MetadataExt;
+
+    let metadata = file.metadata()?;
+    if (path == Path::new("/var/lib/netwatch-pro/api-token") && metadata.uid() != 0)
+        || metadata.mode() & 0o7777 != 0o600
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "new token file must be root-owned with exact mode 0600",
+        ));
+    }
     file.write_all(token.as_bytes())?;
     file.write_all(b"\n")?;
+    file.sync_all()?;
+
+    std::fs::rename(temporary, path)?;
+    std::fs::File::open(path.parent().unwrap_or_else(|| Path::new(".")))?.sync_all()?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn token_is_hex_and_long() {
@@ -63,14 +156,34 @@ mod tests {
     }
 
     #[test]
-    fn token_file_is_mode_0600() {
+    fn token_file_is_atomically_replaced_with_mode_0600() {
         let dir = std::env::temp_dir().join(format!("nwp-token-test-{}", std::process::id()));
         let path = dir.join("sub/api-token");
-        write_token_file(&path, "abc123").unwrap();
+        let first = "a".repeat(64);
+        let second = "b".repeat(64);
+        write_token_file(&path, &first).unwrap();
+        write_token_file(&path, &second).unwrap();
         let meta = std::fs::metadata(&path).unwrap();
-        assert_eq!(meta.permissions().mode() & 0o777, 0o600);
-        let contents = std::fs::read_to_string(&path).unwrap();
-        assert_eq!(contents.trim(), "abc123");
+        assert_eq!(meta.permissions().mode() & 0o7777, 0o600);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            format!("{second}\n")
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn rejects_symlink_target_and_malformed_token() {
+        use std::os::unix::fs::symlink;
+
+        let dir = std::env::temp_dir().join(format!("nwp-token-reject-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("api-token");
+        let target = dir.join("target");
+        std::fs::write(&target, "existing").unwrap();
+        symlink(&target, &path).unwrap();
+        assert!(write_token_file(&path, &"c".repeat(64)).is_err());
+        assert!(write_token_file(&dir.join("malformed"), "bad").is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

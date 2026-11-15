@@ -2098,6 +2098,7 @@ dependencies = [
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "subtle",
  "thiserror 2.0.21",
  "tokio",
  "tokio-tungstenite 0.30.0",
@@ -2108,8 +2109,14 @@ dependencies = [
 name = "netwatch-app"
 version = "0.0.1"
 dependencies = [
+ "futures-util",
+ "reqwest 0.12.28",
+ "serde",
  "tauri",
  "tauri-build",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite 0.30.0",
 ]
 
 [[package]]
@@ -2123,6 +2130,13 @@ dependencies = [
 [[package]]
 name = "netwatch-core"
 version = "0.0.1"
+
+[[package]]
+name = "netwatch-token-helper"
+version = "0.0.1"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "netwatchd"

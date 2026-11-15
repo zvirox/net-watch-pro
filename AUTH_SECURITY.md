@@ -1,7 +1,9 @@
 # AUTH_SECURITY.md — Authentication & Security Design
 
-**Version:** 1.0 · **Date:** 2026-11-14  
+**Version:** 1.2 · **Date:** 2026-11-15  
 **Sources:** `PRD.md` §4/§10 (non-goals, risks) · `ARCHITECTURE.md` §5.3/§7/§8.3 (API, errors, env) · `API.md` §1 (auth, roles, limits) · `DATABASE.md` §6 (access rules) · `REAPM.md` §12 (reference security model)
+
+**Version history:** 1.2 (2026-11-15): canonical token helper/Polkit boundary, strict token-file and comparison validation, native WS transport constraint.
 
 > **Scope decision:** this is a **local-only desktop app** (PRD §4: no cloud, no accounts, no telemetry). There is no server, therefore no login/signup/password-reset surface exists. This file documents the *actual* security model and marks every classic web-auth item **N/A with a one-line reason** — inventing accounts to satisfy a template would violate PRD non-goals and add attack surface, not security.
 
@@ -35,17 +37,25 @@ Out of scope (no surface): remote attackers, credential stuffing, session fixati
 
 No login screen exists; the equivalent is the daemon link, per ARCHITECTURE.md §5.3:
 
-1. Daemon boots (systemd) → generates a **256-bit random token** → writes `$NETWATCH_API_TOKEN_FILE` with mode `0600`, owner root.
-2. UI process launches (user context) → Tauri shell's one-shot privileged helper reads the token file (the *only* privileged read the UI ever triggers) → token held in process memory only.
+1. Daemon boots (systemd) → generates a **256-bit random token** → writes `/var/lib/netwatch-pro/api-token` with mode `0600`, owner root. `NETWATCH_API_TOKEN_FILE` can override the path only for development/test daemon runs; packaged production systemd configuration clears/does not set it.
+2. UI process launches (user context) → Tauri invokes fixed `/usr/bin/pkexec /usr/bin/netwatch-token-helper` without a shell or arguments → helper opens only `/var/lib/netwatch-pro/api-token`, rejects symlinks/non-regular files, verifies UID 0 and exact `0600`, reads via the validated file descriptor, validates exactly 64 hexadecimal characters, and writes only the token to stdout. Tauri validates output and keeps it in process memory only.
 3. UI presents `Authorization: Bearer <token>` on every HTTP/WS call (API.md §1.1).
 4. Failure at any step = `AUTH_INVALID` (401) → honest "Stopped/Connecting" UI state (DESIGN.md §7.5), never a silent retry storm.
 
-### 2.2 Signup — N/A (no accounts). Logout — UI-only action
+### 2.2 Polkit authorization and helper boundary
+
+- Vendor policy: `packaging/polkit/org.netwatchpro.token-helper.policy` matches the exact `/usr/bin/netwatch-token-helper` executable path. Defaults are `allow_any=no`, `allow_inactive=no`, `allow_active=auth_admin`; no application-installed system-wide authorization rules and no retained/cached grant.
+- `/usr/bin/pkexec` and `/usr/bin/netwatch-token-helper` are fixed in the Tauri command. The helper has no CLI arguments, accepts no path/environment override, executes nothing else, and remains safe if authorization is temporarily retained.
+- Helper and all parent directories are root-owned and not writable by ordinary users. The helper is a normal root-owned executable, never setuid. Installation plans must enforce ownership/modes on Arch, Debian, and Fedora.
+- If a graphical Polkit agent is unavailable, pkexec's supported textual authentication fallback may be used; Tauri distinguishes dismissal (exit 126), authorization/execution failure (127), missing pkexec/helper, malformed token output, and other execution failures. No token or subprocess output containing a token is logged.
+- The test/development daemon override `NETWATCH_API_TOKEN_FILE` is never passed to the helper and must not be set by production units. Production daemon and helper share the canonical `/var/lib/netwatch-pro/api-token` path.
+
+### 2.3 Signup — N/A (no accounts). Logout — UI-only action
 
 - "Logout" = quitting the UI. The token lives in UI process memory and dies with the process; **no server-side session to revoke** (one-line reason: stateless local auth has nothing to log out *of*).
 - "Password reset" — N/A (no passwords). The equivalent recovery is the daemon itself: token is **regenerated on every daemon restart**, so a lost/leaked token self-heals at next boot.
 
-### 2.3 License activation (the only credential-like flow)
+### 2.4 License activation (the only credential-like flow)
 
 - User pastes a signed key in the Upgrade modal (DESIGN.md §8.8) → daemon verifies signature offline (embedded public key) → stores only a SHA-256 **fingerprint**, `tier`, timestamps (DATABASE.md §2.7).
 - Raw license keys are **never persisted** — one-line reason: a fingerprint proves the row corresponds to the verified key without becoming a replayable credential.
@@ -60,11 +70,12 @@ No login screen exists; the equivalent is the daemon link, per ARCHITECTURE.md �
 | Property | Design | One-line reason |
 |---|---|---|
 | Type | Opaque 256-bit random token (CSPRNG) | Unpredictable, no structure to exploit, trivial to verify by constant-time compare. |
+| Comparison | Require exactly 64 ASCII hex characters; compare decoded equal-length bytes using `subtle::ConstantTimeEq` | Reject malformed input before comparison and avoid token-dependent early exits. |
 | Access token | The per-boot token — authorizes all `local-ui` calls | Single credential is sufficient at this trust boundary. |
 | Refresh token | **N/A** | Token is re-readable from the root-owned file via the helper; refresh machinery would add state with no benefit. |
 | Expiry | Lifetime = daemon uptime (per-boot) | A daemon restart is a natural, honest "session end" — matching the reference app's per-boot model (REAPM.md §12). |
 | Storage (UI) | Process memory only; never written to disk, never in localStorage/cookies | Compromise dies with the process; nothing to steal at rest. |
-| Storage (daemon) | `0600`, root-owned token file | Root-only readability is the whole trust boundary (DATABASE.md §6). |
+| Storage (daemon) | `/var/lib/netwatch-pro/api-token`, `0600`, root-owned; atomic replacement on daemon start | Root-only readability is the whole trust boundary (DATABASE.md §6); fixed production path aligns daemon and helper. |
 | Rotation | On every daemon restart; **no revocation list** (nothing to revoke) | Short lifetime makes revocation lists pure overhead. |
 | Leaked token? | Restart the daemon — old token invalid | Recovery is a documented one-step user action (Diagnostics). |
 | Comparison | Constant-time compare on the daemon side | Prevents timing oracles on the local socket. |
@@ -102,7 +113,7 @@ Two runtime roles (API.md §1.1) + one entitlement dimension. The UI's *screens*
 Applied *analog* discipline, so the rule "never store plain-text secrets" still holds:
 
 - License keys: verified then **discarded** — only fingerprint stored (§2.3).
-- API token: generated, written `0600`, held in memory — never logged, never embedded in URLs (header only).
+- API token: generated, atomically replaced at `/var/lib/netwatch-pro/api-token` as root-owned `0600`, held in process memory — never logged, never embedded in URLs (header only). Development/test `NETWATCH_API_TOKEN_FILE` override is unavailable to the fixed-path helper.
 - No secrets in code, tests, or commits (AGENTS.md §5).
 
 ---
@@ -141,7 +152,8 @@ Applied *analog* discipline, so the rule "never store plain-text secrets" still 
 | Shipped verifier holds the **public key** only (`packaging/licenses/`) | Asymmetric design: public key can verify, never mint. |
 | `.env` files: dev-only (`NETWATCH_DEV_DAEMON_ADDR`), `.gitignore`d, never in packaged builds | Dev convenience must never become a shipped config path. |
 | Env vars limited to the closed §8.3 list; anything else must be added to ARCHITECTURE.md first | A closed surface is an auditable surface. |
-| Token file mode asserted `0600` root at daemon start; refuse to boot if world-readable | A permissive token file silently undoes the entire auth model. |
+| Token file atomically created/replaced by daemon as root-owned `0600`; existing unsafe ownership, permissions, or symlink targets fail startup | A permissive or redirected token file silently undoes the auth boundary. |
+| Helper policy denies `any` and inactive users; active sessions require admin authentication; cancellation and no-agent behavior are tested per distro | Polkit policy and authentication-agent behavior vary by distribution. |
 | Logs: no token values, no license keys, no file contents — only IDs and codes | Logs outlive processes and get pasted into bug reports. |
 
 ---

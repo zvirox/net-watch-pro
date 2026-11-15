@@ -20,7 +20,7 @@ use tokio_tungstenite::tungstenite::Message;
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
-const TEST_TOKEN: &str = "test-token-0123456789abcdef";
+const TEST_TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 /// Boot the server on 127.0.0.1:<ephemeral>; returns (addr, status sender).
 async fn spawn_server() -> (SocketAddr, watch::Sender<StatusSnapshot>) {

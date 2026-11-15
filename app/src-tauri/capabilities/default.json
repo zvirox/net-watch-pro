@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Least-privilege default capability (PLAN P0.4). More capabilities are added per-feature with justification.",
+  "description": "Least-privilege capability for the main window only; no remote content is permitted.",
   "windows": ["main"],
   "permissions": ["core:default"]
 }

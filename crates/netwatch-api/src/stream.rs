@@ -14,6 +14,7 @@ use axum::response::Response;
 use netwatch_common::{Channel, ErrorCode, StatusSnapshot};
 use serde_json::json;
 
+use crate::auth::token_matches;
 use crate::state::AppState;
 
 /// Close code for WS auth failures (API.md §3 rules).
@@ -33,7 +34,7 @@ pub async fn stream(
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .is_some_and(|tok| tok == state.token.as_str());
+        .is_some_and(|tok| token_matches(tok, state.token.as_str()));
 
     ws.on_upgrade(move |mut socket| async move {
         if authorized {

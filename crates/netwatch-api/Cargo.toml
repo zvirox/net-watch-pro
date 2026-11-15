@@ -11,6 +11,7 @@ netwatch-common = { path = "../netwatch-common" }
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["sync"] }
 thiserror = "2"
+subtle = "2.6"
 getrandom = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

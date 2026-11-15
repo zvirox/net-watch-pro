@@ -1,6 +1,7 @@
 // shadcn-svelte-style barrel — vendored primitives (DESIGN.md §7).
 export { default as Button } from './button/Button.svelte';
 export type { ButtonVariant, ButtonSize } from './button/Button.svelte';
+export { default as StatusChip } from '../status-chip/StatusChip.svelte';
 export { default as Input } from './input/Input.svelte';
 export { default as Table } from './table/Table.svelte';
 export { default as TableHeader } from './table/TableHeader.svelte';

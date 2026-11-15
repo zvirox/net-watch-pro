@@ -4,13 +4,19 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Net Watch Pro UI shell (Tauri 2) — thin: window/tray/daemon-link only (ARCHITECTURE.md §4)"
+description = "Net Watch Pro UI shell (Tauri 2) — native daemon link and window lifecycle"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
 tauri = { version = "2", features = [] }
+tokio = { version = "1", features = ["sync", "time"] }
+tokio-tungstenite = "0.30"
 
 [lints]
 workspace = true

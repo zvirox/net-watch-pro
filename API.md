@@ -1,8 +1,10 @@
 # Net Watch Pro — API.md (Local API Reference)
 
-**Version:** 1.0 · **Date:** 2026-11-14  
+**Version:** 1.1 · **Date:** 2026-11-15  
 **Source of truth:** `PRD.md` (features, freemium gating) · `ARCHITECTURE.md` §5.3 (transport contract) · `DATABASE.md` (tables)  
 **Base URL:** `http://127.0.0.1:7897/api/v1` (loopback only — ARCHITECTURE.md §8.3)
+
+**Version history:** 1.1 (2026-11-15): clarify fixed production token source and native Tauri WebSocket header bridge; wire authentication contract is unchanged.
 
 > **Binding:** every endpoint below maps to a PRD feature and a DATABASE.md table (§10 traceability matrix). Anything flagged as not doing so is explicitly justified there. Implementation of this file lives in `docs/api-contract.md` (ARCHITECTURE.md §4) and must not drift.
 
@@ -17,7 +19,7 @@
 | `anonymous` | any local process | `GET /health` only (bootstrapping) |
 | `local-ui` | UI process + any local tool holding the per-boot token | everything else |
 
-- **Mechanism:** `Authorization: Bearer <token>` — the random per-boot token from `$NETWATCH_API_TOKEN_FILE` (mode 0600, root-owned; UI obtains it via the Tauri one-shot helper, ARCHITECTURE.md §5.3).
+- **Mechanism:** `Authorization: Bearer <token>` — the random per-boot token from canonical production file `/var/lib/netwatch-pro/api-token` (mode 0600, root-owned; UI obtains it via the Tauri one-shot Polkit-authorized helper, ARCHITECTURE.md §5.3). `NETWATCH_API_TOKEN_FILE` is only a development/test daemon override and is never supplied to the helper or set in the packaged production unit.
 - **Pro entitlement is NOT a role.** It is a license-tier check against `DATABASE.md §2.7` enforced server-side (PRD R7). Gated endpoints return `403 EXPORT_PRO_REQUIRED` (see §2.3).
 - **Yes/No per endpoint** is stated in each group's table ("Auth: yes (local-ui)" / "no").
 
@@ -282,7 +284,7 @@ Errors: 401, 429.
 
 ### 3. WebSocket Channels (streaming half of the API)
 
-Same base URL, upgrade on `GET (ws) /api/v1/stream` with the standard `Authorization` header (ARCHITECTURE.md §5.3). One connection multiplexes all channels; frames are versioned JSON.
+Same base URL, upgrade on `GET (ws) /api/v1/stream` with the standard `Authorization` header (ARCHITECTURE.md §5.3). One connection multiplexes all channels; frames are versioned JSON. Browser WebSocket cannot set this header, so the Tauri native link layer creates the socket with the bearer header and relays frames to the main webview through its native bridge; this transport adaptation does not alter the API contract.
 
 Client → server:
 ```json
