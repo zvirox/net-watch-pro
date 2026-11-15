@@ -40,10 +40,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # P0 stopgap: package-lock.json not yet committed (npm resolution churn
-      # on the TypeScript peer range). Restore `npm ci` + npm cache as soon as
-      # the lockfile lands (tracked in CHECKLIST.md P0.3).
-      - run: npm install --no-audit --no-fund
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      # --legacy-peer-deps: npm's strict peer resolver churns endlessly on the
+      # typescript peer graph (ERESOLVE with typescript@undefined, hours-long
+      # loop, reproducible locally). The lockfile is generated with the same
+      # flag, so ci installs exactly what it pinned.
+      - run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: svelte-check
         run: npm run check
       - name: lint
