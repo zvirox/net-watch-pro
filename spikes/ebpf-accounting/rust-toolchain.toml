@@ -1,0 +1,6 @@
+[toolchain]
+channel = "nightly"
+# Components needed for eBPF development:
+#   rustup component add --toolchain nightly rust-src llvm-tools-preview
+# bpf-linker (build-time tool, installed separately):
+#   cargo install bpf-linker   (or from https://github.com/aya-rs/bpf-linker)
