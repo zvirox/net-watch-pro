@@ -5,11 +5,11 @@
 //! only serves it. No per-boot token (retired, D1a); authorization is via
 //! socket peer-credential.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use netwatch_common::{LiveConnectionRow, StatusSnapshot};
-use tokio::sync::{broadcast, watch};
+use netwatch_common::StatusSnapshot;
+use sqlx::SqlitePool;
+use tokio::sync::watch;
 
 use crate::LiveFeed;
 
@@ -19,6 +19,9 @@ pub struct AppState {
     pub status: watch::Receiver<StatusSnapshot>,
     /// Live connection snapshot + delta feed (P2.6).
     pub live: LiveFeed,
+    /// Read-side SQLite pool for query endpoints (history; API.md §2.2).
+    /// The daemon owns the database file; this pool shares its WAL.
+    pub db: SqlitePool,
     /// Connected WS clients (surfaced in `GET /status`).
     pub ws_clients: AtomicU64,
     /// Server start time, for `uptime_s` in `/status`.
@@ -28,10 +31,11 @@ pub struct AppState {
 impl AppState {
     /// Build state from the daemon's channels.
     #[must_use]
-    pub fn new(status: watch::Receiver<StatusSnapshot>, live: LiveFeed) -> Self {
+    pub fn new(status: watch::Receiver<StatusSnapshot>, live: LiveFeed, db: SqlitePool) -> Self {
         Self {
             status,
             live,
+            db,
             ws_clients: AtomicU64::new(0),
             started_at: std::time::Instant::now(),
         }

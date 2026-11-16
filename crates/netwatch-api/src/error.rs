@@ -30,6 +30,13 @@ impl ApiError {
         }
     }
 
+    /// Stable contract code (API.md §1.3) — used by callers and tests to
+    /// assert the exact error without matching on message text.
+    #[must_use]
+    pub fn code(&self) -> ErrorCode {
+        self.code
+    }
+
     /// 401 — missing or invalid bearer token.
     #[must_use]
     pub fn auth_invalid() -> Self {

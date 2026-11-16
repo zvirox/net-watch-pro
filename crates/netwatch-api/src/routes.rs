@@ -50,6 +50,21 @@ pub async fn connections_live(State(state): State<Arc<AppState>>) -> Response {
     .into_response()
 }
 
+/// `GET /connections` — C2 history episodes: keyset pagination, whitelist
+/// filters/sort, raw window + beyond-window aggregate rows (API.md §2.2).
+/// The raw query string is parsed by hand so every error uses the §1.3
+/// envelope (axum's Query extractor rejects with a plain 400).
+pub async fn connections(
+    State(state): State<Arc<AppState>>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> Response {
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    match crate::history::connections_page(&state.db, raw.as_deref().unwrap_or(""), now).await {
+        Ok(envelope) => Json(envelope).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
 /// Epoch seconds for serve-time stamps.
 fn epoch_now() -> u64 {
     std::time::SystemTime::now()
@@ -85,7 +100,11 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
     axum::Router::new()
         .route("/api/v1/health", axum::routing::get(health))
         .route("/api/v1/status", axum::routing::get(status))
-        .route("/api/v1/connections/live", axum::routing::get(connections_live))
+        .route(
+            "/api/v1/connections/live",
+            axum::routing::get(connections_live),
+        )
+        .route("/api/v1/connections", axum::routing::get(connections))
         .route("/api/v1/stream", axum::routing::get(stream_upgrade))
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)

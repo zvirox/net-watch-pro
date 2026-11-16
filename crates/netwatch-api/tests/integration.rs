@@ -45,9 +45,77 @@ fn live_feed() -> (
     )
 }
 
-/// Boot the server on an ephemeral Unix socket path; returns (path, status
-/// sender).
+/// Migrated-empty in-memory database for tests that don't seed history data
+/// (single connection so every query sees the same schema).
+async fn test_db() -> sqlx::SqlitePool {
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(sqlx::sqlite::SqliteConnectOptions::new().in_memory(true))
+        .await
+        .unwrap();
+    pool
+}
+
+/// Minimal history schema for tests (mirrors migrations 0001–0003 columns
+/// the history queries touch).
+pub(crate) async fn seed_history_schema(pool: &sqlx::SqlitePool) {
+    sqlx::query("CREATE TABLE license (id INTEGER PRIMARY KEY CHECK (id = 1), tier TEXT NOT NULL DEFAULT 'free')")
+        .execute(pool).await.unwrap();
+    sqlx::query("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO settings (key, value) VALUES ('raw_window_days', '7')")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO license (id, tier) VALUES (1, 'free')")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("CREATE TABLE apps (id INTEGER PRIMARY KEY, name TEXT NOT NULL, icon_path TEXT)")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "CREATE TABLE connections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            app_id INTEGER NOT NULL, pid INTEGER NOT NULL, process_name TEXT,
+            protocol TEXT NOT NULL, local_ip TEXT NOT NULL, local_port INTEGER NOT NULL,
+            remote_ip TEXT NOT NULL, remote_port INTEGER NOT NULL, remote_host TEXT,
+            bytes_up INTEGER NOT NULL DEFAULT 0, bytes_down INTEGER NOT NULL DEFAULT 0,
+            packets_up INTEGER NOT NULL DEFAULT 0, packets_down INTEGER NOT NULL DEFAULT 0,
+            first_seen_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL,
+            is_open INTEGER NOT NULL DEFAULT 0, interface_id INTEGER)",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "CREATE TABLE usage_endpoint_day (
+            app_id INTEGER NOT NULL, bucket_start INTEGER NOT NULL,
+            remote_ip TEXT NOT NULL, remote_port INTEGER NOT NULL, protocol TEXT NOT NULL,
+            bytes_up INTEGER NOT NULL DEFAULT 0, bytes_down INTEGER NOT NULL DEFAULT 0,
+            connection_count INTEGER NOT NULL DEFAULT 0,
+            first_seen_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL,
+            PRIMARY KEY (app_id, bucket_start, remote_ip, remote_port, protocol))",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Boot the server on an ephemeral Unix socket path with an empty database;
+/// returns (path, status sender).
 async fn spawn_server() -> (std::path::PathBuf, watch::Sender<StatusSnapshot>) {
+    spawn_server_with(test_db().await).await
+}
+
+/// Boot the server against a caller-supplied database (history tests seed it
+/// first so REST queries have rows to page through).
+async fn spawn_server_with(
+    db: sqlx::SqlitePool,
+) -> (std::path::PathBuf, watch::Sender<StatusSnapshot>) {
     let (tx, rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
         ebpf: EbpfState::Attached,
@@ -69,7 +137,7 @@ async fn spawn_server() -> (std::path::PathBuf, watch::Sender<StatusSnapshot>) {
     let (feed, _) = live_feed();
     let sock_for_serve = sock.clone();
     let handle = tokio::spawn(async move {
-        if let Err(e) = netwatch_api::serve_unix(&sock_for_serve, rx, feed, async move {
+        if let Err(e) = netwatch_api::serve_unix(&sock_for_serve, rx, feed, db, async move {
             let _ = shutdown_rx.await;
         })
         .await
@@ -192,7 +260,8 @@ async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let serve_sock = sock.clone();
     let handle = tokio::spawn(async move {
-        let _ = netwatch_api::serve_unix(&serve_sock, status_rx, live, async move {
+        let db = test_db().await;
+        let _ = netwatch_api::serve_unix(&serve_sock, status_rx, live, db, async move {
             let _ = shutdown_rx.await;
         })
         .await;
@@ -290,7 +359,8 @@ async fn connections_live_rest_matches_ws_snapshot() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let serve_sock = sock.clone();
     let handle = tokio::spawn(async move {
-        let _ = netwatch_api::serve_unix(&serve_sock, status_rx, live, async move {
+        let db = test_db().await;
+        let _ = netwatch_api::serve_unix(&serve_sock, status_rx, live, db, async move {
             let _ = shutdown_rx.await;
         })
         .await;
@@ -500,7 +570,7 @@ async fn client_counting_bumps_status_counter() {
         ebpf: EbpfState::Attached,
         recording: true,
     });
-    let state = Arc::new(AppState::new(rx, live_feed().0));
+    let state = Arc::new(AppState::new(rx, live_feed().0, test_db().await));
     state.client_delta(1);
     assert_eq!(state.client_count(), 1);
     state.client_delta(-1);
@@ -532,7 +602,8 @@ async fn stale_socket_file_is_removed_before_bind() {
     let (feed, _) = live_feed();
     let serve_sock = sock.clone();
     let handle = tokio::spawn(async move {
-        let _ = netwatch_api::serve_unix(&serve_sock, rx, feed, async move {
+        let db = test_db().await;
+        let _ = netwatch_api::serve_unix(&serve_sock, rx, feed, db, async move {
             let _ = shutdown_rx.await;
         })
         .await;
@@ -550,4 +621,113 @@ async fn stale_socket_file_is_removed_before_bind() {
     shutdown_tx.send(()).ok();
     handle.abort();
     assert!(connected, "serve_unix did not replace a stale socket file");
+}
+
+// ------------------------------------------- §2.2 C2 history (GET /connections)
+
+/// Seed one app plus raw episodes inside the raw window.
+async fn seed_raw_history(pool: &sqlx::SqlitePool, count: i64) {
+    sqlx::query("INSERT INTO apps (id, name) VALUES (1, 'Firefox')")
+        .execute(pool)
+        .await
+        .unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or_default();
+    for i in 0..count {
+        sqlx::query(
+            "INSERT INTO connections (app_id, pid, protocol, local_ip, local_port,
+             remote_ip, remote_port, bytes_up, bytes_down, first_seen_at, last_seen_at)
+             VALUES (1, 4242, 'tcp', '10.0.0.2', 51000, '151.101.1.1', 443, ?, 0, ?, ?)",
+        )
+        .bind(1000 + i)
+        .bind(now - 3600 - i)
+        .bind(now - 3600 - i)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn connections_history_returns_envelope_over_socket() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_raw_history(&db, 3).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/connections").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    // API.md §1.4 / C2 envelope.
+    assert_eq!(v["has_more"], false);
+    assert!(v["next_cursor"].is_null(), "omitted when has_more is false");
+    let data = v["data"].as_array().unwrap();
+    assert_eq!(data.len(), 3);
+    // Raw rows carry an id and the C1 app block; only aggregates carry kind.
+    assert!(data[0]["id"].as_i64().is_some());
+    assert_eq!(data[0]["app"]["name"], "Firefox");
+    assert!(data[0]["kind"].is_null());
+    assert!(data[0]["packets_up"].as_i64().is_some());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn connections_history_paginates_with_cursor_over_socket() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_raw_history(&db, 5).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/connections?limit=2").await;
+    assert_eq!(status, 200, "body: {body}");
+    let first: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(first["data"].as_array().unwrap().len(), 2);
+    assert_eq!(first["has_more"], true);
+    let cursor = first["next_cursor"].as_str().unwrap().to_string();
+
+    // Walk the rest; the union must be 5 distinct ids in stable order.
+    let mut ids: Vec<i64> = first["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_i64().unwrap())
+        .collect();
+    let mut next = Some(cursor);
+    while let Some(c) = next {
+        let (status, body) =
+            http_get(&sock, &format!("/api/v1/connections?limit=2&cursor={c}")).await;
+        assert_eq!(status, 200, "body: {body}");
+        let page: Value = serde_json::from_str(&body).unwrap();
+        ids.extend(
+            page["data"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["id"].as_i64().unwrap()),
+        );
+        next = page["next_cursor"].as_str().map(str::to_string);
+        assert!(page["data"].as_array().unwrap().len() <= 2);
+    }
+    assert_eq!(ids.len(), 5, "no dupes, no gaps: {ids:?}");
+    let mut unique = ids.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(unique.len(), 5, "cursor walk repeated a row: {ids:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn connections_history_rejects_unknown_param_with_400() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/connections?bogus=1").await;
+    assert_eq!(status, 400, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "QUERY_INVALID");
+    assert!(
+        v["error"]["message"].as_str().unwrap().contains("bogus"),
+        "message must name the offending key: {body}"
+    );
 }

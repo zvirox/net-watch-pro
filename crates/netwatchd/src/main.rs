@@ -144,6 +144,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
             snapshot: snapshot_rx,
             deltas: delta_tx,
         },
+        pool,
         shutdown,
     )
     .await

@@ -2306,6 +2306,7 @@ dependencies = [
  "netwatch-common",
  "serde",
  "serde_json",
+ "sqlx",
  "subtle",
  "thiserror 2.0.21",
  "tokio",

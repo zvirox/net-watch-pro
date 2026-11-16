@@ -186,14 +186,24 @@ mod tests {
         .unwrap();
         assert_eq!(connections, 1);
 
-        // Both migrations recorded in the human ledger (DATABASE.md §2.1).
+        // All migrations recorded in the human ledger (DATABASE.md §2.1):
+        // 0001 init_core, 0002 apps_connections, 0003 rollups.
         let rows: Vec<(i64, String)> =
             sqlx::query_as("SELECT version, name FROM schema_migrations ORDER BY version")
                 .fetch_all(&pool)
                 .await
                 .unwrap();
         println!("schema_migrations rows: {rows:?}");
-        assert_eq!(rows.len(), 2);
+        assert_eq!(rows.len(), 3);
+        // Rollup tables + the deferred remote-host index exist (§2.5/§5).
+        let rollups: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table'
+             AND name IN ('usage_rollup_15m','usage_endpoint_day','usage_interface_15m')",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(rollups, 3);
     }
 
     /// §8 runtime rules hold on a fresh open: WAL + foreign_keys ON.

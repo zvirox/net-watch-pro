@@ -10,6 +10,9 @@ description = "API server: WS routes, token auth, request/validation types (API.
 netwatch-common = { path = "../netwatch-common" }
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["sync", "net", "time", "macros"] }
+# sqlx: read-side queries for history endpoints (same workspace dep as the
+# daemon's writer; approved stack per ARCHITECTURE.md §2).
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
 thiserror = "2"
 subtle = "2.6"
 getrandom = "0.4"

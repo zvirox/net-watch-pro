@@ -13,6 +13,7 @@
 
 pub mod auth;
 pub mod error;
+pub mod history;
 pub mod routes;
 pub mod state;
 pub mod stream;
@@ -50,6 +51,7 @@ pub async fn serve_unix(
     socket_path: &Path,
     status: watch::Receiver<StatusSnapshot>,
     live: LiveFeed,
+    db: sqlx::SqlitePool,
     shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<(), crate::error::ApiError> {
     // Remove stale socket file if present.
@@ -63,7 +65,7 @@ pub async fn serve_unix(
         )
     })?;
 
-    let state = Arc::new(AppState::new(status, live));
+    let state = Arc::new(AppState::new(status, live, db));
     let app = crate::routes::router(state).into_make_service();
 
     axum::serve(listener, app)
