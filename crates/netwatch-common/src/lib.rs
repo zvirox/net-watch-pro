@@ -112,6 +112,106 @@ impl Channel {
     }
 }
 
+/// IP protocol of a connection episode (API.md C1 `protocol` field).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Protocol {
+    /// Transmission Control Protocol.
+    Tcp,
+    /// User Datagram Protocol.
+    Udp,
+    /// Internet Control Message Protocol.
+    Icmp,
+    /// Anything else (SCTP, DCCP, …).
+    Other,
+}
+
+impl Protocol {
+    /// Canonical wire value (API.md C1).
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Protocol::Tcp => "tcp",
+            Protocol::Udp => "udp",
+            Protocol::Icmp => "icmp",
+            Protocol::Other => "other",
+        }
+    }
+}
+
+/// App identity block in a live row (API.md C1 `app` object).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveApp {
+    /// Stable app id (FK to `apps.id`).
+    pub id: i64,
+    /// Display name.
+    pub name: String,
+    /// Icon reference; `null` → UI fallback container (DESIGN.md §6.2).
+    pub icon: Option<String>,
+}
+
+/// One live connection row (API.md C1 shape; WS `live.connections`
+/// snapshot rows use the same shape).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveConnectionRow {
+    /// Stable episode id — the key for delta replacement (API.md §3).
+    pub id: u64,
+    /// Attributed app.
+    pub app: LiveApp,
+    /// OS pid snapshot at attribution.
+    pub pid: u32,
+    /// Process name snapshot (display fallback).
+    pub process_name: Option<String>,
+    /// IP protocol.
+    pub protocol: Protocol,
+    /// Local address.
+    pub local_ip: String,
+    /// Local port.
+    pub local_port: u16,
+    /// Remote address.
+    pub remote_ip: String,
+    /// Remote port.
+    pub remote_port: u16,
+    /// PTR/display name if resolved; never replaces `remote_ip`.
+    pub remote_host: Option<String>,
+    /// Current uplink rate (bytes/s, sampled 1 Hz).
+    pub rate_up_bps: u64,
+    /// Current downlink rate (bytes/s, sampled 1 Hz).
+    pub rate_down_bps: u64,
+    /// Total uplink bytes this episode.
+    pub bytes_up: u64,
+    /// Total downlink bytes this episode.
+    pub bytes_down: u64,
+}
+
+/// Partial row for a delta `updated` entry (API.md §3: only volatile
+/// counters are pushed).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveUpdateRow {
+    /// Episode id this update replaces.
+    pub id: u64,
+    /// Current uplink rate.
+    pub rate_up_bps: u64,
+    /// Current downlink rate.
+    pub rate_down_bps: u64,
+    /// Total uplink bytes so far.
+    pub bytes_up: u64,
+    /// Total downlink bytes so far.
+    pub bytes_down: u64,
+}
+
+/// One `live.connections` delta frame payload (API.md §3). Replacement is
+/// keyed by row `id`, not positional.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveDelta {
+    /// Rows first seen since the previous delta.
+    pub added: Vec<LiveConnectionRow>,
+    /// Counter updates for already-known rows.
+    pub updated: Vec<LiveUpdateRow>,
+    /// Episode ids removed since the previous delta (episode ended).
+    pub removed: Vec<u64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

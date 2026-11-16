@@ -18,6 +18,7 @@ use axum::extract::ws::WebSocket;
 use futures_util::StreamExt;
 use netwatch_common::{Channel, ErrorCode, StatusSnapshot};
 use serde_json::json;
+use tokio::sync::broadcast;
 
 use crate::state::AppState;
 
@@ -35,12 +36,25 @@ fn status_obj(snap: &StatusSnapshot) -> serde_json::Value {
     })
 }
 
-/// Build a JSON object for a live snapshot frame.
-fn live_snapshot_obj() -> serde_json::Value {
+/// Build a JSON object for a live snapshot frame (rows are the current
+/// C1-shaped live view).
+fn live_snapshot_obj(rows: &[netwatch_common::LiveConnectionRow]) -> serde_json::Value {
     json!({
         "channel": Channel::LiveConnections.as_str(),
         "kind": "snapshot",
-        "data": [],
+        "data": rows,
+    })
+}
+
+/// Build a JSON object for a live delta frame (API.md §3: `added`/`updated`
+/// keyed by row id, `removed` ids).
+fn live_delta_obj(delta: &netwatch_common::LiveDelta) -> serde_json::Value {
+    json!({
+        "channel": Channel::LiveConnections.as_str(),
+        "kind": "delta",
+        "added": delta.added,
+        "updated": delta.updated,
+        "removed": delta.removed,
     })
 }
 
@@ -65,7 +79,7 @@ fn error_obj(code: ErrorCode, message: impl Into<String>) -> serde_json::Value {
 fn initial_frame(channel: Channel, state: &AppState) -> Message {
     let v = match channel {
         Channel::Status => status_obj(&state.status.borrow().clone()),
-        Channel::LiveConnections => live_snapshot_obj(),
+        Channel::LiveConnections => live_snapshot_obj(&state.live.snapshot.borrow()),
         Channel::UsageTotals => usage_totals_obj(),
     };
     Message::text(v.to_string())
@@ -78,6 +92,10 @@ pub async fn run_connection(state: Arc<AppState>, mut stream: WebSocket) {
         subs: HashSet::new(),
     };
     let mut status_rx = state.status.clone();
+    // Per-connection delta receiver; subscribed to the broadcast on connect
+    // so frames between subscribe and this point are not lost (the client
+    // still gets the fresh snapshot on subscribe).
+    let mut live_rx = state.live.deltas.subscribe();
 
     loop {
         tokio::select! {
@@ -97,6 +115,39 @@ pub async fn run_connection(state: Arc<AppState>, mut stream: WebSocket) {
                     {
                         break;
                     }
+                }
+            }
+            // Live deltas push to subscribed clients (§3: ≤ 1 msg/s, kept
+            // by the live service's 1 Hz sampler).
+            delta = live_rx.recv() => {
+                match delta {
+                    Ok(delta) => {
+                        if conn.subs.contains(&Channel::LiveConnections) {
+                            if stream
+                                .send(Message::text(live_delta_obj(&delta).to_string()))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_missed)) => {
+                        // Receiver fell behind: resync with a fresh snapshot
+                        // instead of replaying stale deltas (API.md §3 rule:
+                        // snapshot is the recovery mechanism).
+                        if conn.subs.contains(&Channel::LiveConnections) {
+                            let rows = state.live.snapshot.borrow().clone();
+                            if stream
+                                .send(Message::text(live_snapshot_obj(&rows).to_string()))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
                 }
             }
             incoming = stream.next() => {

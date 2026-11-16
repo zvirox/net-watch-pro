@@ -52,6 +52,81 @@ pub async fn migrate(pool: &SqlitePool) -> Result<(), DbError> {
     Ok(())
 }
 
+/// Highest persisted connection id, for seeding the live id space
+/// (`crate::live` starts episode ids above it so the two never collide).
+///
+/// # Errors
+///
+/// Propagates SQLite failures (API.md S2 `DB_ERROR` class).
+pub async fn max_connection_id(pool: &SqlitePool) -> Result<u64, DbError> {
+    let max: Option<i64> = sqlx::query_scalar("SELECT MAX(id) FROM connections")
+        .fetch_one(pool)
+        .await?;
+    Ok(max.unwrap_or(0).max(0) as u64)
+}
+
+/// Persist a batch of episode rows in one transaction (F-09: closes persist
+/// immediately, open episodes on the ~60 s checkpoint; every write is
+/// transactional, §7.1 — partial flushes are never persisted). Absolute
+/// totals: upsert, never accumulate.
+///
+/// The caller stamps `updated_at`-equivalent cadence via `last_seen_at`;
+/// `created_at` keeps its insert default.
+///
+/// # Errors
+///
+/// Propagates SQLite failures; the live service logs and continues on
+/// batch failure (degraded, not dead — §7.1).
+pub async fn persist_episodes(
+    pool: &SqlitePool,
+    rows: &[netwatch_core::episode::EpisodeRow],
+) -> Result<(), DbError> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let mut tx = pool.begin().await?;
+    for row in rows {
+        sqlx::query(
+            "INSERT INTO connections (
+                id, app_id, interface_id, pid, process_name, protocol,
+                local_ip, local_port, remote_ip, remote_port, remote_host,
+                bytes_up, bytes_down, packets_up, packets_down,
+                first_seen_at, last_seen_at, is_open
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+            ON CONFLICT(id) DO UPDATE SET
+                bytes_up = excluded.bytes_up,
+                bytes_down = excluded.bytes_down,
+                packets_up = excluded.packets_up,
+                packets_down = excluded.packets_down,
+                last_seen_at = excluded.last_seen_at,
+                is_open = excluded.is_open,
+                updated_at = strftime('%s','now')",
+        )
+        .bind(row.id as i64)
+        .bind(row.app_id)
+        .bind(row.interface_id)
+        .bind(row.pid as i64)
+        .bind(row.process_name.as_deref())
+        .bind(row.protocol.as_str())
+        .bind(&row.local_ip)
+        .bind(row.local_port as i64)
+        .bind(&row.remote_ip)
+        .bind(row.remote_port as i64)
+        .bind(row.remote_host.as_deref())
+        .bind(row.bytes_up as i64)
+        .bind(row.bytes_down as i64)
+        .bind(row.packets_up as i64)
+        .bind(row.packets_down as i64)
+        .bind(row.first_seen_at as i64)
+        .bind(row.last_seen_at as i64)
+        .bind(i64::from(row.is_open))
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)] // tests, not daemon paths
@@ -149,5 +224,62 @@ mod tests {
 
         pool.close().await;
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// P2.5: episode flush persists a row and later batches upsert absolute
+    /// totals (never accumulate). FK requires a seeded app row — the real
+    /// app upsert path lands with attribution (P2.3).
+    #[tokio::test]
+    async fn persist_episodes_upserts_absolute_totals() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(SqliteConnectOptions::new().in_memory(true))
+            .await
+            .unwrap();
+        migrate(&pool).await.unwrap();
+        sqlx::query("INSERT INTO apps (id, name, app_key, exe_path, first_seen_at, last_seen_at) VALUES (1, 'Firefox', 'cgroup:test', '/usr/bin/firefox', 0, 0)")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let row = netwatch_core::episode::EpisodeRow {
+            id: 7,
+            app_id: 1,
+            interface_id: Some(1),
+            pid: 2213,
+            process_name: Some("firefox".to_string()),
+            protocol: netwatch_common::Protocol::Tcp,
+            local_ip: "192.168.1.23".to_string(),
+            local_port: 53210,
+            remote_ip: "151.101.1.1".to_string(),
+            remote_port: 443,
+            remote_host: None,
+            bytes_up: 100,
+            bytes_down: 200,
+            packets_up: 1,
+            packets_down: 2,
+            first_seen_at: 1000,
+            last_seen_at: 1005,
+            is_open: true,
+        };
+
+        persist_episodes(&pool, &[row.clone()]).await.unwrap();
+        // Second batch with higher totals → replaced, not accumulated.
+        let mut grown = row.clone();
+        grown.bytes_up = 400;
+        grown.bytes_down = 900;
+        grown.last_seen_at = 1060;
+        persist_episodes(&pool, &[grown]).await.unwrap();
+
+        let (up, down, last_seen, is_open): (i64, i64, i64, i64) = sqlx::query_as(
+            "SELECT bytes_up, bytes_down, last_seen_at, is_open FROM connections WHERE id = 7",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!((up, down), (400, 900), "absolute upsert, not accumulate");
+        assert_eq!(last_seen, 1060);
+        assert_eq!(is_open, 1);
+        assert_eq!(max_connection_id(&pool).await.unwrap(), 7);
     }
 }

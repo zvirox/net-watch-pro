@@ -9,6 +9,7 @@ description = "Net Watch Pro daemon: composition root (root systemd service, ARC
 [dependencies]
 netwatch-api = { path = "../netwatch-api" }
 netwatch-common = { path = "../netwatch-common" }
+netwatch-core = { path = "../netwatch-core" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "signal", "sync"] }
 getrandom = "0.4"
 tracing = "0.1"

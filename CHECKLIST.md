@@ -53,8 +53,8 @@
 - [ ] P2.2 Byte counters → 1 s delta events <!-- gated on spike S -->
 - [ ] P2.3 `/proc` attribution + `apps` upserts <!-- cgroup-first identity per D5a; /proc fallback -->
 - [x] P2.4 Migrations 0001+0002 at boot <!-- fresh data dir → tables + seeds verified (smoke run + unit tests) -->
-- [ ] P2.5 Batched `connections` writer (checkpoint cadence ~60 s, F-09)
-- [ ] P2.6 `live.connections` channel (snapshot + delta) over socket stream
+- [x] P2.5 Batched `connections` writer (checkpoint cadence ~60 s, F-09) <!-- persist_episodes upserts absolute totals, one tx per batch; unit tested -->
+- [x] P2.6 `live.connections` channel (snapshot + delta) over socket stream <!-- EpisodeStore + 1 Hz live service + WS snapshot/delta frames; verified over live socket -->
 - [ ] P2.7 Live Connections screen (virtualized, pause, all states)
 - [ ] P2.8 REST `/connections/live` + real ebpf status
 - [ ] P2.9 Degraded path (`NETWATCH_DISABLE_EBPF` → honest UI)

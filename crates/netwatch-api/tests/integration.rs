@@ -28,6 +28,23 @@ use tokio_tungstenite::tungstenite::Message;
 
 type WsStream = tokio_tungstenite::WebSocketStream<UnixStream>;
 
+/// Empty live feed for tests that don't inject live data; returns the feed
+/// and its delta sender (to publish if needed).
+fn live_feed() -> (
+    netwatch_api::LiveFeed,
+    tokio::sync::broadcast::Sender<netwatch_common::LiveDelta>,
+) {
+    let (_, snapshot_rx) = watch::channel(Arc::new(Vec::new()));
+    let (delta_tx, _) = tokio::sync::broadcast::channel(16);
+    (
+        netwatch_api::LiveFeed {
+            snapshot: snapshot_rx,
+            deltas: delta_tx.clone(),
+        },
+        delta_tx,
+    )
+}
+
 /// Boot the server on an ephemeral Unix socket path; returns (path, status
 /// sender).
 async fn spawn_server() -> (std::path::PathBuf, watch::Sender<StatusSnapshot>) {
@@ -49,9 +66,10 @@ async fn spawn_server() -> (std::path::PathBuf, watch::Sender<StatusSnapshot>) {
     let sock = dir.join("api.sock");
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let (feed, _) = live_feed();
     let sock_for_serve = sock.clone();
     let handle = tokio::spawn(async move {
-        if let Err(e) = netwatch_api::serve_unix(&sock_for_serve, rx, async move {
+        if let Err(e) = netwatch_api::serve_unix(&sock_for_serve, rx, feed, async move {
             let _ = shutdown_rx.await;
         })
         .await
@@ -121,6 +139,106 @@ async fn subscribe_live_connections_returns_snapshot() {
     assert_eq!(v["channel"], "live.connections");
     assert_eq!(v["kind"], "snapshot");
     assert_eq!(v["data"], json!([])); // Phase 1 stub: no traffic data yet
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
+    // P2.6: the live feed is shared state; a test publisher injects a
+    // snapshot row and a delta (the daemon's live service does this in
+    // production) and the WS client sees snapshot → delta, API.md §3.
+    let dir = std::env::temp_dir().join(format!(
+        "netwatch-api-live-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let sock = dir.join("api.sock");
+
+    let (_status_tx, status_rx) = watch::channel(StatusSnapshot {
+        daemon: DaemonState::Monitoring,
+        ebpf: EbpfState::Attached,
+        recording: true,
+    });
+    let row = netwatch_common::LiveConnectionRow {
+        id: 88231,
+        app: netwatch_common::LiveApp {
+            id: 1,
+            name: "Firefox".to_string(),
+            icon: None,
+        },
+        pid: 2213,
+        process_name: Some("firefox".to_string()),
+        protocol: netwatch_common::Protocol::Tcp,
+        local_ip: "192.168.1.23".to_string(),
+        local_port: 53210,
+        remote_ip: "151.101.1.1".to_string(),
+        remote_port: 443,
+        remote_host: None,
+        rate_up_bps: 40_960,
+        rate_down_bps: 262_144,
+        bytes_up: 240_000,
+        bytes_down: 1_980_000,
+    };
+    let (snapshot_tx, snapshot_rx) = watch::channel(Arc::new(vec![row.clone()]));
+    let (delta_tx, _) = tokio::sync::broadcast::channel(16);
+    let live = netwatch_api::LiveFeed {
+        snapshot: snapshot_rx,
+        deltas: delta_tx.clone(),
+    };
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let serve_sock = sock.clone();
+    let handle = tokio::spawn(async move {
+        let _ = netwatch_api::serve_unix(&serve_sock, status_rx, live, async move {
+            let _ = shutdown_rx.await;
+        })
+        .await;
+    });
+    for _ in 0..100 {
+        if UnixStream::connect(&sock).await.is_ok() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    let mut ws = ws_connect(&sock).await;
+    ws_send(
+        &mut ws,
+        json!({ "op": "subscribe", "channel": "live.connections" }),
+    )
+    .await;
+
+    // Snapshot carries the injected row (C1 shape).
+    let v = ws_next(&mut ws).await;
+    assert_eq!(v["kind"], "snapshot");
+    assert_eq!(v["data"][0]["id"], 88231);
+    assert_eq!(v["data"][0]["app"]["name"], "Firefox");
+    assert_eq!(v["data"][0]["rate_down_bps"], 262_144);
+
+    // Delta replaces by row id.
+    delta_tx
+        .send(netwatch_common::LiveDelta {
+            added: vec![],
+            updated: vec![netwatch_common::LiveUpdateRow {
+                id: 88231,
+                rate_up_bps: 0,
+                rate_down_bps: 300_000,
+                bytes_up: 240_000,
+                bytes_down: 2_200_000,
+            }],
+            removed: vec![],
+        })
+        .unwrap();
+    let v = ws_next(&mut ws).await;
+    assert_eq!(v["kind"], "delta");
+    assert_eq!(v["updated"][0]["id"], 88231);
+    assert_eq!(v["updated"][0]["bytes_down"], 2_200_000);
+
+    shutdown_tx.send(()).ok();
+    handle.abort();
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -299,7 +417,7 @@ async fn client_counting_bumps_status_counter() {
         ebpf: EbpfState::Attached,
         recording: true,
     });
-    let state = Arc::new(AppState::new(rx));
+    let state = Arc::new(AppState::new(rx, live_feed().0));
     state.client_delta(1);
     assert_eq!(state.client_count(), 1);
     state.client_delta(-1);
@@ -328,9 +446,10 @@ async fn stale_socket_file_is_removed_before_bind() {
         recording: true,
     });
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let (feed, _) = live_feed();
     let serve_sock = sock.clone();
     let handle = tokio::spawn(async move {
-        let _ = netwatch_api::serve_unix(&serve_sock, rx, async move {
+        let _ = netwatch_api::serve_unix(&serve_sock, rx, feed, async move {
             let _ = shutdown_rx.await;
         })
         .await;

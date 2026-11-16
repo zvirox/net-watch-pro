@@ -22,9 +22,20 @@ use std::sync::Arc;
 
 use netwatch_common::StatusSnapshot;
 use tokio::net::UnixListener;
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 
 pub use state::AppState;
+
+/// Receiving halves of the daemon's live-data publishers
+/// (`netwatchd::live`): the current snapshot plus a broadcast of deltas.
+/// Cloned freely; each WS connection derives its own delta receiver.
+#[derive(Clone)]
+pub struct LiveFeed {
+    /// Latest live snapshot, replaced once per sample (≤ 1/s).
+    pub snapshot: watch::Receiver<Arc<Vec<netwatch_common::LiveConnectionRow>>>,
+    /// Delta frames broadcast to every subscribed client (API.md §3).
+    pub deltas: broadcast::Sender<netwatch_common::LiveDelta>,
+}
 
 /// Serve the API on a Unix domain socket until `shutdown` resolves.
 ///
@@ -38,6 +49,7 @@ pub use state::AppState;
 pub async fn serve_unix(
     socket_path: &Path,
     status: watch::Receiver<StatusSnapshot>,
+    live: LiveFeed,
     shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<(), crate::error::ApiError> {
     // Remove stale socket file if present.
@@ -51,7 +63,7 @@ pub async fn serve_unix(
         )
     })?;
 
-    let state = Arc::new(AppState::new(status));
+    let state = Arc::new(AppState::new(status, live));
     let app = crate::routes::router(state).into_make_service();
 
     axum::serve(listener, app)

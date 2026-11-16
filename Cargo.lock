@@ -2340,6 +2340,7 @@ dependencies = [
 name = "netwatch-core"
 version = "0.0.1"
 dependencies = [
+ "netwatch-common",
  "serde",
 ]
 
@@ -2350,6 +2351,7 @@ dependencies = [
  "getrandom 0.4.3",
  "netwatch-api",
  "netwatch-common",
+ "netwatch-core",
  "sqlx",
  "thiserror 2.0.21",
  "tokio",

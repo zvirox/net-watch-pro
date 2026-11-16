@@ -14,9 +14,11 @@
 
 mod config;
 mod db;
+mod live;
 
 use netwatch_common::{DaemonState, EbpfState, StatusSnapshot};
-use tokio::sync::watch;
+use std::sync::Arc;
+use tokio::sync::{broadcast, mpsc, watch};
 
 /// Startup failure classes, each with its §7.1 exit code.
 enum StartupError {
@@ -79,6 +81,43 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     db::migrate(&pool).await.map_err(StartupError::Db)?;
     tracing::info!(?db_path, "database open, migrations applied");
 
+    // P2.5/P2.6 wiring: live service owns the episode store; the writer
+    // task persists flush batches (≤ 1 tx/s); the API serves snapshot +
+    // deltas. Event senders are held for the collector task (P2.1–P2.3,
+    // gated on the eBPF spike) — until then nothing flows and the live
+    // view is honestly empty.
+    let start_id = db::max_connection_id(&pool)
+        .await
+        .map_err(StartupError::Db)?
+        + 1;
+    let (event_tx, event_rx) = mpsc::channel(1024);
+    let (snapshot_tx, snapshot_rx) = watch::channel(Arc::new(Vec::new()));
+    let (delta_tx, _) = broadcast::channel(256);
+    let delta_tx = delta_tx.clone();
+    let (flush_tx, mut flush_rx) = mpsc::channel::<Vec<netwatch_core::episode::EpisodeRow>>(64);
+    let _events = live::LiveEventSender::new(event_tx); // collector takes this in P2.1–P2.3
+    tokio::spawn(live::run(
+        event_rx,
+        live::LivePublishers {
+            snapshot: snapshot_tx,
+            deltas: delta_tx.clone(),
+        },
+        flush_tx,
+        start_id,
+    ));
+    let writer_pool = pool.clone();
+    tokio::spawn(async move {
+        while let Some(batch) = flush_rx.recv().await {
+            // Degraded, not dead (§7.1): a failed batch is logged and the
+            // next checkpoint upserts absolute totals — no accumulation
+            // error possible.
+            if let Err(e) = db::persist_episodes(&writer_pool, &batch).await {
+                tracing::warn!("episode flush failed ({} rows): {e}", batch.len());
+            }
+        }
+        tracing::info!("writer task stopped");
+    });
+
     let (status_tx, status_rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
         ebpf: EbpfState::Attached,
@@ -98,7 +137,15 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     };
 
     tracing::info!("serving API on {}", cfg.socket_path.display());
-    netwatch_api::serve_unix(&cfg.socket_path, status_rx, shutdown)
-        .await
-        .map_err(|e| StartupError::Server(format!("api server: {e}")))
+    netwatch_api::serve_unix(
+        &cfg.socket_path,
+        status_rx,
+        netwatch_api::LiveFeed {
+            snapshot: snapshot_rx,
+            deltas: delta_tx,
+        },
+        shutdown,
+    )
+    .await
+    .map_err(|e| StartupError::Server(format!("api server: {e}")))
 }

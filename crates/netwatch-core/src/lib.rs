@@ -6,3 +6,4 @@
 
 pub mod accounting;
 pub mod attribution;
+pub mod episode;

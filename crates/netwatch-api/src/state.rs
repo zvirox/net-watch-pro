@@ -1,18 +1,24 @@
-//! Shared server state: status broadcast and connection tracking.
+//! Shared server state: status broadcast, live-data feed, connection
+//! tracking.
 //!
-//! ARCHITECTURE.md §6.2: the daemon publishes status; the API only serves
-//! it. No per-boot token (retired, D1a); authorization is via socket
-//! peer-credential.
+//! ARCHITECTURE.md §6.2: the daemon publishes status and live data; the API
+//! only serves it. No per-boot token (retired, D1a); authorization is via
+//! socket peer-credential.
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use netwatch_common::StatusSnapshot;
-use tokio::sync::watch;
+use netwatch_common::{LiveConnectionRow, StatusSnapshot};
+use tokio::sync::{broadcast, watch};
+
+use crate::LiveFeed;
 
 /// Whole-process state shared with all routes/extractors.
 pub struct AppState {
     /// Latest status published by the daemon task.
     pub status: watch::Receiver<StatusSnapshot>,
+    /// Live connection snapshot + delta feed (P2.6).
+    pub live: LiveFeed,
     /// Connected WS clients (surfaced in `GET /status`).
     pub ws_clients: AtomicU64,
     /// Server start time, for `uptime_s` in `/status`.
@@ -20,11 +26,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Build state from the daemon's status channel.
+    /// Build state from the daemon's channels.
     #[must_use]
-    pub fn new(status: watch::Receiver<StatusSnapshot>) -> Self {
+    pub fn new(status: watch::Receiver<StatusSnapshot>, live: LiveFeed) -> Self {
         Self {
             status,
+            live,
             ws_clients: AtomicU64::new(0),
             started_at: std::time::Instant::now(),
         }
