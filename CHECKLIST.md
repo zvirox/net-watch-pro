@@ -66,7 +66,7 @@
 - [x] P3.2 `GET /connections` (keyset pagination, basic filters; aggregate rows beyond raw window)
 - [x] P3.3 Pro-advanced-filter 403 gate (locked off)
 - [x] P3.4 `GET /connections/{id}` (+ pruned 404 wording)
-- [ ] P3.5 History screen (search, table, all states)
+- [x] P3.5 History screen (search, table, all states)
 - [ ] P3.6 Restart persistence test
 - [ ] P3.7 `apps` soft delete on last activity
 - [ ] **DoD: restart keeps history; free history search works; tag `v0.3.0-alpha.3`**

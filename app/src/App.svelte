@@ -3,6 +3,7 @@
   import { Button } from '$lib/components/ui';
   import StatusChip from '$lib/components/status-chip/StatusChip.svelte';
   import Live from '$lib/screens/live/Live.svelte';
+  import History from '$lib/screens/history/History.svelte';
   import { daemonStore } from '$lib/stores/daemon.svelte';
 
   let connected = $state(daemonStore.connection === 'connected');
@@ -83,7 +84,7 @@
       </div>
     </header>
     <main class="content">
-      {#if activeRoute !== 'dashboard' && activeRoute !== 'live'}
+      {#if activeRoute !== 'dashboard' && activeRoute !== 'live' && activeRoute !== 'history'}
         <section class="notice" role="status">
           <div>
             <strong>{routes.find((route) => route.key === activeRoute)?.label}</strong>
@@ -102,6 +103,9 @@
       {/if}
       {#if activeRoute === 'live'}
         <Live />
+      {/if}
+      {#if activeRoute === 'history'}
+        <History />
       {/if}
       {#if activeRoute === 'dashboard'}
         <section class="welcome-row">
