@@ -15,7 +15,6 @@ type FrameListener = (frame: unknown) => void;
 const MAX_RETRY_MS = 16_000;
 
 export class DaemonApiClient {
-  #token: string | null = null;
   #state: LinkState = 'disconnected';
   #stateListeners = new Set<LinkListener>();
   #frameListeners = new Set<FrameListener>();
@@ -23,7 +22,6 @@ export class DaemonApiClient {
   #retryTimer: ReturnType<typeof setTimeout> | null = null;
   #retryDelayMs = 1_000;
   #generation = 0;
-  #invalidTokenRetries = 0;
   #closed = false;
 
   get state(): LinkState {
@@ -57,14 +55,12 @@ export class DaemonApiClient {
 
   async authorize(): Promise<void> {
     this.#closed = false;
-    this.#invalidTokenRetries = 0;
     this.#clearRetry();
     if (!isTauri()) {
       this.#setState('auth-required');
       return;
     }
     if (!(await this.#installEventListeners())) return;
-    this.#token = null;
     await this.#connect();
   }
 
@@ -72,8 +68,6 @@ export class DaemonApiClient {
     this.#closed = true;
     this.#generation += 1;
     this.#clearRetry();
-    this.#token = null;
-    this.#invalidTokenRetries = 0;
     this.#eventUnlisteners.forEach((unlisten) => {
       unlisten();
     });
@@ -83,12 +77,9 @@ export class DaemonApiClient {
   }
 
   async request(method: string, path: string, body?: unknown): Promise<unknown> {
-    const token = this.#token;
-    if (!token) throw new Error('Daemon authorization is required');
-
     let response: DaemonHttpResponse;
     try {
-      response = await requestDaemon(token, method, path, body);
+      response = await requestDaemon(method, path, body);
     } catch {
       this.#scheduleReconnect();
       throw new Error('Daemon is unreachable');
@@ -147,27 +138,8 @@ export class DaemonApiClient {
     const generation = ++this.#generation;
     this.#setState('connecting');
 
-    let token = this.#token;
-    if (!token) {
-      try {
-        token = await invoke<string>('retrieve_daemon_token');
-      } catch {
-        if (this.#isCurrent(generation)) {
-          this.#setState('auth-required');
-          this.#clearRetry();
-        }
-        return;
-      }
-      if (!this.#isCurrent(generation)) return;
-      if (!isToken(token)) {
-        this.#setState('auth-required');
-        return;
-      }
-      this.#token = token;
-    }
-
     try {
-      await connectDaemonWebSocket(token);
+      await connectDaemonWebSocket();
       if (!this.#isCurrent(generation)) return;
       await sendDaemonFrame({ op: 'subscribe', channel: 'status' });
       this.#retryDelayMs = 1_000;
@@ -190,7 +162,6 @@ export class DaemonApiClient {
     } else if (state === 'auth-invalid') {
       void this.#invalidateToken();
     } else if (state === 'auth-required') {
-      this.#token = null;
       this.#clearRetry();
       this.#setState('auth-required');
     } else if (state === 'disconnected') {
@@ -206,9 +177,8 @@ export class DaemonApiClient {
   #handleFrame(raw: string): void {
     const frame = parseJson(raw);
     if (frame !== undefined) {
-      // Any server frame proves the current token was accepted; allow a later
+      // Any server frame proves the connection is accepted; allow a later
       // daemon restart/rotation to use the same single-refresh recovery path.
-      this.#invalidTokenRetries = 0;
       this.#frameListeners.forEach((listener) => {
         listener(frame);
       });
@@ -216,22 +186,14 @@ export class DaemonApiClient {
   }
 
   async #disconnectAfterFailure(): Promise<void> {
-    this.#token = null;
     await disconnectDaemonWebSocket().catch(() => undefined);
   }
 
   async #invalidateToken(): Promise<void> {
-    this.#token = null;
-    this.#generation += 1;
     this.#setState('auth-invalid');
     await disconnectDaemonWebSocket().catch(() => undefined);
-    if (this.#invalidTokenRetries === 0) {
-      this.#invalidTokenRetries = 1;
-      this.#scheduleReconnect();
-    } else {
-      this.#clearRetry();
-      this.#setState('auth-required');
-    }
+    this.#clearRetry();
+    this.#setState('auth-required');
   }
 
   #scheduleReconnect(): void {
@@ -276,8 +238,4 @@ function parseJson(value: string): unknown {
   } catch {
     return undefined;
   }
-}
-
-function isToken(value: string): boolean {
-  return /^[0-9a-fA-F]{64}$/.test(value);
 }

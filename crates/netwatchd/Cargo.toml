@@ -13,6 +13,10 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time",
 getrandom = "0.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# sqlx: mandated by ARCHITECTURE.md §2 (compile-time-checked SQL, embedded migrations).
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "macros", "sqlite", "migrate"] }
+# thiserror: mandated per-crate by ARCHITECTURE.md §7.1.
+thiserror = "2"
 
 [dev-dependencies]
 # None yet; integration tests live in netwatch-api (TESTING.md §4 rows for P1).

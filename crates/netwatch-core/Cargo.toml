@@ -8,3 +8,6 @@ description = "Daemon domain logic: accounting, attribution, retention, rollups 
 
 [lints]
 workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

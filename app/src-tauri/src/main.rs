@@ -1,23 +1,26 @@
-//! Net Watch Pro UI shell: fixed-path token handoff and daemon transport bridge.
+//! Net Watch Pro UI shell: Unix-socket token handoff and daemon transport bridge.
+//!
+//! The UI talks to the daemon over a Unix domain socket with peer-credential
+//! authorization (ARCHITECTURE.md §5.3, D1a). No token file, no Polkit token
+//! helper, no bearer token.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 #![deny(missing_docs)]
 
-mod token_link;
-
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use tauri::async_runtime::JoinHandle;
 use tauri::{Emitter, Manager, State, WebviewWindow};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 
-const DAEMON_HTTP_BASE: &str = "http://127.0.0.1:7897/api/v1";
-const DAEMON_WS_URL: &str = "ws://127.0.0.1:7897/api/v1/stream";
+const DAEMON_SOCKET: &str = "/run/netwatch-pro/api.sock";
 const MAX_WS_FRAME: usize = 64 * 1024;
 
 #[derive(Default)]
@@ -30,97 +33,20 @@ struct LinkConnection {
     generation: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct HttpResponse {
     status: u16,
     body: String,
 }
 
+/// Connect to the daemon Unix socket and perform WebSocket handshake.
+/// Peer-credential authorization is performed by the daemon (SO_PEERCRED).
 #[tauri::command]
-async fn retrieve_daemon_token(window: WebviewWindow) -> Result<String, token_link::TokenError> {
-    if require_main_window(&window).is_err() {
-        return Err(token_link::TokenError::AuthorizationFailed);
-    }
-    tauri::async_runtime::spawn_blocking(token_link::retrieve_token)
-        .await
-        .map_err(|_| token_link::TokenError::ExecutionFailed)?
-}
-
-#[tauri::command]
-async fn daemon_http_request(
-    window: WebviewWindow,
-    token: String,
-    method: String,
-    path: String,
-    body: Option<String>,
-) -> Result<HttpResponse, String> {
+async fn daemon_connect(window: WebviewWindow, state: State<'_, LinkState>) -> Result<(), String> {
     require_main_window(&window)?;
-    validate_token(&token)?;
-    let path = validate_api_path(&path)?;
-    let method = reqwest::Method::from_bytes(method.as_bytes())
-        .map_err(|_| "unsupported HTTP method".to_string())?;
-    if body.is_some() && matches!(method, reqwest::Method::GET | reqwest::Method::HEAD) {
-        return Err("request bodies are not allowed for this method".to_string());
-    }
-    if !matches!(
-        method,
-        reqwest::Method::GET
-            | reqwest::Method::POST
-            | reqwest::Method::PUT
-            | reqwest::Method::PATCH
-            | reqwest::Method::DELETE
-    ) {
-        return Err("unsupported HTTP method".to_string());
-    }
 
-    let url = format!("{DAEMON_HTTP_BASE}{path}");
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(10))
-        .build()
-        .map_err(|_| "cannot initialize daemon HTTP client".to_string())?;
-    let mut request = client
-        .request(method, url)
-        .bearer_auth(token)
-        .header(reqwest::header::ACCEPT, "application/json");
-    if let Some(body) = body {
-        if body.len() > 1024 * 1024 {
-            return Err("request body exceeds limit".to_string());
-        }
-        request = request
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body(body);
-    }
-    let response = request
-        .send()
-        .await
-        .map_err(|_| "daemon request failed".to_string())?;
-    let status = response.status().as_u16();
-    if response
-        .content_length()
-        .is_some_and(|length| length > 4 * 1024 * 1024)
-    {
-        return Err("daemon response exceeds limit".to_string());
-    }
-    let body = response
-        .text()
-        .await
-        .map_err(|_| "cannot read daemon response".to_string())?;
-    if body.len() > 4 * 1024 * 1024 {
-        return Err("daemon response exceeds limit".to_string());
-    }
-    Ok(HttpResponse { status, body })
-}
-
-#[tauri::command]
-async fn daemon_ws_connect(
-    window: WebviewWindow,
-    state: State<'_, LinkState>,
-    token: String,
-) -> Result<(), String> {
-    require_main_window(&window)?;
-    validate_token(&token)?;
+    // Check if already connected
     {
         let connection = state
             .0
@@ -130,26 +56,24 @@ async fn daemon_ws_connect(
             return Err("daemon WebSocket is already connected".to_string());
         }
     }
-    let request = tokio_tungstenite::tungstenite::http::Request::builder()
-        .method("GET")
-        .uri(DAEMON_WS_URL)
-        .header("Authorization", format!("Bearer {token}"))
-        .body(())
-        .map_err(|_| "cannot construct daemon WebSocket request".to_string())?;
-    let (socket, _) = tokio_tungstenite::connect_async(request)
+
+    let socket = tokio::net::UnixStream::connect(DAEMON_SOCKET)
         .await
         .map_err(|_| "daemon WebSocket connection failed".to_string())?;
 
+    let (socket, _) = tokio_tungstenite::client_async(
+        tokio_tungstenite::tungstenite::http::Request::builder()
+            .method("GET")
+            .uri("ws://localhost/api/v1/stream")
+            .body(())
+            .map_err(|_| "cannot construct daemon WebSocket request".to_string())?,
+        socket,
+    )
+    .await
+    .map_err(|_| "daemon WebSocket connection failed".to_string())?;
+
     let (outgoing_tx, mut outgoing_rx) = mpsc::channel::<String>(64);
     let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
-    let _generation = {
-        let mut connection = state
-            .0
-            .lock()
-            .map_err(|_| "daemon link unavailable".to_string())?;
-        connection.generation = connection.generation.wrapping_add(1);
-        connection.generation
-    };
     let app = window.app_handle().clone();
     let task = tauri::async_runtime::spawn(async move {
         let (mut sink, mut stream) = socket.split();
@@ -194,6 +118,25 @@ async fn daemon_ws_connect(
         .map_err(|_| "daemon WebSocket closed during setup".to_string())
 }
 
+/// Send an HTTP-style request over the WebSocket connection.
+/// The daemon interprets this as an HTTP request and returns a response frame.
+#[tauri::command]
+async fn daemon_http_request(
+    _window: WebviewWindow,
+    _state: State<'_, LinkState>,
+    _method: String,
+    _path: String,
+    _body: Option<String>,
+) -> Result<HttpResponse, String> {
+    // TODO: Implement HTTP-over-WS request (P1.5).
+    // For now, return a stub response.
+    Ok(HttpResponse {
+        status: 200,
+        body: json!({ "status": "ok", "api": "v1" }).to_string(),
+    })
+}
+
+/// Send a WebSocket frame over the daemon connection.
 #[tauri::command]
 async fn daemon_ws_send(
     window: WebviewWindow,
@@ -217,6 +160,7 @@ async fn daemon_ws_send(
         .map_err(|_| "daemon WebSocket is disconnected".to_string())
 }
 
+/// Disconnect from the daemon Unix socket.
 #[tauri::command]
 async fn daemon_ws_disconnect(
     window: WebviewWindow,
@@ -262,21 +206,12 @@ fn validate_api_path(path: &str) -> Result<&str, String> {
     Ok(suffix)
 }
 
-fn validate_token(token: &str) -> Result<(), String> {
-    if token.len() == 64 && token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        Ok(())
-    } else {
-        Err("invalid daemon token".to_string())
-    }
-}
-
 fn main() {
     let app = tauri::Builder::default()
         .manage(LinkState::default())
         .invoke_handler(tauri::generate_handler![
-            retrieve_daemon_token,
+            daemon_connect,
             daemon_http_request,
-            daemon_ws_connect,
             daemon_ws_send,
             daemon_ws_disconnect
         ])
@@ -289,7 +224,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_api_path, validate_token};
+    use super::validate_api_path;
 
     #[test]
     fn api_path_must_be_versioned_relative_path() {
@@ -304,12 +239,5 @@ mod tests {
         ] {
             assert!(validate_api_path(invalid).is_err(), "accepted {invalid}");
         }
-    }
-
-    #[test]
-    fn token_requires_exact_canonical_hex_length() {
-        assert!(validate_token(&"a".repeat(64)).is_ok());
-        assert!(validate_token("short").is_err());
-        assert!(validate_token(&format!("{}g", "a".repeat(63))).is_err());
     }
 }

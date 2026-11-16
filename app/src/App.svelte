@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { Button } from '$lib/components/ui';
   import StatusChip from '$lib/components/status-chip/StatusChip.svelte';
+  import Live from '$lib/screens/live/Live.svelte';
   import { daemonStore } from '$lib/stores/daemon.svelte';
 
   let connected = $state(daemonStore.connection === 'connected');
@@ -163,6 +164,9 @@
           </div>
         </article>
       </section>
+      {#if activeRoute === 'live'}
+        <Live />
+      {/if}
       <footer class="page-footer">
         <span>NET WATCH PRO <i>·</i> PRIVATE BY DESIGN</span><span
           >ALL DATA STORED ON THIS DEVICE</span

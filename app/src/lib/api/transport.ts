@@ -12,21 +12,19 @@ type DaemonEvent = {
 };
 
 export async function requestDaemon(
-  token: string,
   method: string,
   path: string,
   body?: unknown,
 ): Promise<DaemonHttpResponse> {
   return invoke<DaemonHttpResponse>('daemon_http_request', {
-    token,
     method,
     path,
     body: body === undefined ? null : JSON.stringify(body),
   });
 }
 
-export async function connectDaemonWebSocket(token: string): Promise<void> {
-  await invoke('daemon_ws_connect', { token });
+export async function connectDaemonWebSocket(): Promise<void> {
+  await invoke('daemon_connect');
 }
 
 export async function sendDaemonFrame(frame: unknown): Promise<void> {

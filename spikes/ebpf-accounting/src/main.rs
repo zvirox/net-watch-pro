@@ -1,120 +1,60 @@
 //! eBPF accounting spike — per-app byte attribution measurement (Part 3).
 //!
-//! Build:   cargo +nightly build --release
-//! Run:     sudo ./target/release/netwatch-ebpf-spike <workload>
+//! This is spike code, NOT product code. It lives outside the Cargo workspace.
+//! The eBPF programs are written in C (cgroup_skb.c, kprobe_tcp.c) and compiled
+//! with clang -target bpf. This Rust binary is a userspace loader that uses
+//! libbpf to load and attach the eBPF programs.
+//!
+//! Build:
+//!   cargo +nightly build --release    (builds this Rust loader)
+//!   clang -target bpf -O2 -g -Wall -D__TARGET_ARCH_x86 -I/usr/include \
+//!       -c cgroup_skb.c -o cgroup_skb.o
+//!
+//! Run (as root):
+//!   sudo ./target/release/netwatch-ebpf-spike <workload>
 //!
 //! Requires root (CAP_BPF, CAP_NET_ADMIN, CAP_PERFMON) and cgroup v2.
 //!
-//! Designs implemented:
-//!   Design 1: cgroup_skb counters keyed by socket cookie
-//!   Design 2: kprobe/fentry on tcp_sendmsg / tcp_recvmsg
-//!   Design 3: hybrid
-//!
-//! Q1-Q10 answers go into docs/spike-ebpf-report.md after running.
+//! Measurements Q1–Q10 (see docs/spike-ebpf-report.md):
+//!   Q1: hook set for TCP/UDP/QUIC/IPv4/IPv6 attribution
+//!   Q2: attributed bytes vs interface counters gap
+//!   Q3: CPU/RSS at 50/500 conns and high packet rate
+//!   Q4: cgroup-path identity reliability (Flatpak/Snap/terminals)
+//!   Q5: exec-time identity capture vs /proc reads
+//!   Q6: required capabilities for load/attach/run
+//!   Q7: Secure Boot / kernel lockdown on Ubuntu/Fedora
+//!   Q8: map sizing, LRU eviction, ring-buffer drops, churn
+//!   Q9: nightly + bpf-linker toolchain reality
+//!  Q10: DB writes/s and index churn at proposed cadence
 
-#![no_std]
-#![no_main]
-#![allow(unsafe_code)]
+use std::process::exit;
 
-use aya::{
-    bindings::xdp_action,
-    macros::{cgroup_skb, kprobe, map, xdp},
-    maps::RingBuf,
-    programs::{XdpContext, XdpContext as _},
-};
-use aya_log_ebpf::info;
-use core::mem;
-
-// ============================================================================
-// Maps (shared between kernel and userspace)
-// ============================================================================
-
-/// Socket cookie -> (pid_tgid, cgroup_id) identity map (Design 1).
-#[map(name = "SOCK_COOKIE_MAP")]
-static mut SOCK_COOKIE_MAP: Map<(u64, (u32, u64))> = Map::with_max_entries(65536, 0);
-
-/// Per-socket byte counters (up/down) keyed by socket cookie.
-#[map(name = "BYTE_COUNTS_MAP")]
-static mut BYTE_COUNTS_MAP: Map<(u64, (u64, u64)), (u64, u64)> = Map::with_max_entries(65536, 0);
-
-/// Per-cgroup byte counters (fallback identity).
-#[map(name = "CGROUP_COUNTS_MAP")]
-static mut CGROUP_COUNTS_MAP: Map<(u64, (u64, u64)), (u64, u64)> = Map::with_max_entries(4096, 0);
-
-/// Ring buffer for delta events flushed to userspace (~1s cadence).
-#[map(name = "EVENTS_RB")]
-static mut EVENTS_RB: RingBuf = RingBuf::with_size(1 << 20, 0);
-
-/// ============================================================================
-// Design 1: cgroup_skb ingress/egress counters keyed by socket cookie
-// ============================================================================
-
-#[cgroup_skb(name = "cgroup_skb_ingress")]
-pub fn cgroup_skb_ingress(ctx: aya::programs::SkBuffContext) -> u32 {
-    match try_cgroup_skb_ingress(ctx) {
-        Ok(ret) => ret,
-        Err(_) => 1, // XDP_ABORTED equivalent for cgroup_skb
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Usage: netwatch-ebpf-spike <workload>");
+        eprintln!();
+        eprintln!("Workloads:");
+        eprintln!("  curl-download   Single-app download via curl");
+        eprintln!("  curl-upload     Single-app upload via curl");
+        eprintln!("  iperf3-tcp      iperf3 TCP throughput");
+        eprintln!("  iperf3-udp      iperf3 UDP throughput");
+        eprintln!("  short-curls     Loop of 5k short-lived curls");
+        eprintln!("  idle-conns      500 idle connections");
+        eprintln!("  wireguard       WireGuard/VPN on");
+        eprintln!("  docker          Docker container making requests");
+        eprintln!("  ipv6-only       IPv6-only traffic");
+        eprintln!("  flatpak-app     Flatpak app traffic");
+        eprintln!("  python-script   Python script making requests");
+        eprintln!();
+        eprintln!("Run as root: sudo ./target/release/netwatch-ebpf-spike <workload>");
+        exit(1);
     }
+
+    let workload = &args[1];
+    eprintln!("netwatch-ebpf-spike: workload '{}' not yet implemented", workload);
+    eprintln!("This is a skeleton — implement Designs 1–3 (cgroup_skb cookie,");
+    eprintln!("function hooks, hybrid) on the target machine and record Q1–Q10 results.");
+    eprintln!("Results go into docs/spike-ebpf-report.md.");
+    exit(0);
 }
-
-fn try_cgroup_skb_ingress(_ctx: aya::programs::SkBuffContext) -> Result<u32, u32> {
-    // cgroup_skb runs in softirq context — `current` PID is unreliable.
-    // Use socket cookie to look up identity from connect-time map.
-    info!("cgroup_skb_ingress invoked");
-    Ok(0) // XDP_PASS equivalent
-}
-
-#[cgroup_skb(name = "cgroup_skb_egress")]
-pub fn cgroup_skb_egress(ctx: aya::programs::SkBuffContext) -> u32 {
-    match try_cgroup_skb_egress(ctx) {
-        Ok(ret) => ret,
-        Err(_) => 1,
-    }
-}
-
-fn try_cgroup_skb_egress(_ctx: aya::programs::SkBuffContext) -> Result<u32, u32> {
-    info!("cgroup_skb_egress invoked");
-    Ok(0)
-}
-
-// ============================================================================
-// Design 2: kprobe on tcp_sendmsg / tcp_recvmsg / udp_sendmsg / udp_recvmsg
-// ============================================================================
-
-#[kprobe(name = "kprobe__tcp_sendmsg")]
-pub fn kprobe_tcp_sendmsg(ctx: aya::programs::PtRegsContext) -> u32 {
-    match try_kprobe_tcp_sendmsg(ctx) {
-        Ok(ret) => ret,
-        Err(_) => 0,
-    }
-}
-
-fn try_kprobe_tcp_sendmsg(_ctx: aya::programs::PtRegsContext) -> Result<u32, u32> {
-    info!("kprobe__tcp_sendmsg invoked");
-    Ok(0)
-}
-
-#[kprobe(name = "kprobe__tcp_recvmsg")]
-pub fn kprobe_tcp_recvmsg(ctx: aya::programs::PtRegsContext) -> u32 {
-    match try_kprobe_tcp_recvmsg(ctx) {
-        Ok(ret) => ret,
-        Err(_) => 0,
-    }
-}
-
-fn try_kprobe_tcp_recvmsg(_ctx: aya::programs::PtRegsContext) -> Result<u32, u32> {
-    info!("kprobe__tcp_recvmsg invoked");
-    Ok(0)
-}
-
-// ============================================================================
-// Design 3: hybrid — placeholder
-// ============================================================================
-
-#[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    unsafe { core::hint::unreachable_unchecked() }
-}
-
-#[allow(non_upper_case_globals)]
-type Map<K, V> = aya::maps::Array<K, V>;

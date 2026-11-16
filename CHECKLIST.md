@@ -52,7 +52,7 @@
 - [ ] P2.1 eBPF attach + ring buffer plumbing <!-- gated on spike S go/no-go -->
 - [ ] P2.2 Byte counters → 1 s delta events <!-- gated on spike S -->
 - [ ] P2.3 `/proc` attribution + `apps` upserts <!-- cgroup-first identity per D5a; /proc fallback -->
-- [ ] P2.4 Migrations 0001+0002 at boot
+- [x] P2.4 Migrations 0001+0002 at boot <!-- fresh data dir → tables + seeds verified (smoke run + unit tests) -->
 - [ ] P2.5 Batched `connections` writer (checkpoint cadence ~60 s, F-09)
 - [ ] P2.6 `live.connections` channel (snapshot + delta) over socket stream
 - [ ] P2.7 Live Connections screen (virtualized, pause, all states)

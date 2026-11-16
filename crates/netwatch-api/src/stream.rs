@@ -4,102 +4,61 @@
 //! `subscribe`/`unsubscribe`/`ping` ops, status pushed on change,
 //! `live.connections`/`usage.totals` send their stub snapshot/update and go
 //! quiet until Phase 2 wires real data.
+//!
+//! Auth is handled at the socket level via peer-credential (`SO_PEERCRED`),
+//! so no token check is needed here (D1a).
 
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use axum::extract::State;
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::response::Response;
+use futures_util::SinkExt;
+use futures_util::StreamExt;
 use netwatch_common::{Channel, ErrorCode, StatusSnapshot};
-use serde_json::json;
+use serde_json::{Value, json};
+use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::tungstenite::Message;
 
-use crate::auth::token_matches;
 use crate::state::AppState;
-
-/// Close code for WS auth failures (API.md §3 rules).
-const CLOSE_AUTH: u16 = 4401;
-
-/// `GET /api/v1/stream` — upgrade, then enforce auth with close 4401.
-///
-/// The contract says auth failure "closes with code 4401" (not a 401 HTTP
-/// response), so the upgrade is accepted and the socket is closed with the
-/// code — the UI's client keys its "auth" reconnect state off of it.
-pub async fn stream(
-    State(state): State<Arc<AppState>>,
-    ws: WebSocketUpgrade,
-    headers: axum::http::HeaderMap,
-) -> Response {
-    let authorized = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .is_some_and(|tok| token_matches(tok, state.token.as_str()));
-
-    ws.on_upgrade(move |mut socket| async move {
-        if authorized {
-            run_connection(state, socket).await;
-        } else {
-            // §3: auth failure closes with 4401.
-            let _ = socket
-                .send(Message::Close(Some(axum::extract::ws::CloseFrame {
-                    code: CLOSE_AUTH,
-                    reason: "AUTH_INVALID".into(),
-                })))
-                .await;
-        }
-    })
-}
 
 /// Per-connection state: which channels this client subscribed to.
 struct Connection {
     subs: HashSet<Channel>,
 }
 
-/// Frame builders — shapes per API.md §3 server→client table.
-fn status_frame(snap: &StatusSnapshot) -> Message {
-    Message::text(
-        json!({
-            "channel": Channel::Status.as_str(),
-            "kind": "update",
-            "data": snap,
-        })
-        .to_string(),
-    )
+/// Build a JSON object for a status frame.
+fn status_obj(snap: &StatusSnapshot) -> Value {
+    serde_json::json!({
+        "channel": Channel::Status.as_str(),
+        "kind": "update",
+        "data": snap,
+    })
 }
 
-fn live_snapshot_frame() -> Message {
-    // Phase 1 stub: no traffic data yet (Phase 2 wires the collector).
-    Message::text(
-        json!({
-            "channel": Channel::LiveConnections.as_str(),
-            "kind": "snapshot",
-            "data": [],
-        })
-        .to_string(),
-    )
+/// Build a JSON object for a live snapshot frame.
+fn live_snapshot_obj() -> Value {
+    serde_json::json!({
+        "channel": Channel::LiveConnections.as_str(),
+        "kind": "snapshot",
+        "data": [],
+    })
 }
 
-fn usage_totals_frame() -> Message {
-    // Phase 1 stub: zeroed totals until accounting lands (Phase 2).
-    Message::text(
-        json!({
-            "channel": Channel::UsageTotals.as_str(),
-            "kind": "update",
-            "data": { "today": { "up": 0, "down": 0 } },
-        })
-        .to_string(),
-    )
+/// Build a JSON object for a usage totals frame.
+fn usage_totals_obj() -> Value {
+    serde_json::json!({
+        "channel": Channel::UsageTotals.as_str(),
+        "kind": "update",
+        "data": { "today": { "up": 0, "down": 0 } },
+    })
 }
 
-fn error_frame(code: ErrorCode, message: impl Into<String>) -> Message {
-    Message::text(
-        json!({
-            "op": "error",
-            "error": { "code": code, "message": message.into() },
-        })
-        .to_string(),
-    )
+/// Build a JSON object for an error frame.
+fn error_obj(code: ErrorCode, message: impl Into<String>) -> Value {
+    serde_json::json!({
+        "op": "error",
+        "error": { "code": code, "message": message.into() },
+    })
 }
 
 /// Initial frame sent on subscribe (API.md §3: snapshot on subscribe).
@@ -111,8 +70,37 @@ fn initial_frame(channel: Channel, state: &AppState) -> Message {
     }
 }
 
+/// Build a JSON status frame from a snapshot.
+fn status_frame(snap: &StatusSnapshot) -> Message {
+    Message::text(serde_json::json!(status_obj(snap)).to_string())
+}
+
+/// Build a JSON live snapshot frame.
+fn live_snapshot_frame() -> Message {
+    Message::text(serde_json::json!(live_snapshot_obj()).to_string())
+}
+
+/// Build a JSON usage totals frame.
+fn usage_totals_frame() -> Message {
+    Message::text(serde_json::json!(usage_totals_obj()).to_string())
+}
+
+/// Build a JSON error frame.
+fn error_frame(code: ErrorCode, message: impl Into<String>) -> Message {
+    Message::text(
+        serde_json::json!({
+            "op": "error",
+            "error": { "code": code, "message": message.into() },
+        })
+        .to_string(),
+    )
+}
+
 /// Run one connection until the client disconnects or the server shuts down.
-async fn run_connection(state: Arc<AppState>, mut socket: WebSocket) {
+pub async fn run_connection(
+    state: Arc<AppState>,
+    mut stream: WebSocketStream<tokio::net::UnixStream>,
+) {
     state.client_delta(1);
     let mut conn = Connection {
         subs: HashSet::new(),
@@ -130,20 +118,19 @@ async fn run_connection(state: Arc<AppState>, mut socket: WebSocket) {
                 }
                 if conn.subs.contains(&Channel::Status) {
                     let snap = status_rx.borrow().clone();
-                    if socket.send(status_frame(&snap)).await.is_err() {
+                    if stream.send(status_frame(&snap)).await.is_err() {
                         break;
                     }
                 }
             }
-            frame = socket.recv() => {
-                let Some(msg) = frame else {
+            incoming = stream.next() => {
+                let Some(Ok(msg)) = incoming else {
                     // Client went away (or the socket errored): done either way.
                     break;
                 };
-                let Ok(msg) = msg else { break };
-                let keep = match handle_client_frame(&state, &mut conn, msg, &mut socket).await {
+                let keep = match handle_client_frame(&state, &mut conn, msg, &mut stream).await {
                     Ok(keep) => keep,
-                    Err(frame) => socket.send(frame).await.is_ok(), // close frame or send failure
+                    Err(frame) => stream.send(frame).await.is_ok(),
                 };
                 if !keep {
                     break;
@@ -156,12 +143,12 @@ async fn run_connection(state: Arc<AppState>, mut socket: WebSocket) {
 }
 
 /// Handle one client frame. `Ok(false)` = close the connection; `Err(msg)`
-/// = send the returned error frame (API.md §3 op:"error").
+/// = send the returned error frame (API.md §3 error frame).
 async fn handle_client_frame(
     state: &Arc<AppState>,
     conn: &mut Connection,
     msg: Message,
-    socket: &mut WebSocket,
+    stream: &mut WebSocketStream<tokio::net::UnixStream>,
 ) -> Result<bool, Message> {
     match msg {
         Message::Text(text) => {
@@ -173,22 +160,21 @@ async fn handle_client_frame(
             };
             match v["op"].as_str() {
                 Some("ping") => {
-                    let sent = socket
-                        .send(Message::text(json!({ "op": "pong" }).to_string()))
-                        .await
-                        .is_ok();
-                    Ok(sent)
+                    let sent = stream
+                        .send(Message::text(
+                            serde_json::json!({ "op": "pong" }).to_string(),
+                        ))
+                        .await;
+                    Ok(sent.is_ok())
                 }
-                Some("subscribe") => {
-                    match parse_channel(&v) {
-                        Ok(ch) => {
-                            conn.subs.insert(ch);
-                            // §3: subscribe → immediate snapshot/update.
-                            Ok(socket.send(initial_frame(ch, state)).await.is_ok())
-                        }
-                        Err(msg) => Err(error_frame(ErrorCode::QueryInvalid, msg)),
+                Some("subscribe") => match parse_channel(&v) {
+                    Ok(ch) => {
+                        conn.subs.insert(ch);
+                        // §3: subscribe → immediate snapshot/update.
+                        Ok(stream.send(initial_frame(ch, state)).await.is_ok())
                     }
-                }
+                    Err(msg) => Err(error_frame(ErrorCode::QueryInvalid, msg)),
+                },
                 Some("unsubscribe") => match parse_channel(&v) {
                     Ok(ch) => {
                         conn.subs.remove(&ch);

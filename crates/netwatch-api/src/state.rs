@@ -1,9 +1,9 @@
-//! Shared server state: the per-boot token and the status broadcast.
+//! Shared server state: status broadcast and connection tracking.
 //!
 //! ARCHITECTURE.md §6.2: the daemon publishes status; the API only serves
-//! it. The token is the single secret in the product (ARCHITECTURE.md §8.3).
+//! it. No per-boot token (retired, D1a); authorization is via socket
+//! peer-credential.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use netwatch_common::StatusSnapshot;
@@ -11,8 +11,6 @@ use tokio::sync::watch;
 
 /// Whole-process state shared with all routes/extractors.
 pub struct AppState {
-    /// Per-boot bearer token (plaintext in memory; on disk it is 0600).
-    pub token: Arc<String>,
     /// Latest status published by the daemon task.
     pub status: watch::Receiver<StatusSnapshot>,
     /// Connected WS clients (surfaced in `GET /status`).
@@ -22,11 +20,10 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Build state from a token and the daemon's status channel.
+    /// Build state from the daemon's status channel.
     #[must_use]
-    pub fn new(token: Arc<String>, status: watch::Receiver<StatusSnapshot>) -> Self {
+    pub fn new(status: watch::Receiver<StatusSnapshot>) -> Self {
         Self {
-            token,
             status,
             ws_clients: AtomicU64::new(0),
             started_at: std::time::Instant::now(),

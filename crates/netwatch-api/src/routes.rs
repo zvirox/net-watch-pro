@@ -8,7 +8,6 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
 
-use crate::auth::RequireToken;
 use crate::error::ApiError;
 use crate::state::AppState;
 
@@ -21,12 +20,12 @@ pub async fn health() -> Json<serde_json::Value> {
     }))
 }
 
-/// `GET /status` — S2, auth. Drives the DESIGN.md §7.5 chip.
+/// `GET /status` — S2, auth via socket peer-cred. Drives the DESIGN.md §7.5 chip.
 ///
 /// Phase 1 note: the daemon publishes a stub "monitoring/attached" state
 /// (PLAN.md P1.6); the collector lands in Phase 2 and will publish honest
 /// states (ARCHITECTURE.md §10 honest-status principle).
-pub async fn status(State(state): State<Arc<AppState>>, _: RequireToken) -> Response {
+pub async fn status(State(state): State<Arc<AppState>>) -> Response {
     let snap = state.status.borrow().clone();
     Json(json!({
         "daemon": snap.daemon,
@@ -50,12 +49,11 @@ pub async fn method_not_allowed() -> ApiError {
 }
 
 /// Construct the v1 router. Loopback-only bind is enforced by the caller
-/// (`serve`), not here — the router must stay address-agnostic.
+/// (`serve_unix`), not here — the router must stay address-agnostic.
 pub fn router(state: Arc<AppState>) -> axum::Router {
     axum::Router::new()
         .route("/api/v1/health", axum::routing::get(health))
         .route("/api/v1/status", axum::routing::get(status))
-        .route("/api/v1/stream", axum::routing::get(crate::stream::stream))
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)
         .with_state(state)

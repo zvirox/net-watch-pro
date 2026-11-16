@@ -1,0 +1,23 @@
+[package]
+name = "netwatch-ebpf"
+version = "0.1.0"
+edition = "2024"
+description = "eBPF programs for Net Watch Pro - per-app byte attribution"
+
+[dependencies]
+# Aya eBPF library - added when spike results confirm hook design
+# aya = "0.20"
+# aya-log = "0.20"
+# aya-log-derive = "0.20"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Compile-time feature flags for eBPF program selection
+# ebpf-programs = ["aya", "aya-log"]
+
+[workspace]
+# Intentionally NOT a member of the root workspace until eBPF attach is verified
+# (Phase S gate in PLAN.md Part 5). The skeleton compiles but does not link
+# against Aya until Q1-Q10 spike results confirm hook design.
