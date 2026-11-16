@@ -731,3 +731,31 @@ async fn connections_history_rejects_unknown_param_with_400() {
         "message must name the offending key: {body}"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn connection_by_id_over_socket_contract() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_raw_history(&db, 2).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    // Found: 200, C1 shape + packets.
+    let (status, body) = http_get(&sock, "/api/v1/connections/1").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["id"], 1);
+    assert_eq!(v["app"]["name"], "Firefox");
+    assert!(v["packets_up"].as_i64().is_some());
+
+    // Fake id: 404 envelope, code NOT_FOUND (PLAN P3.4 verify criterion).
+    let (status, body) = http_get(&sock, "/api/v1/connections/424242").await;
+    assert_eq!(status, 404, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "NOT_FOUND");
+
+    // Non-numeric id: 404 (C3 has no 400 in its error list).
+    let (status, body) = http_get(&sock, "/api/v1/connections/abc").await;
+    assert_eq!(status, 404, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "NOT_FOUND");
+}

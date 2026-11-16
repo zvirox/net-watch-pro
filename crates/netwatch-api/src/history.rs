@@ -1122,6 +1122,72 @@ fn agg_fetched(row: &SqliteRow, sort: SortField) -> Fetched {
     }
 }
 
+// ---------------------------------------------------------------------------
+// C3 — GET /connections/{id} (raw window only, API.md §2.2)
+// ---------------------------------------------------------------------------
+
+/// Serve C3: one raw episode by id, plus the retention wording (API.md C3:
+/// pruned episodes answer 404 with "outside retention window" — the UI maps
+/// that to the DESIGN.md §8.6 empty state instead of a generic error).
+///
+/// # Errors
+///
+/// `NOT_FOUND` when the id does not exist or falls outside the raw window,
+/// `DB_ERROR` for SQLite failures.
+pub async fn connection_by_id(
+    pool: &SqlitePool,
+    id: i64,
+    now: i64,
+) -> Result<HistoryRow, ApiError> {
+    let raw_window_days: Option<String> =
+        sqlx::query_scalar("SELECT value FROM settings WHERE key = 'raw_window_days'")
+            .fetch_optional(pool)
+            .await
+            .map_err(db_error)?;
+    let raw_window_days = raw_window_days
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(RAW_WINDOW_DAYS_DEFAULT);
+    let cutoff = now - raw_window_days * DAY_S;
+
+    let row = sqlx::query(
+        "SELECT c.id AS id, c.app_id AS app_id, a.name AS app_name, \
+         a.icon_path AS app_icon, c.pid AS pid, c.process_name AS process_name, \
+         c.protocol AS protocol, c.local_ip AS local_ip, c.local_port AS local_port, \
+         c.remote_ip AS remote_ip, c.remote_port AS remote_port, \
+         c.remote_host AS remote_host, c.bytes_up AS bytes_up, \
+         c.bytes_down AS bytes_down, c.packets_up AS packets_up, \
+         c.packets_down AS packets_down, c.first_seen_at AS first_seen_at, \
+         c.last_seen_at AS last_seen_at \
+         FROM connections c JOIN apps a ON a.id = c.app_id WHERE c.id = ?",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_error)?;
+
+    match row {
+        Some(row) if row.try_get::<i64, _>("last_seen_at").unwrap_or_default() < cutoff => {
+            // Retention pruner deletes beyond the raw window; this row is
+            // still here (between pruner runs) but is already out of contract.
+            Err(ApiError::new(
+                ErrorCode::NotFound,
+                axum::http::StatusCode::NOT_FOUND,
+                format!(
+                    "connection episode {id} is outside the retention window \
+                     (raw episodes are kept {raw_window_days} days; only daily \
+                     aggregates remain for that period)"
+                ),
+            ))
+        }
+        Some(row) => Ok(raw_fetched(&row, SortField::LastSeenAt).row),
+        None => Err(ApiError::new(
+            ErrorCode::NotFound,
+            axum::http::StatusCode::NOT_FOUND,
+            format!("no connection episode with id {id}"),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)] // tests, not daemon paths
@@ -1286,6 +1352,50 @@ mod tests {
         let c = agg_key(100, (2, "1.1.1.1", 443, "tcp"));
         assert!(a.sort_less(&b, SortField::LastSeenAt, SortOrder::Desc));
         assert!(b.sort_less(&c, SortField::LastSeenAt, SortOrder::Desc));
+    }
+
+    // -- C3 single episode (API.md §2.2) ---------------------------------------
+
+    #[tokio::test]
+    async fn c3_returns_the_episode_with_packets() {
+        let pool = db().await;
+        insert_app(&pool, 1, "Firefox").await;
+        insert_raw(&pool, 1, CUTOFF + 100, 1234, "1.1.1.1").await;
+        let row = connection_by_id(&pool, 1, NOW).await.unwrap();
+        assert_eq!(row.id, Some(1));
+        assert_eq!(row.app.name, "Firefox");
+        assert_eq!(row.bytes_up, 1234);
+        assert!(row.packets_up.is_some(), "C3 = C1 shape + packets");
+        assert!(
+            row.first_seen_at > 0,
+            "history rows carry the activity span"
+        );
+    }
+
+    #[tokio::test]
+    async fn c3_unknown_id_is_404() {
+        let pool = db().await;
+        insert_app(&pool, 1, "Firefox").await;
+        insert_raw(&pool, 1, CUTOFF + 100, 1, "1.1.1.1").await;
+        let err = connection_by_id(&pool, 999, NOW).await.unwrap_err();
+        assert_eq!(err.code(), ErrorCode::NotFound);
+        assert!(
+            !err.to_string().contains("retention"),
+            "plain 404 for fake ids: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn c3_beyond_raw_window_404_names_retention() {
+        let pool = db().await;
+        insert_app(&pool, 1, "Firefox").await;
+        insert_raw(&pool, 1, CUTOFF - 100, 1, "1.1.1.1").await;
+        let err = connection_by_id(&pool, 1, NOW).await.unwrap_err();
+        assert_eq!(err.code(), ErrorCode::NotFound);
+        assert!(
+            err.to_string().contains("outside the retention window"),
+            "pruned wording per API.md C3: {err}"
+        );
     }
 
     // -- DB-backed pagination walk (raw + aggregate seam) ----------------------

@@ -65,6 +65,28 @@ pub async fn connections(
     }
 }
 
+/// `GET /connections/{id}` — C3: one raw episode (C1 shape + packets),
+/// raw window only (API.md §2.2). Non-numeric ids answer 404 — the resource
+/// cannot exist, and C3's error list has no 400.
+pub async fn connection_by_id(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    let Ok(id) = id.parse::<i64>() else {
+        return ApiError::new(
+            netwatch_common::ErrorCode::NotFound,
+            StatusCode::NOT_FOUND,
+            format!("no connection episode with id {id}"),
+        )
+        .into_response();
+    };
+    match crate::history::connection_by_id(&state.db, id, now).await {
+        Ok(row) => Json(row).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
 /// Epoch seconds for serve-time stamps.
 fn epoch_now() -> u64 {
     std::time::SystemTime::now()
@@ -103,6 +125,10 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
         .route(
             "/api/v1/connections/live",
             axum::routing::get(connections_live),
+        )
+        .route(
+            "/api/v1/connections/{id}",
+            axum::routing::get(connection_by_id),
         )
         .route("/api/v1/connections", axum::routing::get(connections))
         .route("/api/v1/stream", axum::routing::get(stream_upgrade))

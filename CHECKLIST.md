@@ -64,8 +64,8 @@
 
 - [x] P3.1 Migration 0003: `usage_rollup_15m`, `usage_endpoint_day`, `usage_interface_15m` + indexes
 - [x] P3.2 `GET /connections` (keyset pagination, basic filters; aggregate rows beyond raw window)
-- [ ] P3.3 Pro-advanced-filter 403 gate (locked off)
-- [ ] P3.4 `GET /connections/{id}` (+ pruned 404 wording)
+- [x] P3.3 Pro-advanced-filter 403 gate (locked off)
+- [x] P3.4 `GET /connections/{id}` (+ pruned 404 wording)
 - [ ] P3.5 History screen (search, table, all states)
 - [ ] P3.6 Restart persistence test
 - [ ] P3.7 `apps` soft delete on last activity
