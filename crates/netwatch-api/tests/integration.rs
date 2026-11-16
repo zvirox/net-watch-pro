@@ -242,6 +242,89 @@ async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn connections_live_rest_matches_ws_snapshot() {
+    // P2.8 acceptance: REST snapshot == WS snapshot for the same feed.
+    let dir = std::env::temp_dir().join(format!(
+        "netwatch-api-c1-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let sock = dir.join("api.sock");
+
+    let (_status_tx, status_rx) = watch::channel(StatusSnapshot {
+        daemon: DaemonState::Monitoring,
+        ebpf: EbpfState::Attached,
+        recording: true,
+    });
+    let row = netwatch_common::LiveConnectionRow {
+        id: 88231,
+        app: netwatch_common::LiveApp {
+            id: 1,
+            name: "Firefox".to_string(),
+            icon: None,
+        },
+        pid: 2213,
+        process_name: Some("firefox".to_string()),
+        protocol: netwatch_common::Protocol::Tcp,
+        local_ip: "192.168.1.23".to_string(),
+        local_port: 53210,
+        remote_ip: "151.101.1.1".to_string(),
+        remote_port: 443,
+        remote_host: None,
+        rate_up_bps: 40_960,
+        rate_down_bps: 262_144,
+        bytes_up: 240_000,
+        bytes_down: 1_980_000,
+    };
+    let (snapshot_tx, snapshot_rx) = watch::channel(Arc::new(vec![row]));
+    let (delta_tx, _) = tokio::sync::broadcast::channel(16);
+    let live = netwatch_api::LiveFeed {
+        snapshot: snapshot_rx,
+        deltas: delta_tx.clone(),
+    };
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let serve_sock = sock.clone();
+    let handle = tokio::spawn(async move {
+        let _ = netwatch_api::serve_unix(&serve_sock, status_rx, live, async move {
+            let _ = shutdown_rx.await;
+        })
+        .await;
+    });
+    for _ in 0..100 {
+        if UnixStream::connect(&sock).await.is_ok() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    // WS: subscribe and capture the snapshot data array.
+    let mut ws = ws_connect(&sock).await;
+    ws_send(
+        &mut ws,
+        json!({ "op": "subscribe", "channel": "live.connections" }),
+    )
+    .await;
+    let ws_frame = ws_next(&mut ws).await;
+    assert_eq!(ws_frame["kind"], "snapshot");
+
+    // REST: same feed, same rows (C1 envelope).
+    let (status, body) = http_get(&sock, "/api/v1/connections/live").await;
+    assert_eq!(status, 200);
+    let rest: Value = serde_json::from_str(&body).unwrap();
+    assert!(rest["captured_at"].is_u64());
+    assert_eq!(rest["frozen"], false);
+    assert_eq!(rest["data"], ws_frame["data"], "REST == WS snapshot");
+
+    shutdown_tx.send(()).ok();
+    handle.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn subscribe_status_pushes_current_then_updates_on_change() {
     let (sock, tx) = spawn_server().await;
     let mut ws = ws_connect(&sock).await;

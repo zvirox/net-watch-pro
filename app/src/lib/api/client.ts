@@ -1,4 +1,4 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
 import {
   connectDaemonWebSocket,
   disconnectDaemonWebSocket,

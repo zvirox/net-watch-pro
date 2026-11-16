@@ -38,6 +38,26 @@ pub async fn status(State(state): State<Arc<AppState>>) -> Response {
     .into_response()
 }
 
+/// `GET /connections/live` — C1: one snapshot of the live view; the WS
+/// `live.connections` channel serves the same rows (P2.8: REST matches WS).
+pub async fn connections_live(State(state): State<Arc<AppState>>) -> Response {
+    let rows = (*state.live.snapshot.borrow().clone()).clone();
+    Json(json!({
+        "captured_at": epoch_now(),
+        "frozen": false,
+        "data": rows,
+    }))
+    .into_response()
+}
+
+/// Epoch seconds for serve-time stamps.
+fn epoch_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default()
+}
+
 /// 404 envelope for unknown paths (API.md §1.3: the envelope is everywhere).
 pub async fn not_found() -> ApiError {
     ApiError::not_found()
@@ -65,6 +85,7 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
     axum::Router::new()
         .route("/api/v1/health", axum::routing::get(health))
         .route("/api/v1/status", axum::routing::get(status))
+        .route("/api/v1/connections/live", axum::routing::get(connections_live))
         .route("/api/v1/stream", axum::routing::get(stream_upgrade))
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)

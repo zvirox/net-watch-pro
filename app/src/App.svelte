@@ -15,6 +15,9 @@
   ];
   const navigationIcons = ['◫', '⌁', '◉', '◷', '⚙'];
   let activeRoute = $state('dashboard');
+  const routeLabel = $derived(
+    routes.find((route) => route.key === activeRoute)?.label ?? 'Dashboard',
+  );
 
   onMount(() => {
     const unlisten = daemonStore.onConnection((state) => {
@@ -36,13 +39,15 @@
 </script>
 
 <svelte:head>
-  <title>Dashboard · Net Watch Pro</title>
+  <title>{routeLabel} · Net Watch Pro</title>
 </svelte:head>
 
 <div class="app-shell">
   <aside class="sidebar" aria-label="Main navigation">
     <a class="brand" href="#dashboard" aria-label="Net Watch Pro home"
-      ><span class="brand__mark">NW</span><span>Net Watch Pro</span></a
+      ><img class="brand__logo" src="/logo.png" alt="" width="32" height="32" /><span
+        >Net Watch Pro</span
+      ></a
     >
     <nav>
       <p class="nav-heading">MONITOR</p>
@@ -70,15 +75,15 @@
   <div class="main-column">
     <header class="topbar">
       <div>
-        <p class="eyebrow">OVERVIEW</p>
-        <h1>Dashboard</h1>
+        <p class="eyebrow">{activeRoute === 'dashboard' ? 'OVERVIEW' : 'MONITOR'}</p>
+        <h1>{routeLabel}</h1>
       </div>
       <div class="topbar-actions">
         <StatusChip /><span class="avatar" aria-label="Local user">L</span>
       </div>
     </header>
     <main class="content">
-      {#if activeRoute !== 'dashboard'}
+      {#if activeRoute !== 'dashboard' && activeRoute !== 'live'}
         <section class="notice" role="status">
           <div>
             <strong>{routes.find((route) => route.key === activeRoute)?.label}</strong>
@@ -95,77 +100,79 @@
           <Button variant="primary" onclick={() => void daemonStore.authorize()}>Authorize</Button>
         </section>
       {/if}
-      <section class="welcome-row">
-        <div>
-          <h2>Your network, clearly in view.</h2>
-          <p>Private monitoring that stays on this device.</p>
-        </div>
-        <span class="local-badge"><span></span> LOCAL ONLY</span>
-      </section>
-      <section class="metrics" aria-label="Usage summary">
-        <article class="metric-card">
-          <div class="metric-label">DATA TODAY <span class="metric-icon">↓</span></div>
-          <strong>—</strong>
-          <p>Usage history starts in Phase 3</p>
-        </article>
-        <article class="metric-card">
-          <div class="metric-label">ACTIVE APPS <span class="metric-icon">◉</span></div>
-          <strong>—</strong>
-          <p>App attribution starts in Phase 2</p>
-        </article>
-        <article class="metric-card metric-card--status">
-          <div class="metric-label">MONITORING <span class="metric-icon">⌁</span></div>
-          <strong
-            >{daemonStore.daemon === 'monitoring'
-              ? 'On'
-              : daemonStore.daemon === 'degraded'
-                ? 'Limited'
-                : 'Off'}</strong
-          >
-          <p>
-            {daemonStore.recording
-              ? 'Traffic recording is active'
-              : 'Waiting for daemon connection'}
-          </p>
-        </article>
-      </section>
-      <section class="lower-grid">
-        <article class="panel timeline-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">NETWORK ACTIVITY</p>
-              <h2>Usage timeline</h2>
-            </div>
-            <span class="period">TODAY⌄</span>
-          </div>
-          <div class="empty-chart">
-            <div class="chart-glyph" aria-hidden="true">⌁</div>
-            <h3>Waiting for your first data</h3>
-            <p>Once monitoring is enabled, your activity will appear here.</p>
-            <div class="chart-baseline"></div>
-          </div>
-        </article>
-        <article class="panel apps-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">BY APPLICATION</p>
-              <h2>Top apps</h2>
-            </div>
-            <a href="#apps">View all</a>
-          </div>
-          <div class="empty-apps">
-            <div class="app-orbit" aria-hidden="true">◎</div>
-            <p>Application usage will show up here after monitoring begins.</p>
-          </div>
-          <div class="privacy-note">
-            <span>◇</span><span
-              ><strong>Your data stays yours</strong><br />Stored locally. Never sent to a server.</span
-            >
-          </div>
-        </article>
-      </section>
       {#if activeRoute === 'live'}
         <Live />
+      {/if}
+      {#if activeRoute === 'dashboard'}
+        <section class="welcome-row">
+          <div>
+            <h2>Your network, clearly in view.</h2>
+            <p>Private monitoring that stays on this device.</p>
+          </div>
+          <span class="local-badge"><span></span> LOCAL ONLY</span>
+        </section>
+        <section class="metrics" aria-label="Usage summary">
+          <article class="metric-card">
+            <div class="metric-label">DATA TODAY <span class="metric-icon">↓</span></div>
+            <strong>—</strong>
+            <p>Usage history starts in Phase 3</p>
+          </article>
+          <article class="metric-card">
+            <div class="metric-label">ACTIVE APPS <span class="metric-icon">◉</span></div>
+            <strong>—</strong>
+            <p>App attribution starts in Phase 2</p>
+          </article>
+          <article class="metric-card metric-card--status">
+            <div class="metric-label">MONITORING <span class="metric-icon">⌁</span></div>
+            <strong
+              >{daemonStore.daemon === 'monitoring'
+                ? 'On'
+                : daemonStore.daemon === 'degraded'
+                  ? 'Limited'
+                  : 'Off'}</strong
+            >
+            <p>
+              {daemonStore.recording
+                ? 'Traffic recording is active'
+                : 'Waiting for daemon connection'}
+            </p>
+          </article>
+        </section>
+        <section class="lower-grid">
+          <article class="panel timeline-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">NETWORK ACTIVITY</p>
+                <h2>Usage timeline</h2>
+              </div>
+              <span class="period">TODAY⌄</span>
+            </div>
+            <div class="empty-chart">
+              <div class="chart-glyph" aria-hidden="true">⌁</div>
+              <h3>Waiting for your first data</h3>
+              <p>Once monitoring is enabled, your activity will appear here.</p>
+              <div class="chart-baseline"></div>
+            </div>
+          </article>
+          <article class="panel apps-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">BY APPLICATION</p>
+                <h2>Top apps</h2>
+              </div>
+              <a href="#apps">View all</a>
+            </div>
+            <div class="empty-apps">
+              <div class="app-orbit" aria-hidden="true">◎</div>
+              <p>Application usage will show up here after monitoring begins.</p>
+            </div>
+            <div class="privacy-note">
+              <span>◇</span><span
+                ><strong>Your data stays yours</strong><br />Stored locally. Never sent to a server.</span
+              >
+            </div>
+          </article>
+        </section>
       {/if}
       <footer class="page-footer">
         <span>NET WATCH PRO <i>·</i> PRIVATE BY DESIGN</span><span
@@ -214,17 +221,12 @@
     font-weight: 650;
     letter-spacing: -0.02em;
   }
-  .brand__mark {
-    display: grid;
+  .brand__logo {
+    display: block;
     width: 32px;
     height: 32px;
-    place-items: center;
-    border-radius: var(--nwp-radius-md);
-    background: var(--nwp-primary);
-    color: var(--nwp-on-primary);
-    font-family: var(--nwp-font-mono);
-    font-size: var(--nwp-size-label);
-    font-weight: 700;
+    object-fit: contain;
+    flex-shrink: 0;
   }
   nav {
     display: grid;

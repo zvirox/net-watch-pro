@@ -55,8 +55,8 @@
 - [x] P2.4 Migrations 0001+0002 at boot <!-- fresh data dir → tables + seeds verified (smoke run + unit tests) -->
 - [x] P2.5 Batched `connections` writer (checkpoint cadence ~60 s, F-09) <!-- persist_episodes upserts absolute totals, one tx per batch; unit tested -->
 - [x] P2.6 `live.connections` channel (snapshot + delta) over socket stream <!-- EpisodeStore + 1 Hz live service + WS snapshot/delta frames; verified over live socket -->
-- [ ] P2.7 Live Connections screen (virtualized, pause, all states)
-- [ ] P2.8 REST `/connections/live` + real ebpf status
+- [x] P2.7 Live Connections screen (virtualized, pause, all states) <!-- live.svelte store + Live.svelte content-only; windowed table, filter row, pause/frozen banner, empty/loading/error states; svelte-check 0/0, lint+build clean; connected-flow visuals pending Tauri app check -->
+- [x] P2.8 REST `/connections/live` + real ebpf status <!-- endpoint live + integration test REST==WS; ebpf field stays stub "attached" until the collector lands (P2.1–P2.3 blocked on kernel -EPERM; PLAN P1.6 allows) -->
 - [ ] P2.9 Degraded path (`NETWATCH_DISABLE_EBPF` → honest UI)
 - [ ] **DoD: real traffic visible, app-labeled, pause/sort work; tag `v0.2.0-alpha.2`**
 

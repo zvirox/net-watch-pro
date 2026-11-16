@@ -4,9 +4,12 @@ type DaemonState = 'monitoring' | 'degraded' | 'stopped' | 'starting';
 type ConnectionState =
   'disconnected' | 'connecting' | 'connected' | 'auth-required' | 'auth-invalid';
 type Listener = (state: ConnectionState) => void;
-// Callback registry is not rendered state, so Svelte reactivity is unnecessary.
+// Callback registries are not rendered state, so Svelte reactivity is unnecessary.
 // eslint-disable-next-line svelte/prefer-svelte-reactivity
 const connectionListeners = new Set<Listener>();
+// eslint-disable-next-line svelte/prefer-svelte-reactivity
+const frameListeners = new Set<FrameListener>();
+type FrameListener = (frame: unknown) => void;
 type StatusFrame = {
   channel: 'status';
   kind: 'update';
@@ -34,6 +37,11 @@ client.onState((state) => {
 });
 
 client.onFrame((frame) => {
+  // Forward every frame to store listeners (live.svelte, usage.svelte
+  // filter by channel — §6.1); status handling stays here.
+  frameListeners.forEach((listener) => {
+    listener(frame);
+  });
   if (!isStatusFrame(frame)) return;
   daemon = frame.data.daemon;
 });
@@ -53,6 +61,12 @@ export const daemonStore = {
     listener(connection);
     return () => {
       connectionListeners.delete(listener);
+    };
+  },
+  onFrame(listener: FrameListener): () => void {
+    frameListeners.add(listener);
+    return () => {
+      frameListeners.delete(listener);
     };
   },
   subscribe(channel: 'status' | 'live.connections' | 'usage.totals'): Promise<void> {
