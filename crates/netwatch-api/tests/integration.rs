@@ -4,10 +4,8 @@
 //! ephemeral socket path and clients connect with `tokio-tungstenite`
 //! `client_async` over a `UnixStream`.
 //!
-//! REST (`/health`, `/status`) is served by `routes::router`; since the
-//! router is not yet mounted in `serve_unix` (Phase 1' rewrite gap), the
-//! REST shapes are asserted by calling the handlers directly. When the
-//! mount lands these tests should go over the socket like the WS ones.
+//! REST (`/health`, `/status`) is asserted end-to-end with raw HTTP/1.1
+//! requests over a `UnixStream` (no HTTP client crate needed for GETs).
 //!
 //! Peer-credential auth (D1a) cannot be simulated in-process (denied UID
 //! requires a foreign process), so the old 401/4401 token tests are gone;
@@ -192,33 +190,58 @@ async fn ping_replies_with_pong() {
     assert_eq!(v["op"], "pong");
 }
 
-// --------------------------------------------- S1/S2 REST shapes (handlers)
-//
-// The router is not yet mounted in serve_unix (Phase 1' rewrite gap, see
-// module docs), so these call the handler functions directly to pin the
-// API.md contract shapes.
+// ------------------------------------------------- S1/S2 REST over socket
 
-#[tokio::test]
-async fn health_returns_contract_shape() {
-    let v = netwatch_api::routes::health().await.0;
+/// Raw HTTP/1.1 GET over the Unix socket; returns (status_code, body_text).
+/// Bounded read — the daemon only serves small JSON envelopes.
+async fn http_get(sock: &std::path::Path, path: &str) -> (u16, String) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = UnixStream::connect(sock).await.unwrap();
+    let req = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    stream.write_all(req.as_bytes()).await.unwrap();
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        let n = stream.read(&mut chunk).await.unwrap();
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        // 64 KiB bound: far above any contract response; guards a runaway.
+        if buf.len() > 64 * 1024 {
+            panic!("response exceeds 64 KiB bound");
+        }
+    }
+    let text = String::from_utf8(buf).unwrap();
+    let status: u16 = text
+        .split_whitespace()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .expect("no HTTP status line in response");
+    let body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, b)| b.to_string())
+        .unwrap_or_default();
+    (status, body)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn health_over_socket_returns_contract_shape() {
+    let (sock, _tx) = spawn_server().await;
+    let (status, body) = http_get(&sock, "/api/v1/health").await;
+    assert_eq!(status, 200);
+    let v: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(v["status"], "ok");
     assert_eq!(v["api"], "v1");
     assert!(v["version"].as_str().is_some_and(|s| !s.is_empty()));
 }
 
-#[tokio::test]
-async fn status_returns_contract_shape() {
-    let (_tx, rx) = watch::channel(StatusSnapshot {
-        daemon: DaemonState::Monitoring,
-        ebpf: EbpfState::Attached,
-        recording: true,
-    });
-    let state = Arc::new(AppState::new(rx));
-    let resp = netwatch_api::routes::status(axum::extract::State(state)).await;
-    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let v: Value = serde_json::from_slice(&body).unwrap();
+#[tokio::test(flavor = "multi_thread")]
+async fn status_over_socket_returns_contract_shape() {
+    let (sock, _tx) = spawn_server().await;
+    let (status, body) = http_get(&sock, "/api/v1/status").await;
+    assert_eq!(status, 200);
+    let v: Value = serde_json::from_str(&body).unwrap();
     // Stub state per PLAN.md P1.6 until the Phase 2 collector publishes real states.
     assert_eq!(v["daemon"], "monitoring");
     assert_eq!(v["ebpf"], "attached");
@@ -226,6 +249,46 @@ async fn status_returns_contract_shape() {
     assert_eq!(v["ws_clients"], 0);
     assert!(v["uptime_s"].is_u64());
     assert_eq!(v["drops"]["ring_buffer_dropped"], 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unknown_route_over_socket_is_404_envelope() {
+    let (sock, _tx) = spawn_server().await;
+    let (status, body) = http_get(&sock, "/api/v1/nope").await;
+    assert_eq!(status, 404);
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "NOT_FOUND");
+    assert!(v["error"]["request_id"].as_str().is_some());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn wrong_method_over_socket_is_405_envelope() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let (sock, _tx) = spawn_server().await;
+    let mut stream = UnixStream::connect(&sock).await.unwrap();
+    stream
+        .write_all(b"POST /api/v1/status HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        let n = stream.read(&mut chunk).await.unwrap();
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+    }
+    let text = String::from_utf8(buf).unwrap();
+    let status: u16 = text
+        .split_whitespace()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .expect("no HTTP status line");
+    assert_eq!(status, 405);
+    let body = text.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
+    let v: Value = serde_json::from_str(body).unwrap();
+    assert_eq!(v["error"]["code"], "METHOD_NOT_ALLOWED");
 }
 
 /// WS client counting feeds `ws_clients` in `GET /status` (S2).

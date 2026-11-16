@@ -6,18 +6,18 @@
 //! quiet until Phase 2 wires real data.
 //!
 //! Auth is handled at the socket level via peer-credential (`SO_PEERCRED`),
-//! so no token check is needed here (D1a).
+//! so no token check is needed here (D1a). The upgrade itself happens in the
+//! axum router (`routes::stream_upgrade`); this module runs the upgraded
+//! connection.
 
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use axum::extract::State;
-use futures_util::SinkExt;
+use axum::extract::ws::Message;
+use axum::extract::ws::WebSocket;
 use futures_util::StreamExt;
 use netwatch_common::{Channel, ErrorCode, StatusSnapshot};
-use serde_json::{Value, json};
-use tokio_tungstenite::WebSocketStream;
-use tokio_tungstenite::tungstenite::Message;
+use serde_json::json;
 
 use crate::state::AppState;
 
@@ -27,8 +27,8 @@ struct Connection {
 }
 
 /// Build a JSON object for a status frame.
-fn status_obj(snap: &StatusSnapshot) -> Value {
-    serde_json::json!({
+fn status_obj(snap: &StatusSnapshot) -> serde_json::Value {
+    json!({
         "channel": Channel::Status.as_str(),
         "kind": "update",
         "data": snap,
@@ -36,8 +36,8 @@ fn status_obj(snap: &StatusSnapshot) -> Value {
 }
 
 /// Build a JSON object for a live snapshot frame.
-fn live_snapshot_obj() -> Value {
-    serde_json::json!({
+fn live_snapshot_obj() -> serde_json::Value {
+    json!({
         "channel": Channel::LiveConnections.as_str(),
         "kind": "snapshot",
         "data": [],
@@ -45,8 +45,8 @@ fn live_snapshot_obj() -> Value {
 }
 
 /// Build a JSON object for a usage totals frame.
-fn usage_totals_obj() -> Value {
-    serde_json::json!({
+fn usage_totals_obj() -> serde_json::Value {
+    json!({
         "channel": Channel::UsageTotals.as_str(),
         "kind": "update",
         "data": { "today": { "up": 0, "down": 0 } },
@@ -54,8 +54,8 @@ fn usage_totals_obj() -> Value {
 }
 
 /// Build a JSON object for an error frame.
-fn error_obj(code: ErrorCode, message: impl Into<String>) -> Value {
-    serde_json::json!({
+fn error_obj(code: ErrorCode, message: impl Into<String>) -> serde_json::Value {
+    json!({
         "op": "error",
         "error": { "code": code, "message": message.into() },
     })
@@ -63,44 +63,16 @@ fn error_obj(code: ErrorCode, message: impl Into<String>) -> Value {
 
 /// Initial frame sent on subscribe (API.md §3: snapshot on subscribe).
 fn initial_frame(channel: Channel, state: &AppState) -> Message {
-    match channel {
-        Channel::Status => status_frame(&state.status.borrow().clone()),
-        Channel::LiveConnections => live_snapshot_frame(),
-        Channel::UsageTotals => usage_totals_frame(),
-    }
-}
-
-/// Build a JSON status frame from a snapshot.
-fn status_frame(snap: &StatusSnapshot) -> Message {
-    Message::text(serde_json::json!(status_obj(snap)).to_string())
-}
-
-/// Build a JSON live snapshot frame.
-fn live_snapshot_frame() -> Message {
-    Message::text(serde_json::json!(live_snapshot_obj()).to_string())
-}
-
-/// Build a JSON usage totals frame.
-fn usage_totals_frame() -> Message {
-    Message::text(serde_json::json!(usage_totals_obj()).to_string())
-}
-
-/// Build a JSON error frame.
-fn error_frame(code: ErrorCode, message: impl Into<String>) -> Message {
-    Message::text(
-        serde_json::json!({
-            "op": "error",
-            "error": { "code": code, "message": message.into() },
-        })
-        .to_string(),
-    )
+    let v = match channel {
+        Channel::Status => status_obj(&state.status.borrow().clone()),
+        Channel::LiveConnections => live_snapshot_obj(),
+        Channel::UsageTotals => usage_totals_obj(),
+    };
+    Message::text(v.to_string())
 }
 
 /// Run one connection until the client disconnects or the server shuts down.
-pub async fn run_connection(
-    state: Arc<AppState>,
-    mut stream: WebSocketStream<tokio::net::UnixStream>,
-) {
+pub async fn run_connection(state: Arc<AppState>, mut stream: WebSocket) {
     state.client_delta(1);
     let mut conn = Connection {
         subs: HashSet::new(),
@@ -118,7 +90,11 @@ pub async fn run_connection(
                 }
                 if conn.subs.contains(&Channel::Status) {
                     let snap = status_rx.borrow().clone();
-                    if stream.send(status_frame(&snap)).await.is_err() {
+                    if stream
+                        .send(Message::text(status_obj(&snap).to_string()))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                 }
@@ -148,22 +124,23 @@ async fn handle_client_frame(
     state: &Arc<AppState>,
     conn: &mut Connection,
     msg: Message,
-    stream: &mut WebSocketStream<tokio::net::UnixStream>,
+    stream: &mut WebSocket,
 ) -> Result<bool, Message> {
     match msg {
         Message::Text(text) => {
             let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
-                return Err(error_frame(
-                    ErrorCode::QueryInvalid,
-                    "Frames are versioned JSON (API.md §3)",
+                return Err(Message::text(
+                    error_obj(
+                        ErrorCode::QueryInvalid,
+                        "Frames are versioned JSON (API.md §3)",
+                    )
+                    .to_string(),
                 ));
             };
             match v["op"].as_str() {
                 Some("ping") => {
                     let sent = stream
-                        .send(Message::text(
-                            serde_json::json!({ "op": "pong" }).to_string(),
-                        ))
+                        .send(Message::text(json!({ "op": "pong" }).to_string()))
                         .await;
                     Ok(sent.is_ok())
                 }
@@ -195,6 +172,11 @@ async fn handle_client_frame(
             "Unsupported frame type",
         )),
     }
+}
+
+/// Build a JSON error frame.
+fn error_frame(code: ErrorCode, message: impl Into<String>) -> Message {
+    Message::text(error_obj(code, message).to_string())
 }
 
 /// Parse `{"op":"…","channel":"…"}` into a known channel; errors carry the

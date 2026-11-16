@@ -48,12 +48,24 @@ pub async fn method_not_allowed() -> ApiError {
     ApiError::method_not_allowed()
 }
 
-/// Construct the v1 router. Loopback-only bind is enforced by the caller
-/// (`serve_unix`), not here — the router must stay address-agnostic.
+/// WS upgrade for `/api/v1/stream` (API.md §3). On completion the upgraded
+/// connection is handed to `stream::run_connection`.
+async fn stream_upgrade(
+    ws: axum::extract::ws::WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+) -> axum::response::Response {
+    ws.on_upgrade(move |socket| async move {
+        crate::stream::run_connection(state, socket).await;
+    })
+}
+
+/// Construct the v1 router. Socket-file permissions (root-owned Unix domain
+/// socket) are the transport gate — the router stays address-agnostic.
 pub fn router(state: Arc<AppState>) -> axum::Router {
     axum::Router::new()
         .route("/api/v1/health", axum::routing::get(health))
         .route("/api/v1/status", axum::routing::get(status))
+        .route("/api/v1/stream", axum::routing::get(stream_upgrade))
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)
         .with_state(state)

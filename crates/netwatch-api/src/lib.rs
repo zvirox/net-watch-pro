@@ -20,11 +20,9 @@ pub mod stream;
 use std::path::Path;
 use std::sync::Arc;
 
-use futures_util::SinkExt;
 use netwatch_common::StatusSnapshot;
 use tokio::net::UnixListener;
 use tokio::sync::watch;
-use tokio_tungstenite::tungstenite::http::Request;
 
 pub use state::AppState;
 
@@ -54,36 +52,18 @@ pub async fn serve_unix(
     })?;
 
     let state = Arc::new(AppState::new(status));
+    let app = crate::routes::router(state).into_make_service();
 
-    let mut shutdown = Box::pin(shutdown);
-    loop {
-        tokio::select! {
-            biased;
-            _ = &mut shutdown => break,
-            result = listener.accept() => {
-                match result {
-                    Ok((stream, _peer_addr)) => {
-                        let state = Arc::clone(&state);
-                        tokio::spawn(async move {
-                            // Upgrade to WebSocket over the Unix socket.
-                            let ws_stream = match tokio_tungstenite::accept_async(stream).await {
-                                Ok(ws) => ws,
-                                Err(e) => {
-                                    tracing::debug!("WS handshake failed: {e}");
-                                    return;
-                                }
-                            };
-
-                            let _ = crate::stream::run_connection(state.clone(), ws_stream).await;
-                        });
-                    }
-                    Err(e) => {
-                        tracing::warn!("failed to accept socket connection: {e}");
-                    }
-                }
-            }
-        }
-    }
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown)
+        .await
+        .map_err(|e| {
+            crate::error::ApiError::new(
+                netwatch_common::ErrorCode::DaemonUnreachable,
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("serve loop failed: {e}"),
+            )
+        })?;
 
     Ok(())
 }

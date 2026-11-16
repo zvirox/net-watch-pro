@@ -8,13 +8,11 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 #![deny(missing_docs)]
 
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
 use tauri::async_runtime::JoinHandle;
 use tauri::{Emitter, Manager, State, WebviewWindow};
 use tokio::sync::mpsc;
@@ -22,6 +20,9 @@ use tokio_tungstenite::tungstenite::Message;
 
 const DAEMON_SOCKET: &str = "/run/netwatch-pro/api.sock";
 const MAX_WS_FRAME: usize = 64 * 1024;
+/// Bounded response size for bridge HTTP requests (contract responses are
+/// small JSON envelopes; 1 MiB is a generous ceiling).
+const MAX_HTTP_RESPONSE: usize = 1024 * 1024;
 
 #[derive(Default)]
 struct LinkState(Arc<Mutex<LinkConnection>>);
@@ -41,7 +42,7 @@ struct HttpResponse {
 }
 
 /// Connect to the daemon Unix socket and perform WebSocket handshake.
-/// Peer-credential authorization is performed by the daemon (SO_PEERCRED).
+/// Peer-credential authorization is performed by the daemon (`SO_PEERCRED`).
 #[tauri::command]
 async fn daemon_connect(window: WebviewWindow, state: State<'_, LinkState>) -> Result<(), String> {
     require_main_window(&window)?;
@@ -118,21 +119,64 @@ async fn daemon_connect(window: WebviewWindow, state: State<'_, LinkState>) -> R
         .map_err(|_| "daemon WebSocket closed during setup".to_string())
 }
 
-/// Send an HTTP-style request over the WebSocket connection.
-/// The daemon interprets this as an HTTP request and returns a response frame.
+/// Issue a real HTTP/1.1 request to the daemon over a short-lived Unix
+/// socket connection (REST half of the transport; WS is the streaming half).
 #[tauri::command]
 async fn daemon_http_request(
-    _window: WebviewWindow,
+    window: WebviewWindow,
     _state: State<'_, LinkState>,
-    _method: String,
-    _path: String,
-    _body: Option<String>,
+    method: String,
+    path: String,
+    body: Option<String>,
 ) -> Result<HttpResponse, String> {
-    // TODO: Implement HTTP-over-WS request (P1.5).
-    // For now, return a stub response.
+    require_main_window(&window)?;
+
+    // Path allowlist: v1 API paths only, no query strings, no traversal.
+    let api_path = validate_api_path(&path)?;
+
+    let mut stream = tokio::net::UnixStream::connect(DAEMON_SOCKET)
+        .await
+        .map_err(|_| "daemon connection failed".to_string())?;
+
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let body_bytes = body.unwrap_or_default();
+    let req = format!(
+        "{method} {api_path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body_bytes}",
+        body_bytes.len(),
+    );
+    tokio::time::timeout(Duration::from_secs(2), stream.write_all(req.as_bytes()))
+        .await
+        .map_err(|_| "daemon HTTP request timed out".to_string())?
+        .map_err(|_| "daemon connection failed".to_string())?;
+
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        let n = tokio::time::timeout(Duration::from_secs(2), stream.read(&mut chunk))
+            .await
+            .map_err(|_| "daemon HTTP response timed out".to_string())?
+            .map_err(|_| "daemon connection failed".to_string())?;
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        if buf.len() > MAX_HTTP_RESPONSE {
+            return Err("daemon HTTP response exceeds limit".to_string());
+        }
+    }
+    let text = String::from_utf8(buf).map_err(|_| "invalid daemon response".to_string())?;
+    let status: u16 = text
+        .split_whitespace()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .ok_or_else(|| "malformed daemon response".to_string())?;
+    let resp_body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, b)| b.to_string())
+        .unwrap_or_default();
     Ok(HttpResponse {
-        status: 200,
-        body: json!({ "status": "ok", "api": "v1" }).to_string(),
+        status,
+        body: resp_body,
     })
 }
 
