@@ -67,17 +67,17 @@
 - [x] P3.3 Pro-advanced-filter 403 gate (locked off)
 - [x] P3.4 `GET /connections/{id}` (+ pruned 404 wording)
 - [x] P3.5 History screen (search, table, all states)
-- [ ] P3.6 Restart persistence test
-- [ ] P3.7 `apps` soft delete on last activity
+- [x] P3.6 Restart persistence test <!-- real netwatchd kill+restart; exact history response and C3 row preserved; workspace tests green -->
+- [x] P3.7 `apps` soft delete on last activity <!-- idempotent db helper marks stale apps; row + history name preserved; unit test green -->
 - [ ] **DoD: restart keeps history; free history search works; tag `v0.3.0-alpha.3`**
 
 ## Phase 4 — Dashboard Slice → `v0.4.0-alpha.4` (~40 h)
 
-- [ ] P4.1 Compaction job (raw → `usage_rollup_15m` at 7 days; write `usage_endpoint_day`)
-- [ ] P4.2 Interface-counter sampler (`/sys/class/net/*/statistics`; `lo` excluded)
-- [ ] P4.3 `GET /usage/summary` (total/attributed/unattributed + top apps)
-- [ ] P4.4 `GET /usage/timeline` (15m; day/hour in configured timezone)
-- [ ] P4.5 `GET /usage/interfaces` (from `usage_interface_15m`; `lo` excluded)
+- [x] P4.1 Compaction job (raw → `usage_rollup_15m` at 7 days; write `usage_endpoint_day`) <!-- transactional compaction + 50-endpoint cap; totals preserved; 2 core + 1 daemon test green -->
+- [x] P4.2 Interface-counter sampler (`/sys/class/net/*/statistics`; `lo` excluded) <!-- pure delta core + 15s daemon task; synthetic sysfs test verifies 15m rows and lo exclusion; vnstat comparison follows in P4.3/P10.1 -->
+- [x] P4.3 `GET /usage/summary` (total/attributed/unattributed + top apps) <!-- U1 contract + IANA day/billing boundaries (D4a); 4 calendar + 3 API tests green; chrono/chrono-tz approved 2026-11-17 -->
+- [x] P4.4 `GET /usage/timeline` (15m; day/hour in configured timezone) <!-- raw+rollup seam union, local hour/day buckets, interface filter; 1 calendar + 4 API tests green -->
+- [x] P4.5 `GET /usage/interfaces` (from `usage_interface_15m`; `lo` excluded) <!-- U3 shape + local-day default range; 2 API tests green, excluded interface never returned -->
 - [ ] P4.6 ECharts token theme wrapper
 - [ ] P4.7 Dashboard screen (headline total/attributed/unattributed, timeline, top apps, Unattributed row, interfaces)
 - [ ] P4.8 `usage.totals` socket stream → headline cards

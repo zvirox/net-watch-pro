@@ -105,6 +105,29 @@ pub(crate) async fn seed_history_schema(pool: &sqlx::SqlitePool) {
     .unwrap();
 }
 
+/// Minimal U1 schema: the two rollup tables used by `/usage/summary`.
+async fn seed_usage_schema(pool: &sqlx::SqlitePool) {
+    sqlx::query(
+        "CREATE TABLE usage_interface_15m (
+            interface_id INTEGER NOT NULL, bucket_start INTEGER NOT NULL,
+            rx_bytes INTEGER NOT NULL DEFAULT 0, tx_bytes INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (interface_id, bucket_start))",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "CREATE TABLE usage_rollup_15m (
+            app_id INTEGER NOT NULL, bucket_start INTEGER NOT NULL,
+            bytes_up INTEGER NOT NULL DEFAULT 0, bytes_down INTEGER NOT NULL DEFAULT 0,
+            connection_count INTEGER NOT NULL DEFAULT 0, interfaces_mask TEXT,
+            PRIMARY KEY (app_id, bucket_start))",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 /// Boot the server on an ephemeral Unix socket path with an empty database;
 /// returns (path, status sender).
 async fn spawn_server() -> (std::path::PathBuf, watch::Sender<StatusSnapshot>) {
@@ -758,4 +781,339 @@ async fn connection_by_id_over_socket_contract() {
     assert_eq!(status, 404, "body: {body}");
     let v: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(v["error"]["code"], "NOT_FOUND");
+}
+
+// ----------------------------------------------------- §2.5 U1 usage summary
+
+async fn seed_usage_data(pool: &sqlx::SqlitePool) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let bucket = now / 900 * 900;
+    sqlx::query("INSERT INTO apps (id, name) VALUES (1, 'Firefox'), (2, 'Chrome')")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO usage_interface_15m (interface_id, bucket_start, rx_bytes, tx_bytes)
+         VALUES (2, ?1, 1000, 500), (2, ?2, 100, 50)",
+    )
+    .bind(bucket)
+    .bind(bucket + 900)
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO usage_rollup_15m (app_id, bucket_start, bytes_up, bytes_down)
+         VALUES (1, ?1, 800, 400), (2, ?1, 200, 100)",
+    )
+    .bind(bucket)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_summary_reports_totals_gap_and_top_apps() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    seed_usage_data(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/usage/summary").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["state"], "ok");
+    for period in ["today", "month"] {
+        assert_eq!(v[period]["total"], 1_650, "{period}: {body}");
+        assert_eq!(v[period]["attributed"], 1_500, "{period}: {body}");
+        assert_eq!(v[period]["unattributed"], 150, "{period}: {body}");
+    }
+    assert_eq!(v["top_apps"].as_array().unwrap().len(), 2);
+    assert_eq!(v["top_apps"][0]["name"], "Firefox");
+    assert_eq!(v["top_apps"][0]["bytes_total"], 1_200);
+    assert_eq!(v["top_apps"][1]["name"], "Chrome");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_summary_empty_db_is_collecting() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/usage/summary").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["state"], "collecting");
+    assert_eq!(v["today"]["total"], 0);
+    assert_eq!(v["month"]["unattributed"], 0);
+    assert_eq!(v["top_apps"], json!([]));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_summary_rejects_invalid_top_limit() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    for query in [
+        "?top_limit=0",
+        "?top_limit=11",
+        "?top_limit=abc",
+        "?bogus=1",
+    ] {
+        let (status, body) = http_get(&sock, &format!("/api/v1/usage/summary{query}")).await;
+        assert_eq!(status, 400, "query {query}: {body}");
+        let v: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(v["error"]["code"], "QUERY_INVALID");
+    }
+}
+
+// ---------------------------------------------------- §2.5 U2 usage timeline
+
+async fn set_timezone(pool: &sqlx::SqlitePool, name: &str) {
+    sqlx::query("INSERT INTO settings (key, value) VALUES ('timezone', ?1)")
+        .bind(name)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn insert_rollup(pool: &sqlx::SqlitePool, bucket: i64, up: i64, down: i64, connections: i64) {
+    sqlx::query(
+        "INSERT INTO usage_rollup_15m (app_id, bucket_start, bytes_up, bytes_down, connection_count)
+         VALUES (1, ?1, ?2, ?3, ?4)",
+    )
+    .bind(bucket)
+    .bind(up)
+    .bind(down)
+    .bind(connections)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_timeline_merges_raw_and_rollup_at_seam() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    set_timezone(&db, "UTC").await;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let cutoff = now - 7 * 86_400;
+    let since = cutoff - 7_200;
+    let until = cutoff + 7_200;
+
+    insert_rollup(&db, cutoff - 3_660, 100, 200, 3).await;
+    // A stale rollup inside the raw window must not be double-counted.
+    insert_rollup(&db, cutoff + 900, 9_999, 9_999, 9).await;
+    sqlx::query(
+        "INSERT INTO connections (app_id, pid, protocol, local_ip, local_port,
+                                  remote_ip, remote_port, bytes_up, bytes_down,
+                                  first_seen_at, last_seen_at)
+         VALUES (1, 42, 'tcp', '10.0.0.2', 51000, '198.51.100.1', 443,
+                 10, 20, ?1, ?2)",
+    )
+    .bind(cutoff)
+    .bind(cutoff + 60)
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let (sock, _tx) = spawn_server_with(db).await;
+    let (status, body) = http_get(
+        &sock,
+        &format!("/api/v1/usage/timeline?granularity=hour&since={since}&until={until}"),
+    )
+    .await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["granularity"], "hour");
+    let data = v["data"].as_array().unwrap();
+    assert_eq!(data.len(), 2, "one rollup bucket + one raw bucket: {body}");
+    let up: i64 = data.iter().map(|row| row["up"].as_i64().unwrap()).sum();
+    let down: i64 = data.iter().map(|row| row["down"].as_i64().unwrap()).sum();
+    let connections: i64 = data
+        .iter()
+        .map(|row| row["connections"].as_i64().unwrap())
+        .sum();
+    assert_eq!((up, down, connections), (110, 220, 4));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_timeline_groups_15m_rollups_into_local_days() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    set_timezone(&db, "Asia/Kathmandu").await;
+    let tz: chrono_tz::Tz = "Asia/Kathmandu".parse().unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let day = netwatch_api::calendar::bucket_start(
+        now - 30 * 86_400,
+        netwatch_api::calendar::Bucket::Day,
+        tz,
+    );
+    insert_rollup(&db, day, 10, 20, 1).await;
+    insert_rollup(&db, day + 900, 30, 40, 2).await;
+    insert_rollup(&db, day + 1_800, 50, 60, 3).await;
+
+    let (sock, _tx) = spawn_server_with(db).await;
+    let (status, body) = http_get(
+        &sock,
+        &format!(
+            "/api/v1/usage/timeline?granularity=day&since={}&until={}",
+            day - 86_400,
+            day + 86_400
+        ),
+    )
+    .await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    let data = v["data"].as_array().unwrap();
+    assert_eq!(
+        data.len(),
+        1,
+        "three 15m rows must form one local day: {body}"
+    );
+    assert_eq!(data[0]["bucket_start"], day);
+    assert_eq!(data[0]["up"], 90);
+    assert_eq!(data[0]["down"], 120);
+    assert_eq!(data[0]["connections"], 6);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_timeline_interface_filter_uses_counter_table() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    set_timezone(&db, "UTC").await;
+    sqlx::query(
+        "INSERT INTO usage_interface_15m (interface_id, bucket_start, rx_bytes, tx_bytes)
+         VALUES (2, ?1, 500, 100)",
+    )
+    .bind(1_800_000_000 / 900 * 900)
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let (sock, _tx) = spawn_server_with(db).await;
+    let (status, body) = http_get(
+        &sock,
+        "/api/v1/usage/timeline?granularity=hour&since=1799900000&until=1800100000&interface_id=2",
+    )
+    .await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    let data = v["data"].as_array().unwrap();
+    assert_eq!(data.len(), 1);
+    assert_eq!(data[0]["up"], 100, "tx_bytes is upload");
+    assert_eq!(data[0]["down"], 500, "rx_bytes is download");
+    assert_eq!(data[0]["connections"], 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_timeline_rejects_invalid_queries() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+    for query in [
+        "?granularity=week",
+        "?since=100&until=100",
+        "?since=200&until=100",
+        "?limit=0",
+        "?bogus=1",
+    ] {
+        let (status, body) = http_get(&sock, &format!("/api/v1/usage/timeline{query}")).await;
+        assert_eq!(status, 400, "query {query}: {body}");
+        let v: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(v["error"]["code"], "QUERY_INVALID");
+    }
+}
+
+async fn seed_interfaces(pool: &sqlx::SqlitePool) {
+    sqlx::query(
+        "CREATE TABLE interfaces (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            kind TEXT NOT NULL DEFAULT 'ethernet',
+            is_metered INTEGER NOT NULL DEFAULT 0,
+            is_excluded INTEGER NOT NULL DEFAULT 0)",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO interfaces (id, name, kind, is_metered, is_excluded) VALUES
+            (1, 'lo', 'loopback', 0, 1),
+            (2, 'wlan0', 'wifi', 1, 0),
+            (3, 'eth0', 'ethernet', 0, 0)",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_interfaces_excludes_loopback_and_sums_counters() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    seed_interfaces(&db).await;
+    set_timezone(&db, "UTC").await;
+    sqlx::query(
+        "INSERT INTO usage_interface_15m (interface_id, bucket_start, rx_bytes, tx_bytes) VALUES
+            (1, ?1, 999_999, 999_999),
+            (2, ?1, 500, 100), (2, ?2, 50, 10),
+            (3, ?1, 20, 5)",
+    )
+    .bind(1_800_000_000)
+    .bind(1_800_000_900)
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let (sock, _tx) = spawn_server_with(db).await;
+    let (status, body) = http_get(
+        &sock,
+        "/api/v1/usage/interfaces?since=1700000000&until=1900000000",
+    )
+    .await;
+    assert_eq!(status, 200, "body: {body}");
+    let rows: Value = serde_json::from_str(&body).unwrap();
+    let rows = rows.as_array().unwrap();
+    assert_eq!(rows.len(), 2, "lo must never appear: {body}");
+    assert_eq!(rows[0]["id"], 2);
+    assert_eq!(rows[0]["name"], "wlan0");
+    assert_eq!(rows[0]["kind"], "wifi");
+    assert_eq!(rows[0]["is_metered"], true);
+    assert_eq!(rows[0]["bytes"]["up"], 110);
+    assert_eq!(rows[0]["bytes"]["down"], 550);
+    assert_eq!(rows[1]["id"], 3);
+    assert_eq!(rows[1]["bytes"]["up"], 5);
+    assert_eq!(rows[1]["bytes"]["down"], 20);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_interfaces_rejects_invalid_queries() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    seed_interfaces(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+    for query in ["?since=100&until=100", "?since=200&until=100", "?bogus=1"] {
+        let (status, body) = http_get(&sock, &format!("/api/v1/usage/interfaces{query}")).await;
+        assert_eq!(status, 400, "query {query}: {body}");
+        let v: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(v["error"]["code"], "QUERY_INVALID");
+    }
 }

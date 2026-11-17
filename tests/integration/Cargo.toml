@@ -1,0 +1,16 @@
+[package]
+name = "netwatch-integration-tests"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "Process-level integration tests: real netwatchd binary, temp SQLite, Unix-socket API (TESTING.md §1)"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "net", "io-util", "time"] }
+# Already approved stack (ARCHITECTURE.md §2): used only to seed fixture rows
+# before restarting the daemon under test.
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
+serde_json = "1"
+
+[lints]
+workspace = true

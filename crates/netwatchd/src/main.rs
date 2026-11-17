@@ -15,9 +15,11 @@
 mod config;
 mod db;
 mod live;
+mod sampler;
 
 use netwatch_common::{DaemonState, EbpfState, StatusSnapshot};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, mpsc, watch};
 
 /// Startup failure classes, each with its §7.1 exit code.
@@ -81,6 +83,33 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     db::migrate(&pool).await.map_err(StartupError::Db)?;
     tracing::info!(?db_path, "database open, migrations applied");
 
+    // P4.1: compact raw episodes that already aged past the raw window on
+    // boot. A failure is degraded state, never a startup failure (§7.1);
+    // P7.1's scheduled pruner will own recurring runs.
+    let now = i64::try_from(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+    )
+    .unwrap_or_default();
+    match db::compact_old_connections(&pool, now, netwatch_core::retention::DEFAULT_ENDPOINT_CAP)
+        .await
+    {
+        Ok(report) if report.compacted_connections > 0 => tracing::info!(
+            connections = report.compacted_connections,
+            rollups = report.rollup_rows,
+            endpoints = report.endpoint_rows,
+            "raw-window compaction complete"
+        ),
+        Ok(_) => {}
+        Err(e) => tracing::warn!("compaction failed; raw rows kept: {e}"),
+    }
+
+    // P4.2: interface counters use their own cadence; the first tick only
+    // establishes the cumulative-counter baseline.
+    let sampler_abort = sampler::spawn(pool.clone());
+
     // P2.5/P2.6 wiring: live service owns the episode store; the writer
     // task persists flush batches (≤ 1 tx/s); the API serves snapshot +
     // deltas. Event senders are held for the collector task (P2.1–P2.3,
@@ -137,7 +166,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     };
 
     tracing::info!("serving API on {}", cfg.socket_path.display());
-    netwatch_api::serve_unix(
+    let result = netwatch_api::serve_unix(
         &cfg.socket_path,
         status_rx,
         netwatch_api::LiveFeed {
@@ -148,5 +177,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
         shutdown,
     )
     .await
-    .map_err(|e| StartupError::Server(format!("api server: {e}")))
+    .map_err(|e| StartupError::Server(format!("api server: {e}")));
+    sampler_abort.abort();
+    result
 }

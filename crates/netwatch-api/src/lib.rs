@@ -12,11 +12,15 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod auth;
+pub mod calendar;
 pub mod error;
 pub mod history;
+pub mod interfaces_usage;
 pub mod routes;
 pub mod state;
 pub mod stream;
+pub mod timeline;
+pub mod usage;
 
 use std::path::Path;
 use std::sync::Arc;

@@ -87,6 +87,44 @@ pub async fn connection_by_id(
     }
 }
 
+/// `GET /usage/interfaces` — U3: per-interface totals, excluding `lo`.
+pub async fn usage_interfaces(
+    State(state): State<Arc<AppState>>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> Response {
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    match crate::interfaces_usage::interfaces_usage(&state.db, now, raw.as_deref()).await {
+        Ok(rows) => Json(rows).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `GET /usage/timeline` — U2: local-hour/local-day usage series (API.md §2.5).
+pub async fn usage_timeline(
+    State(state): State<Arc<AppState>>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> Response {
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    match crate::timeline::timeline(&state.db, now, raw.as_deref()).await {
+        Ok(payload) => Json(payload).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `GET /usage/summary` — U1: interface totals, attributed bytes, gap and
+/// top talkers (API.md §2.5). Boundaries use the configured timezone and
+/// billing cycle (D4a).
+pub async fn usage_summary(
+    State(state): State<Arc<AppState>>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> Response {
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    match crate::usage::summary(&state.db, now, raw.as_deref()).await {
+        Ok(payload) => Json(payload).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
 /// Epoch seconds for serve-time stamps.
 fn epoch_now() -> u64 {
     std::time::SystemTime::now()
@@ -131,6 +169,12 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
             axum::routing::get(connection_by_id),
         )
         .route("/api/v1/connections", axum::routing::get(connections))
+        .route("/api/v1/usage/summary", axum::routing::get(usage_summary))
+        .route("/api/v1/usage/timeline", axum::routing::get(usage_timeline))
+        .route(
+            "/api/v1/usage/interfaces",
+            axum::routing::get(usage_interfaces),
+        )
         .route("/api/v1/stream", axum::routing::get(stream_upgrade))
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)

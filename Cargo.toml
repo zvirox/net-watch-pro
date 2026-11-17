@@ -6,6 +6,7 @@ members = [
     "crates/netwatchd",
     "crates/netwatch-api",
     "app/src-tauri",
+    "tests/integration",
     "xtask",
 ]
 

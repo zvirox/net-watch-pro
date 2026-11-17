@@ -129,7 +129,7 @@ Covers: *"As a metered-connection user, I want to see today's and this month's d
 ### Acceptance criteria
 - [ ] Daily totals equal kernel interface counters by construction; ≥95% of bytes attributed; unattributed row shows gap (accuracy harness)
 - [ ] Top apps order matches summary; click-through routes to F4
-- [ ] Compaction preserves totals (raw + rollup = constant across the seam)
+- [x] Compaction preserves totals (raw + rollup = constant across the seam)
 - [ ] Soft-deleted app's history still resolves name/icon
 - [ ] Timezone caption correct on day/month boundaries
 

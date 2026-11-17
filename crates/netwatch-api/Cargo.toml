@@ -13,6 +13,10 @@ tokio = { version = "1", features = ["sync", "net", "time", "macros"] }
 # sqlx: read-side queries for history endpoints (same workspace dep as the
 # daemon's writer; approved stack per ARCHITECTURE.md §2).
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
+# chrono + chrono-tz: D4a IANA timezone and billing-cycle boundaries for
+# usage aggregates (owner-approved dependency, 2026-11-17).
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+chrono-tz = "0.10.4"
 thiserror = "2"
 subtle = "2.6"
 getrandom = "0.4"

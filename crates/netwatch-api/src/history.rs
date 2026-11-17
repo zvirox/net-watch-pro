@@ -290,7 +290,7 @@ fn bad_limit(value: &str) -> ApiError {
 
 /// Minimal `a=b&c=d` split with percent-decoding — keeps the §1.3 error
 /// envelope guaranteed (axum's Query extractor rejects with a plain 400).
-fn parse_query_params(raw: &str) -> Result<HashMap<String, String>, ApiError> {
+pub(crate) fn parse_query_params(raw: &str) -> Result<HashMap<String, String>, ApiError> {
     let mut map = HashMap::new();
     for pair in raw.split('&').filter(|p| !p.is_empty()) {
         let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
@@ -931,7 +931,7 @@ pub async fn connections_page(
 
 // Takes the error by value so it composes with `.map_err(db_error)`.
 #[allow(clippy::needless_pass_by_value)]
-fn db_error(e: sqlx::Error) -> ApiError {
+pub(crate) fn db_error(e: sqlx::Error) -> ApiError {
     ApiError::new(
         ErrorCode::DbError,
         axum::http::StatusCode::INTERNAL_SERVER_ERROR,
