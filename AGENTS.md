@@ -12,6 +12,7 @@
 3. Everything is local: no cloud, no telemetry, no outbound connections — this is a product promise and a hard constraint (PRD §1/§4).
 4. Freemium: free tier = live monitoring + per-app usage + 90-day history; Pro (offline license key) = advanced filters, CSV/JSON export, longer retention.
 5. The docs are the contract: UI follows DESIGN.md, schema follows DATABASE.md, endpoints follow API.md, structure follows ARCHITECTURE.md. Code that drifts from them is wrong.
+6. **Starship Control Ecosystem**: NWP integrates into the Mother Ship ecosystem via the shared `starship-plugin` SDK, exposing read-only network inspection tools to **Starship Control** (`https://github.com/zvirox/starship-control`) over `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock`.
 
 ## 2. Source of Truth — Priority Order
 

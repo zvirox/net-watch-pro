@@ -288,7 +288,19 @@
 
 ---
 
-## 14. Global Rules
+## 14. Phase 12 — Starship Control & `starship-plugin` SDK Integration
+
+| ID | Task | Files | Verify | Deps |
+|---|---|---|---|---|
+| P12.1 | Embed `starship-plugin` crate & publish manifest | `crates/netwatchd/`, `starship-plugin` | Manifest at `$XDG_DATA_HOME/starship/plugins/nwp.json` | P8.1 |
+| P12.2 | Unix socket bridge listener with `SO_PEERCRED` | `crates/netwatchd/src/bridge.rs` | Socket at `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock` verified | P12.1 |
+| P12.3 | Expose MCP telemetry tools to Starship Control (`network.query_top_talkers`, `network.query_app_usage`, `network.audit_connections`) | `crates/netwatchd/src/mcp.rs` | Starship Control queries network state read-only | P12.2 |
+
+**DoD:** Net Watch Pro is auto-discovered by Starship Control; autonomous agents can audit network leaks and per-app usage over the local Unix domain socket bridge.
+
+---
+
+## 15. Global Rules
 
 - **Runnable after every phase** — a phase that can't demo its slice isn't done.
 - **Docs move with code** (AGENTS.md §4.5): the task that changes an endpoint/schema/token carries its doc edit.
