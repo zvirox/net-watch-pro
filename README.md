@@ -87,18 +87,24 @@ passes fmt/clippy/check, and ships no product features.
 
 ~~~mermaid
 flowchart LR
-  UI[Svelte 5 UI (unprivileged)] -->|localhost WS + REST<br/>bearer token| API[netwatch-api]
-  API --> Core[netwatch-core: accounting · attribution · retention]
-  EBPF[Aya eBPF observe-only] --> Core
-  Core --> DB[(SQLite: connections · rollups · events)]
+  UI["Svelte 5 UI (unprivileged)"]
+  API["netwatch-api - Unix socket, peer credentials"]
+  Core["netwatch-core - accounting, attribution, retention"]
+  EBPF["Aya eBPF - observe only"]
+  DB[("SQLite - connections, rollups, events")]
+
+  UI -->|WS and REST over Unix socket| API
+  API --> Core
+  EBPF --> Core
+  Core --> DB
   DB --> API
 ~~~
 
 Two processes, one boundary: a root systemd daemon (`netwatchd`) observes
 traffic with eBPF and writes local SQLite; the unprivileged Tauri UI talks
-**only** to a token-authenticated loopback API. There is no cloud, no
-telemetry, and no outbound connection — by contract, not by accident
-([AUTH_SECURITY.md](AUTH_SECURITY.md)). Details in
+**only** to the peer-credential-authorized local API on a Unix domain socket.
+There is no bearer token, no cloud, no telemetry, and no outbound connection —
+by contract, not by accident ([AUTH_SECURITY.md](AUTH_SECURITY.md)). Details in
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Install and try it
