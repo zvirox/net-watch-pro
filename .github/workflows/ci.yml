@@ -27,6 +27,8 @@ jobs:
         run: cargo fmt --check
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: build daemon binary for process-level tests
+        run: cargo build -p netwatchd
       - name: tests
         run: cargo test --workspace
 
