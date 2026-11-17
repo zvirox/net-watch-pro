@@ -23,12 +23,12 @@ pub struct Authorized;
 impl FromRequestParts<Arc<AppState>> for Authorized {
     type Rejection = ApiError;
 
-    async fn from_request_parts(
+    fn from_request_parts(
         _parts: &mut Parts,
         _state: &Arc<AppState>,
-    ) -> Result<Self, Self::Rejection> {
+    ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
         // Auth already validated at the socket level via SO_PEERCRED.
-        Ok(Authorized)
+        std::future::ready(Ok(Authorized))
     }
 }
 

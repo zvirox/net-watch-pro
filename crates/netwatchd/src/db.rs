@@ -63,7 +63,7 @@ pub async fn max_connection_id(pool: &SqlitePool) -> Result<u64, DbError> {
     let max: Option<i64> = sqlx::query_scalar("SELECT MAX(id) FROM connections")
         .fetch_one(pool)
         .await?;
-    Ok(max.unwrap_or(0).max(0) as u64)
+    Ok(u64::try_from(max.unwrap_or(0).max(0)).unwrap_or(u64::MAX))
 }
 
 /// Persist a batch of episode rows in one transaction (F-09: closes persist
@@ -103,23 +103,23 @@ pub async fn persist_episodes(
                 is_open = excluded.is_open,
                 updated_at = strftime('%s','now')",
         )
-        .bind(row.id as i64)
+        .bind(i64::try_from(row.id).unwrap_or(i64::MAX))
         .bind(row.app_id)
         .bind(row.interface_id)
-        .bind(row.pid as i64)
+        .bind(i64::from(row.pid))
         .bind(row.process_name.as_deref())
         .bind(row.protocol.as_str())
         .bind(&row.local_ip)
-        .bind(row.local_port as i64)
+        .bind(i64::from(row.local_port))
         .bind(&row.remote_ip)
-        .bind(row.remote_port as i64)
+        .bind(i64::from(row.remote_port))
         .bind(row.remote_host.as_deref())
-        .bind(row.bytes_up as i64)
-        .bind(row.bytes_down as i64)
-        .bind(row.packets_up as i64)
-        .bind(row.packets_down as i64)
-        .bind(row.first_seen_at as i64)
-        .bind(row.last_seen_at as i64)
+        .bind(i64::try_from(row.bytes_up).unwrap_or(i64::MAX))
+        .bind(i64::try_from(row.bytes_down).unwrap_or(i64::MAX))
+        .bind(i64::try_from(row.packets_up).unwrap_or(i64::MAX))
+        .bind(i64::try_from(row.packets_down).unwrap_or(i64::MAX))
+        .bind(i64::try_from(row.first_seen_at).unwrap_or(i64::MAX))
+        .bind(i64::try_from(row.last_seen_at).unwrap_or(i64::MAX))
         .bind(i64::from(row.is_open))
         .execute(&mut *tx)
         .await?;
@@ -629,7 +629,7 @@ mod tests {
         assert_eq!(rollups, 3);
     }
 
-    /// §8 runtime rules hold on a fresh open: WAL + foreign_keys ON.
+    /// §8 runtime rules hold on a fresh open: WAL + `foreign_keys` ON.
     #[tokio::test]
     async fn pragmas_applied() {
         let dir = std::env::temp_dir().join(format!(
@@ -696,7 +696,9 @@ mod tests {
             is_open: true,
         };
 
-        persist_episodes(&pool, &[row.clone()]).await.unwrap();
+        persist_episodes(&pool, std::slice::from_ref(&row))
+            .await
+            .unwrap();
         // Second batch with higher totals → replaced, not accumulated.
         let mut grown = row.clone();
         grown.bytes_up = 400;

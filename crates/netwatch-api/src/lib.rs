@@ -68,7 +68,7 @@ pub async fn serve_unix(
         crate::error::ApiError::new(
             netwatch_common::ErrorCode::PermissionDenied,
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            format!("cannot bind Unix socket {socket_path:?}: {e}"),
+            format!("cannot bind Unix socket {}: {e}", socket_path.display()),
         )
     })?;
 

@@ -1,6 +1,6 @@
 //! Per-socket byte attribution accounting.
 //!
-//! Phase 2: accumulate byte deltas per socket cookie from eBPF cgroup_skb
+//! Phase 2: accumulate byte deltas per socket cookie from eBPF `cgroup_skb`
 //! programs. Open-episode state is kept in memory and persisted on episode
 //! close or at checkpoint interval (~60s) to limit crash-loss window.
 //!
@@ -11,31 +11,38 @@
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Per-socket byte counters accumulated from eBPF cgroup_skb programs.
+/// Per-socket byte counters accumulated from eBPF `cgroup_skb` programs.
 #[derive(Debug, Clone, Default)]
 pub struct SocketCounters {
+    /// Uplink bytes observed for this socket.
     pub bytes_up: u64,
+    /// Downlink bytes observed for this socket.
     pub bytes_down: u64,
+    /// Uplink packets observed for this socket.
     pub packets_up: u64,
+    /// Downlink packets observed for this socket.
     pub packets_down: u64,
+    /// Epoch seconds of the first observation.
     pub first_seen_at: u64,
+    /// Epoch seconds of the most recent observation.
     pub last_seen_at: u64,
+    /// Whether the socket is still open.
     pub is_open: bool,
 }
 
-/// Socket cookie -> per-socket byte counters mapping.
-/// Populated from eBPF cgroup_skb ingress/egress programs.
+/// Socket cookie → per-socket byte counters mapping.
+/// Populated from eBPF `cgroup_skb` ingress/egress programs.
+#[derive(Default)]
 pub struct SocketCounterMap {
-    /// socket cookie -> per-socket counters
+    /// Socket cookie → per-socket counters.
     counters: HashMap<u64, SocketCounters>,
 }
 
 impl SocketCounterMap {
     /// Create a new empty counter map.
+    #[must_use]
     pub fn new() -> Self {
-        Self {
-            counters: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Record bytes for a socket cookie.
@@ -56,13 +63,10 @@ impl SocketCounterMap {
             .counters
             .entry(cookie)
             .or_insert_with(|| SocketCounters {
-                bytes_up: 0,
-                bytes_down: 0,
-                packets_up: 0,
-                packets_down: 0,
                 first_seen_at: now,
                 last_seen_at: now,
                 is_open: true,
+                ..SocketCounters::default()
             });
 
         counter.bytes_up = counter.bytes_up.saturating_add(bytes_up);
@@ -81,11 +85,13 @@ impl SocketCounterMap {
     }
 
     /// Get a reference to the counter for a socket cookie.
+    #[must_use]
     pub fn get(&self, cookie: u64) -> Option<&SocketCounters> {
         self.counters.get(&cookie)
     }
 
     /// Get all open connections.
+    #[must_use]
     pub fn open_connections(&self) -> Vec<(u64, &SocketCounters)> {
         self.counters
             .iter()
@@ -95,21 +101,25 @@ impl SocketCounterMap {
     }
 
     /// Get all counters (open and closed).
+    #[must_use]
     pub fn all(&self) -> Vec<(u64, &SocketCounters)> {
         self.counters.iter().map(|(k, v)| (*k, v)).collect()
     }
 
     /// Number of tracked sockets.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.counters.len()
     }
 
     /// Number of tracked sockets (alias for `len`, used in tests).
+    #[must_use]
     pub fn pending_count(&self) -> usize {
         self.counters.len()
     }
 
     /// Check if the map is empty.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.counters.is_empty()
     }
@@ -122,6 +132,8 @@ impl SocketCounterMap {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)] // tests, not daemon paths
+
     use super::*;
 
     #[test]
@@ -169,8 +181,8 @@ mod tests {
 
         map.remove_closed();
         assert_eq!(map.pending_count(), 1);
-        assert_eq!(map.get(2).is_some(), true);
-        assert_eq!(map.get(1).is_some(), false);
+        assert!(map.get(2).is_some());
+        assert!(map.get(1).is_none());
     }
 
     #[test]

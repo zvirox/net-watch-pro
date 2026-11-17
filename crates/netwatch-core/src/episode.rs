@@ -23,16 +23,25 @@ pub struct EpisodeOpen {
     pub key: u64,
     /// Attributed app (FK id + display name).
     pub app_id: i64,
+    /// Display name from the attribution registry.
     pub app_name: String,
+    /// Optional icon handle; `None` uses the UI fallback.
     pub icon: Option<String>,
     /// OS pid snapshot at attribution.
     pub pid: u32,
+    /// Process name snapshot (display fallback).
     pub process_name: Option<String>,
+    /// IP protocol.
     pub protocol: Protocol,
+    /// Local IP address.
     pub local_ip: String,
+    /// Local port.
     pub local_port: u16,
+    /// Remote IP address.
     pub remote_ip: String,
+    /// Remote port.
     pub remote_port: u16,
+    /// Resolved remote hostname (`None` → display the IP).
     pub remote_host: Option<String>,
     /// Interface the episode traverses, when known (FK `interfaces.id`).
     pub interface_id: Option<i32>,
@@ -47,38 +56,67 @@ pub enum EpisodeEvent {
     Open(EpisodeOpen),
     /// Byte/packet counters advanced for a known episode.
     Bytes {
+        /// Collector handle this delta belongs to.
         key: u64,
+        /// Absolute uplink bytes for the socket.
         bytes_up: u64,
+        /// Absolute downlink bytes for the socket.
         bytes_down: u64,
+        /// Absolute uplink packets for the socket.
         packets_up: u64,
+        /// Absolute downlink packets for the socket.
         packets_down: u64,
+        /// Epoch seconds of this observation.
         at: u64,
     },
     /// Episode ended (socket closed).
-    Close { key: u64, at: u64 },
+    Close {
+        /// Collector handle being closed.
+        key: u64,
+        /// Epoch seconds of the close event.
+        at: u64,
+    },
 }
 
 /// A row as persisted to SQLite (connections table). One id space with the
 /// live view: the store assigns `id`, the writer inserts it explicitly.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EpisodeRow {
+    /// Stable episode id shared with the live view.
     pub id: u64,
+    /// Attributed app id (FK to `apps.id`).
     pub app_id: i64,
+    /// Traversed interface id, when known.
     pub interface_id: Option<i32>,
+    /// Process id snapshot at attribution.
     pub pid: u32,
+    /// Process name snapshot.
     pub process_name: Option<String>,
+    /// IP protocol.
     pub protocol: Protocol,
+    /// Local IP address.
     pub local_ip: String,
+    /// Local port.
     pub local_port: u16,
+    /// Remote IP address.
     pub remote_ip: String,
+    /// Remote port.
     pub remote_port: u16,
+    /// Resolved remote hostname.
     pub remote_host: Option<String>,
+    /// Uplink bytes for the episode.
     pub bytes_up: u64,
+    /// Downlink bytes for the episode.
     pub bytes_down: u64,
+    /// Uplink packets for the episode.
     pub packets_up: u64,
+    /// Downlink packets for the episode.
     pub packets_down: u64,
+    /// Epoch seconds of the first observation.
     pub first_seen_at: u64,
+    /// Epoch seconds of the last observation.
     pub last_seen_at: u64,
+    /// Whether the episode is still open.
     pub is_open: bool,
 }
 
@@ -86,31 +124,51 @@ pub struct EpisodeRow {
 /// (closed episodes persist immediately per F-09).
 #[derive(Debug, Default)]
 pub struct Sample {
+    /// Wire delta for the live view.
     pub delta: LiveDelta,
+    /// Final rows for episodes that closed in this sample.
     pub closed_rows: Vec<EpisodeRow>,
 }
 
 /// Internal episode state.
 struct Episode {
-    key: u64,
+    /// Stable episode id.
     id: u64,
+    /// Attributed app id.
     app_id: i64,
+    /// Display name from attribution.
     app_name: String,
+    /// Optional icon handle.
     icon: Option<String>,
+    /// Process id snapshot.
     pid: u32,
+    /// Process name snapshot.
     process_name: Option<String>,
+    /// IP protocol.
     protocol: Protocol,
+    /// Local IP address.
     local_ip: String,
+    /// Local port.
     local_port: u16,
+    /// Remote IP address.
     remote_ip: String,
+    /// Remote port.
     remote_port: u16,
+    /// Resolved remote hostname.
     remote_host: Option<String>,
+    /// Traversed interface id.
     interface_id: Option<i32>,
+    /// Uplink bytes for the episode.
     bytes_up: u64,
+    /// Downlink bytes for the episode.
     bytes_down: u64,
+    /// Uplink packets for the episode.
     packets_up: u64,
+    /// Downlink packets for the episode.
     packets_down: u64,
+    /// Epoch seconds of the first observation.
     first_seen_at: u64,
+    /// Epoch seconds of the last observation.
     last_seen_at: u64,
     /// Bytes at the previous sample (rate numerator).
     sampled_up: u64,
@@ -164,7 +222,6 @@ impl EpisodeStore {
                 self.by_key.insert(
                     open.key,
                     Episode {
-                        key: open.key,
                         id,
                         app_id: open.app_id,
                         app_name: open.app_name,
@@ -248,9 +305,13 @@ impl EpisodeStore {
                 continue;
             }
             let dt = now.saturating_sub(ep.sampled_at);
-            if dt > 0 {
-                ep.rate_up = ep.bytes_up.saturating_sub(ep.sampled_up) / dt;
-                ep.rate_down = ep.bytes_down.saturating_sub(ep.sampled_down) / dt;
+            if let Some(rate_up) = ep.bytes_up.saturating_sub(ep.sampled_up).checked_div(dt) {
+                ep.rate_up = rate_up;
+                ep.rate_down = ep
+                    .bytes_down
+                    .saturating_sub(ep.sampled_down)
+                    .checked_div(dt)
+                    .unwrap_or_default();
                 ep.sampled_up = ep.bytes_up;
                 ep.sampled_down = ep.bytes_down;
                 ep.sampled_at = now;
@@ -273,11 +334,8 @@ impl EpisodeStore {
     /// ordering (DESIGN.md §8.4).
     #[must_use]
     pub fn snapshot(&self) -> Vec<LiveConnectionRow> {
-        let mut rows: Vec<LiveConnectionRow> = self
-            .by_key
-            .values()
-            .map(|ep| Self::live_row_of(ep))
-            .collect();
+        let mut rows: Vec<LiveConnectionRow> =
+            self.by_key.values().map(Self::live_row_of).collect();
         rows.sort_by(|a, b| {
             let act_a = a.rate_up_bps + a.rate_down_bps + a.bytes_up + a.bytes_down;
             let act_b = b.rate_up_bps + b.rate_down_bps + b.bytes_up + b.bytes_down;
@@ -293,7 +351,7 @@ impl EpisodeStore {
         self.by_key
             .values()
             .filter(|ep| !ep.closed)
-            .map(|ep| Self::row_of(ep))
+            .map(Self::row_of)
             .collect()
     }
 

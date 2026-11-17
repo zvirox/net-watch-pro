@@ -61,12 +61,11 @@ fn live_feed_with_totals() -> (
 /// Migrated-empty in-memory database for tests that don't seed history data
 /// (single connection so every query sees the same schema).
 async fn test_db() -> sqlx::SqlitePool {
-    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+    sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(sqlx::sqlite::SqliteConnectOptions::new().in_memory(true))
         .await
-        .unwrap();
-    pool
+        .unwrap()
 }
 
 /// Minimal history schema for tests (mirrors migrations 0001–0003 columns
@@ -209,7 +208,7 @@ async fn spawn_server_with_feed(
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     handle.abort();
-    panic!("server did not start on {sock:?}");
+    panic!("server did not start on {}", sock.display());
 }
 
 /// Connect to the WS endpoint over the Unix socket.
@@ -301,7 +300,7 @@ async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
         bytes_up: 240_000,
         bytes_down: 1_980_000,
     };
-    let (snapshot_tx, snapshot_rx) = watch::channel(Arc::new(vec![row.clone()]));
+    let (_snapshot_tx, snapshot_rx) = watch::channel(Arc::new(vec![row.clone()]));
     let (delta_tx, _) = tokio::sync::broadcast::channel(16);
     let (_totals_tx, totals_rx) = watch::channel(Arc::new(UsageTotals::default()));
     let live = netwatch_api::LiveFeed {
@@ -402,7 +401,7 @@ async fn connections_live_rest_matches_ws_snapshot() {
         bytes_up: 240_000,
         bytes_down: 1_980_000,
     };
-    let (snapshot_tx, snapshot_rx) = watch::channel(Arc::new(vec![row]));
+    let (_snapshot_tx, snapshot_rx) = watch::channel(Arc::new(vec![row]));
     let (delta_tx, _) = tokio::sync::broadcast::channel(16);
     let (_totals_tx, totals_rx) = watch::channel(Arc::new(UsageTotals::default()));
     let live = netwatch_api::LiveFeed {
@@ -532,7 +531,7 @@ async fn ping_replies_with_pong() {
 
 // ------------------------------------------------- S1/S2 REST over socket
 
-/// Raw HTTP/1.1 GET over the Unix socket; returns (status_code, body_text).
+/// Raw HTTP/1.1 GET over the Unix socket; returns (`status_code`, `body_text`).
 /// Bounded read — the daemon only serves small JSON envelopes.
 async fn http_get(sock: &std::path::Path, path: &str) -> (u16, String) {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -548,9 +547,7 @@ async fn http_get(sock: &std::path::Path, path: &str) -> (u16, String) {
         }
         buf.extend_from_slice(&chunk[..n]);
         // 64 KiB bound: far above any contract response; guards a runaway.
-        if buf.len() > 64 * 1024 {
-            panic!("response exceeds 64 KiB bound");
-        }
+        assert!(buf.len() <= 64 * 1024, "response exceeds 64 KiB bound");
     }
     let text = String::from_utf8(buf).unwrap();
     let status: u16 = text
@@ -626,7 +623,7 @@ async fn wrong_method_over_socket_is_405_envelope() {
         .and_then(|s| s.parse().ok())
         .expect("no HTTP status line");
     assert_eq!(status, 405);
-    let body = text.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
+    let body = text.split_once("\r\n\r\n").map_or("", |(_, b)| b);
     let v: Value = serde_json::from_str(body).unwrap();
     assert_eq!(v["error"]["code"], "METHOD_NOT_ALLOWED");
 }
@@ -646,7 +643,7 @@ async fn client_counting_bumps_status_counter() {
     assert_eq!(state.client_count(), 0);
 }
 
-/// Stale socket files are removed at bind (serve_unix contract).
+/// Stale socket files are removed at bind (`serve_unix` contract).
 #[tokio::test(flavor = "multi_thread")]
 async fn stale_socket_file_is_removed_before_bind() {
     let dir = std::env::temp_dir().join(format!(
@@ -702,7 +699,7 @@ async fn seed_raw_history(pool: &sqlx::SqlitePool, count: i64) {
         .unwrap();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
+        .map(|d| d.as_secs().cast_signed())
         .unwrap_or_default();
     for i in 0..count {
         sqlx::query(
@@ -835,7 +832,8 @@ async fn seed_usage_data(pool: &sqlx::SqlitePool) {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_secs() as i64;
+        .as_secs()
+        .cast_signed();
     let bucket = now / 900 * 900;
     sqlx::query("INSERT INTO apps (id, name) VALUES (1, 'Firefox'), (2, 'Chrome')")
         .execute(pool)
@@ -952,7 +950,8 @@ async fn usage_timeline_merges_raw_and_rollup_at_seam() {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_secs() as i64;
+        .as_secs()
+        .cast_signed();
     let cutoff = now - 7 * 86_400;
     let since = cutoff - 7_200;
     let until = cutoff + 7_200;
@@ -1003,7 +1002,8 @@ async fn usage_timeline_groups_15m_rollups_into_local_days() {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_secs() as i64;
+        .as_secs()
+        .cast_signed();
     let day = netwatch_api::calendar::bucket_start(
         now - 30 * 86_400,
         netwatch_api::calendar::Bucket::Day,
@@ -1170,7 +1170,8 @@ async fn seed_apps_for_ranking(pool: &sqlx::SqlitePool) {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_secs() as i64;
+        .as_secs()
+        .cast_signed();
     set_timezone(pool, "UTC").await;
     sqlx::query(
         "INSERT INTO apps (id, name, icon_path, attribution_confidence, first_seen_at, last_seen_at, deleted_at) VALUES

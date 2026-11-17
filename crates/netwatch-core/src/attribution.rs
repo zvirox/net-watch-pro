@@ -12,7 +12,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// App identity key type.
 pub type AppKey = u64;
@@ -31,7 +31,7 @@ pub enum AttributionConfidence {
 /// How process identity was captured.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum IdentityKind {
-    /// Captured at exec time via cgroup path (systemd app-*.scope).
+    /// Captured at exec time via cgroup path (systemd `app-*.scope`).
     CgroupApp,
     /// Flatpak application.
     Flatpak,
@@ -44,39 +44,48 @@ pub enum IdentityKind {
 /// Per-app identity information.
 #[derive(Debug, Clone)]
 pub struct AppIdentity {
+    /// Stable identity key (cgroup path, flatpak, snap, or exe).
     pub app_key: AppKey,
+    /// How this identity was captured.
     pub identity_kind: IdentityKind,
+    /// Executable path (display/provenance only, never unique).
     pub exe_path: String,
+    /// Hash of the binary when resolvable.
     pub exe_hash: Option<String>,
+    /// Optional icon path; `None` uses the UI fallback.
     pub icon_path: Option<String>,
+    /// Confidence in this attribution.
     pub confidence: AttributionConfidence,
+    /// Epoch seconds of the first observation.
     pub first_seen_at: u64,
+    /// Epoch seconds of the most recent observation.
     pub last_seen_at: u64,
 }
 
 /// Attribution engine: maps sockets to apps via cgroup identity.
+#[derive(Default)]
 pub struct Attribution {
-    /// Socket cookie -> app_key mapping.
+    /// Socket cookie → `app_key` mapping.
     socket_to_app: HashMap<u64, AppKey>,
-    /// app_key -> AppIdentity registry.
+    /// `app_key` → [`AppIdentity`] registry.
     apps: HashMap<AppKey, AppIdentity>,
-    /// Next app_key to assign.
+    /// Next `app_key` to assign.
     next_app_key: AppKey,
 }
 
 impl Attribution {
     /// Create a new attribution engine.
+    #[must_use]
     pub fn new() -> Self {
         Self {
-            socket_to_app: HashMap::new(),
-            apps: HashMap::new(),
             next_app_key: 1,
+            ..Self::default()
         }
     }
 
     /// Attribute a socket connection to an app.
     ///
-    /// Called when eBPF cgroup_skb or kprobe hooks observe a new socket.
+    /// Called when eBPF `cgroup_skb` or kprobe hooks observe a new socket.
     /// Returns the `app_key` for the connection.
     pub fn attribute(&mut self, cookie: u64, pid: u32, exe_path: Option<&str>) -> AppKey {
         // If we've seen this socket cookie before, return existing app_key.
@@ -91,7 +100,7 @@ impl Attribution {
         }
 
         // Fallback to /proc/<pid>/exe attribution.
-        if let Some(app_key) = self.identify_by_exe(pid, exe_path) {
+        if let Some(app_key) = self.identify_by_exe(exe_path) {
             self.socket_to_app.insert(cookie, app_key);
             return app_key;
         }
@@ -120,58 +129,63 @@ impl Attribution {
     /// Flatpak, Snap).
     fn identify_by_cgroup(&mut self, pid: u32) -> Option<AppKey> {
         // Read /proc/<pid>/cgroup to get cgroup path.
-        let cgroup_path = format!("/proc/{}/cgroup", pid);
-        let cgroup_content = fs::read_to_string(&cgroup_path).ok()?;
+        let cgroup_file = format!("/proc/{pid}/cgroup");
+        let cgroup_content = fs::read_to_string(&cgroup_file).ok()?;
 
-        // Parse cgroup v2 format: "0::/system.slice/app-foo.service"
-        for line in cgroup_path.lines() {
+        // Parse cgroup v2 format: "0::/system.slice/app-foo.scope"
+        for line in cgroup_content.lines() {
             let parts: Vec<&str> = line.splitn(3, ':').collect();
-            if parts.len() >= 3 {
-                let cgroup_path = parts[2];
-                // Check for systemd app scope: /system.slice/app-*.scope
-                if let Some(app_name) = cgroup_path.strip_prefix("system.slice/app-") {
-                    if app_name.ends_with(".scope") {
-                        let app_name = &app_name[..app_name.len() - 6]; // strip .scope
-                        // Hash the cgroup path to get a stable app_key
-                        let app_key = hash_app_key(&format!("cgroup:{}", cgroup_path));
-                        if let Some(existing) = self.apps.get(&app_key) {
-                            return Some(existing.app_key);
-                        }
-                        let app_key = self.next_app_key;
-                        self.next_app_key += 1;
-                        self.apps.insert(
-                            app_key,
-                            AppIdentity {
-                                app_key,
-                                identity_kind: IdentityKind::CgroupApp,
-                                exe_path: cgroup_path.to_string(),
-                                exe_hash: None,
-                                icon_path: None,
-                                confidence: AttributionConfidence::Exact,
-                                first_seen_at: now_secs(),
-                                last_seen_at: now_secs(),
-                            },
-                        );
-                        return Some(app_key);
-                    }
-                }
+            if parts.len() < 3 {
+                continue;
             }
+            let cgroup_path = parts[2];
+            let Some(app_name) = cgroup_path.strip_prefix("system.slice/app-") else {
+                continue;
+            };
+            // Compare the extension case-insensitively (Clippy's file
+            // extension rule) without treating arbitrary suffixes as paths.
+            let Some((name, extension)) = app_name.rsplit_once('.') else {
+                continue;
+            };
+            if !extension.eq_ignore_ascii_case("scope") {
+                continue;
+            }
+            let app_key = hash_app_key(&format!("cgroup:{cgroup_path}"));
+            if let Some(existing) = self.apps.get(&app_key) {
+                return Some(existing.app_key);
+            }
+            let app_key = self.next_app_key;
+            self.next_app_key += 1;
+            self.apps.insert(
+                app_key,
+                AppIdentity {
+                    app_key,
+                    identity_kind: IdentityKind::CgroupApp,
+                    exe_path: name.to_string(),
+                    exe_hash: None,
+                    icon_path: None,
+                    confidence: AttributionConfidence::Exact,
+                    first_seen_at: now_secs(),
+                    last_seen_at: now_secs(),
+                },
+            );
+            return Some(app_key);
         }
         None
     }
 
-    /// Identify a process by reading /proc/<pid>/exe.
-    fn identify_by_exe(&mut self, pid: u32, exe_path: Option<&str>) -> Option<AppKey> {
+    /// Identify a process by its executable path.
+    fn identify_by_exe(&mut self, exe_path: Option<&str>) -> Option<AppKey> {
         let exe_path = exe_path?;
-        let exe_hash = std::fs::read(exe_path).ok().map(|b| {
+        let exe_hash = fs::read(exe_path).ok().map(|bytes| {
             use std::hash::{Hash, Hasher};
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            b.hash(&mut hasher);
+            bytes.hash(&mut hasher);
             hasher.finish()
         });
 
         // Check if we've seen this exe_path before (same app, new socket).
-        for (_, app) in self.apps.iter() {
+        for app in self.apps.values() {
             if app.exe_path == exe_path && app.identity_kind == IdentityKind::Exe {
                 return Some(app.app_key);
             }
@@ -185,7 +199,7 @@ impl Attribution {
                 app_key,
                 identity_kind: IdentityKind::Exe,
                 exe_path: exe_path.to_string(),
-                exe_hash: exe_hash.map(|h| h.to_string()),
+                exe_hash: exe_hash.map(|hash| hash.to_string()),
                 icon_path: None,
                 confidence: AttributionConfidence::Heuristic,
                 first_seen_at: now_secs(),
@@ -204,9 +218,7 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
-/// Hash a string to an app_key (u64).
+/// Hash a string to an `app_key` (u64).
 fn hash_app_key(s: &str) -> AppKey {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -216,6 +228,8 @@ fn hash_app_key(s: &str) -> AppKey {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)] // tests, not daemon paths
+
     use super::*;
 
     #[test]

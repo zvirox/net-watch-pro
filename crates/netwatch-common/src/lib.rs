@@ -273,7 +273,7 @@ mod tests {
             },
         };
         assert_eq!(
-            serde_json::to_value(&totals).unwrap(),
+            serde_json::to_value(totals).unwrap(),
             serde_json::json!({ "today": { "up": 52_428_800, "down": 934_000_000 } })
         );
     }

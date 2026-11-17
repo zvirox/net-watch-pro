@@ -9,7 +9,7 @@ use std::path::PathBuf;
 pub struct Config {
     /// DB + state directory (systemd sets it in production).
     pub data_dir: PathBuf,
-    /// Unix domain socket path for the API (NETWATCH_API_SOCKET).
+    /// Unix domain socket path for the API (`NETWATCH_API_SOCKET`).
     pub socket_path: PathBuf,
 }
 
@@ -18,6 +18,9 @@ impl Config {
     ///
     /// Fail-fast with a distinct message per class (ARCHITECTURE.md §7.1):
     /// startup is the one place a crash is acceptable.
+    // Keep the Result shape for the documented config-error exit class (§7.1)
+    // even though the current closed key list has no invalid combinations.
+    #[allow(clippy::unnecessary_wraps)]
     pub fn from_env() -> Result<Self, String> {
         let data_dir = match std::env::var("NETWATCH_DATA_DIR") {
             Ok(v) => PathBuf::from(v),

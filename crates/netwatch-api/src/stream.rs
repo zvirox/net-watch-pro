@@ -148,14 +148,13 @@ pub async fn run_connection(state: Arc<AppState>, mut stream: WebSocket) {
             delta = live_rx.recv() => {
                 match delta {
                     Ok(delta) => {
-                        if conn.subs.contains(&Channel::LiveConnections) {
-                            if stream
+                        if conn.subs.contains(&Channel::LiveConnections)
+                            && stream
                                 .send(Message::text(live_delta_obj(&delta).to_string()))
                                 .await
                                 .is_err()
-                            {
-                                break;
-                            }
+                        {
+                            break;
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(_missed)) => {

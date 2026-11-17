@@ -29,10 +29,12 @@ pub struct LivePublishers {
 /// queue (backpressure policy §10: bounded queues, never block the kernel
 /// path; losses surface via diagnostics in a later task).
 #[derive(Clone)]
+#[allow(dead_code)] // collector wiring lands with the eBPF spike tasks
 pub struct LiveEventSender {
     tx: mpsc::Sender<EpisodeEvent>,
 }
 
+#[allow(dead_code)] // collector wiring lands with the eBPF spike tasks
 impl LiveEventSender {
     /// Wrap the events half of the collector channel.
     #[must_use]
@@ -105,9 +107,9 @@ async fn run_with_cadence(
 
                 // Closes persist immediately; open episodes on the ~60 s
                 // checkpoint (F-09). One flush batch = one tx (P2.5).
-                if !closed_rows.is_empty() || sample_no % CHECKPOINT_EVERY_SAMPLES == 0 {
+                if !closed_rows.is_empty() || sample_no.is_multiple_of(CHECKPOINT_EVERY_SAMPLES) {
                     let mut batch = closed_rows;
-                    if sample_no % CHECKPOINT_EVERY_SAMPLES == 0 {
+                    if sample_no.is_multiple_of(CHECKPOINT_EVERY_SAMPLES) {
                         batch.extend(store.checkpoint_rows());
                     }
                     if !batch.is_empty() && flush_tx.send(batch).await.is_err() {
@@ -161,8 +163,7 @@ mod tests {
     #[tokio::test]
     async fn events_flow_to_snapshot_and_flush() {
         let (event_tx, event_rx) = mpsc::channel(8);
-        let (snapshot_tx, mut snapshot_rx) =
-            watch::channel(Arc::new(Vec::<LiveConnectionRow>::new()));
+        let (snapshot_tx, snapshot_rx) = watch::channel(Arc::new(Vec::<LiveConnectionRow>::new()));
         let (delta_tx, mut delta_rx) = broadcast::channel(16);
         let (flush_tx, mut flush_rx) = mpsc::channel(8);
 
@@ -203,6 +204,6 @@ mod tests {
         assert!(!batch[0].is_open);
 
         drop(event_tx); // stop the service
-        let _ = service.await.unwrap();
+        service.await.unwrap();
     }
 }

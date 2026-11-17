@@ -15,6 +15,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tauri::async_runtime::JoinHandle;
 use tauri::{Emitter, Manager, State, WebviewWindow};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 
@@ -31,7 +32,6 @@ struct LinkState(Arc<Mutex<LinkConnection>>);
 struct LinkConnection {
     sender: Option<mpsc::Sender<String>>,
     task: Option<JoinHandle<()>>,
-    generation: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -138,7 +138,6 @@ async fn daemon_http_request(
         .await
         .map_err(|_| "daemon connection failed".to_string())?;
 
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let body_bytes = body.unwrap_or_default();
     let req = format!(
         "{method} {api_path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body_bytes}",
