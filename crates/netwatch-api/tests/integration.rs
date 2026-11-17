@@ -20,7 +20,7 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use netwatch_api::state::AppState;
-use netwatch_common::{DaemonState, EbpfState, StatusSnapshot};
+use netwatch_common::{DaemonState, EbpfState, StatusSnapshot, UsageTotals};
 use serde_json::{Value, json};
 use tokio::net::UnixStream;
 use tokio::sync::watch;
@@ -34,14 +34,27 @@ fn live_feed() -> (
     netwatch_api::LiveFeed,
     tokio::sync::broadcast::Sender<netwatch_common::LiveDelta>,
 ) {
+    let (feed, deltas, _) = live_feed_with_totals();
+    (feed, deltas)
+}
+
+/// Feed with an injectable totals sender for the `usage.totals` channel test.
+fn live_feed_with_totals() -> (
+    netwatch_api::LiveFeed,
+    tokio::sync::broadcast::Sender<netwatch_common::LiveDelta>,
+    watch::Sender<Arc<UsageTotals>>,
+) {
     let (_, snapshot_rx) = watch::channel(Arc::new(Vec::new()));
     let (delta_tx, _) = tokio::sync::broadcast::channel(16);
+    let (totals_tx, totals_rx) = watch::channel(Arc::new(UsageTotals::default()));
     (
         netwatch_api::LiveFeed {
             snapshot: snapshot_rx,
             deltas: delta_tx.clone(),
+            totals: totals_rx,
         },
         delta_tx,
+        totals_tx,
     )
 }
 
@@ -73,10 +86,17 @@ pub(crate) async fn seed_history_schema(pool: &sqlx::SqlitePool) {
         .execute(pool)
         .await
         .unwrap();
-    sqlx::query("CREATE TABLE apps (id INTEGER PRIMARY KEY, name TEXT NOT NULL, icon_path TEXT)")
-        .execute(pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "CREATE TABLE apps (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL, icon_path TEXT,
+            attribution_confidence TEXT NOT NULL DEFAULT 'exact',
+            first_seen_at INTEGER NOT NULL DEFAULT 0,
+            last_seen_at INTEGER NOT NULL DEFAULT 0,
+            deleted_at INTEGER)",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
     sqlx::query(
         "CREATE TABLE connections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,6 +159,15 @@ async fn spawn_server() -> (std::path::PathBuf, watch::Sender<StatusSnapshot>) {
 async fn spawn_server_with(
     db: sqlx::SqlitePool,
 ) -> (std::path::PathBuf, watch::Sender<StatusSnapshot>) {
+    let (feed, _) = live_feed();
+    spawn_server_with_feed(db, feed).await
+}
+
+/// Boot the server with a caller-supplied feed (totals injection test).
+async fn spawn_server_with_feed(
+    db: sqlx::SqlitePool,
+    feed: netwatch_api::LiveFeed,
+) -> (std::path::PathBuf, watch::Sender<StatusSnapshot>) {
     let (tx, rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
         ebpf: EbpfState::Attached,
@@ -157,7 +186,6 @@ async fn spawn_server_with(
     let sock = dir.join("api.sock");
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-    let (feed, _) = live_feed();
     let sock_for_serve = sock.clone();
     let handle = tokio::spawn(async move {
         if let Err(e) = netwatch_api::serve_unix(&sock_for_serve, rx, feed, db, async move {
@@ -275,9 +303,11 @@ async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
     };
     let (snapshot_tx, snapshot_rx) = watch::channel(Arc::new(vec![row.clone()]));
     let (delta_tx, _) = tokio::sync::broadcast::channel(16);
+    let (_totals_tx, totals_rx) = watch::channel(Arc::new(UsageTotals::default()));
     let live = netwatch_api::LiveFeed {
         snapshot: snapshot_rx,
         deltas: delta_tx.clone(),
+        totals: totals_rx,
     };
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
@@ -374,9 +404,11 @@ async fn connections_live_rest_matches_ws_snapshot() {
     };
     let (snapshot_tx, snapshot_rx) = watch::channel(Arc::new(vec![row]));
     let (delta_tx, _) = tokio::sync::broadcast::channel(16);
+    let (_totals_tx, totals_rx) = watch::channel(Arc::new(UsageTotals::default()));
     let live = netwatch_api::LiveFeed {
         snapshot: snapshot_rx,
         deltas: delta_tx.clone(),
+        totals: totals_rx,
     };
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
@@ -440,18 +472,32 @@ async fn subscribe_status_pushes_current_then_updates_on_change() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn subscribe_usage_totals_returns_stub_update() {
-    let (sock, _tx) = spawn_server().await;
+async fn subscribe_usage_totals_streams_publisher_updates() {
+    let (feed, _deltas, totals_tx) = live_feed_with_totals();
+    let (sock, _tx) = spawn_server_with_feed(test_db().await, feed).await;
     let mut ws = ws_connect(&sock).await;
     ws_send(
         &mut ws,
         json!({ "op": "subscribe", "channel": "usage.totals" }),
     )
     .await;
-    let v = ws_next(&mut ws).await;
-    assert_eq!(v["channel"], "usage.totals");
-    assert_eq!(v["kind"], "update");
-    assert_eq!(v["data"]["today"], json!({ "up": 0, "down": 0 }));
+    let initial = ws_next(&mut ws).await;
+    assert_eq!(initial["channel"], "usage.totals");
+    assert_eq!(initial["kind"], "update");
+    assert_eq!(initial["data"]["today"], json!({ "up": 0, "down": 0 }));
+
+    totals_tx.send_replace(Arc::new(UsageTotals {
+        today: netwatch_common::DirectionTotals {
+            up: 52_428_800,
+            down: 934_000_000,
+        },
+    }));
+    let update = ws_next(&mut ws).await;
+    assert_eq!(update["channel"], "usage.totals");
+    assert_eq!(
+        update["data"]["today"],
+        json!({ "up": 52_428_800, "down": 934_000_000 })
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1112,6 +1158,116 @@ async fn usage_interfaces_rejects_invalid_queries() {
     let (sock, _tx) = spawn_server_with(db).await;
     for query in ["?since=100&until=100", "?since=200&until=100", "?bogus=1"] {
         let (status, body) = http_get(&sock, &format!("/api/v1/usage/interfaces{query}")).await;
+        assert_eq!(status, 400, "query {query}: {body}");
+        let v: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(v["error"]["code"], "QUERY_INVALID");
+    }
+}
+
+// ------------------------------------------------------- §2.4 A1 apps ranking
+
+async fn seed_apps_for_ranking(pool: &sqlx::SqlitePool) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    set_timezone(pool, "UTC").await;
+    sqlx::query(
+        "INSERT INTO apps (id, name, icon_path, attribution_confidence, first_seen_at, last_seen_at, deleted_at) VALUES
+            (1, 'Firefox', '/icons/firefox.png', 'exact', ?1, ?1, NULL),
+            (2, 'Chrome', NULL, 'heuristic', ?1, ?2, NULL),
+            (3, 'Old App', NULL, 'exact', ?1, ?1, ?1)",
+    )
+    .bind(now - 86_400)
+    .bind(now - 60)
+    .execute(pool)
+    .await
+    .unwrap();
+    let bucket = now / 900 * 900;
+    sqlx::query(
+        "INSERT INTO usage_rollup_15m (app_id, bucket_start, bytes_up, bytes_down) VALUES
+            (1, ?1, 100, 200), (2, ?1, 300, 50), (3, ?1, 900, 900)",
+    )
+    .bind(bucket)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn apps_ranking_matches_summary_and_hides_deleted() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    seed_apps_for_ranking(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/apps?sort=usage_month").await;
+    assert_eq!(status, 200, "body: {body}");
+    let rows: Value = serde_json::from_str(&body).unwrap();
+    let rows = rows.as_array().unwrap();
+    assert_eq!(rows.len(), 2, "soft-deleted app hidden by default");
+    assert_eq!(rows[0]["name"], "Chrome", "350 > 300");
+    assert_eq!(rows[0]["usage"]["month"]["up"], 300);
+    assert_eq!(rows[0]["usage"]["today"]["down"], 50);
+    assert_eq!(rows[0]["attribution_confidence"], "heuristic");
+    assert_eq!(rows[1]["icon"], "ic:1", "filesystem path must not leak");
+
+    let (_, summary_body) = http_get(&sock, "/api/v1/usage/summary?top_limit=5").await;
+    let summary: Value = serde_json::from_str(&summary_body).unwrap();
+    let top_ids: Vec<i64> = summary["top_apps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|app| app["id"].as_i64().unwrap())
+        .collect();
+    let app_ids: Vec<i64> = rows.iter().map(|app| app["id"].as_i64().unwrap()).collect();
+    assert_eq!(top_ids, app_ids, "A1 ranking must match U1 top apps");
+
+    let (status, body) = http_get(&sock, "/api/v1/apps?include_deleted=true").await;
+    assert_eq!(status, 200, "body: {body}");
+    let rows: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 3);
+    assert_eq!(rows[0]["name"], "Old App");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn apps_ranking_sorts_by_today_and_last_seen() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    seed_apps_for_ranking(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (_, body) = http_get(&sock, "/api/v1/apps?sort=usage_today").await;
+    let rows: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(rows[0]["name"], "Chrome");
+
+    let (_, body) = http_get(&sock, "/api/v1/apps?sort=last_seen_at").await;
+    let rows: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(rows[0]["name"], "Chrome", "most recent first");
+    assert_eq!(rows[1]["name"], "Firefox");
+
+    let (_, body) = http_get(&sock, "/api/v1/apps?sort=last_seen_at&order=asc").await;
+    let rows: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(rows[0]["name"], "Firefox");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn apps_ranking_rejects_invalid_queries() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+    for query in [
+        "?sort=bogus",
+        "?order=sideways",
+        "?limit=0",
+        "?limit=201",
+        "?include_deleted=maybe",
+        "?bogus=1",
+    ] {
+        let (status, body) = http_get(&sock, &format!("/api/v1/apps{query}")).await;
         assert_eq!(status, 400, "query {query}: {body}");
         let v: Value = serde_json::from_str(&body).unwrap();
         assert_eq!(v["error"]["code"], "QUERY_INVALID");

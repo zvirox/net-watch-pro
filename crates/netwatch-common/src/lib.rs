@@ -86,6 +86,22 @@ pub struct StatusSnapshot {
     pub recording: bool,
 }
 
+/// Uplink/downlink byte pair (API.md §3 `usage.totals` frame).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DirectionTotals {
+    /// Transmitted bytes (uplink).
+    pub up: u64,
+    /// Received bytes (downlink).
+    pub down: u64,
+}
+
+/// Headline totals pushed on the `usage.totals` WS channel (API.md §3).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UsageTotals {
+    /// Current local-day interface counter totals.
+    pub today: DirectionTotals,
+}
+
 /// WS channel names (API.md §3, dot-namespaced kebab-case).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Channel {
@@ -246,5 +262,19 @@ mod tests {
     fn channels_use_contract_names() {
         assert_eq!(Channel::LiveConnections.as_str(), "live.connections");
         assert_eq!(Channel::UsageTotals.as_str(), "usage.totals");
+    }
+
+    #[test]
+    fn usage_totals_match_stream_frame_shape() {
+        let totals = UsageTotals {
+            today: DirectionTotals {
+                up: 52_428_800,
+                down: 934_000_000,
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&totals).unwrap(),
+            serde_json::json!({ "today": { "up": 52_428_800, "down": 934_000_000 } })
+        );
     }
 }

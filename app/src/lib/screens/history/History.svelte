@@ -16,6 +16,7 @@
     TableCell,
   } from '$lib/components/ui';
   import { historyStore, type HistoryRow } from '$lib/stores/history.svelte';
+  import { formatBytes } from '$lib/utils/format';
 
   // Manual windowing (same approach as Live §8.4): fixed row height, render
   // only the visible slice plus overscan; spacer rows keep the scroll height
@@ -43,19 +44,6 @@
 
   function onSearchInput(event: Event): void {
     historyStore.setAppSearch((event.currentTarget as HTMLInputElement).value);
-  }
-
-  function fmtBytes(bytes: number): string {
-    if (bytes < 1024) return `${String(Math.round(bytes))} B`;
-    const units = ['KB', 'MB', 'GB', 'TB'];
-    let value = bytes / 1024;
-    let unit = 0;
-    while (value >= 1024 && unit < units.length - 1) {
-      value /= 1024;
-      unit += 1;
-    }
-    const unitLabel = units[Math.min(unit, units.length - 1)] ?? 'B';
-    return `${value >= 100 ? value.toFixed(0) : value.toFixed(1)} ${unitLabel}`;
   }
 
   function fmtDate(timestamp: number): string {
@@ -190,8 +178,8 @@
                     {/if}
                   </span>
                 </TableCell>
-                <TableCell mono numeric>{fmtBytes(row.bytes_up)}</TableCell>
-                <TableCell mono numeric>{fmtBytes(row.bytes_down)}</TableCell>
+                <TableCell mono numeric>{formatBytes(row.bytes_up)}</TableCell>
+                <TableCell mono numeric>{formatBytes(row.bytes_down)}</TableCell>
               </tr>
             {/each}
             {#if rows.length - winEnd > 0}

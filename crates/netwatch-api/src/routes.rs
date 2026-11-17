@@ -50,6 +50,18 @@ pub async fn connections_live(State(state): State<Arc<AppState>>) -> Response {
     .into_response()
 }
 
+/// `GET /apps` — A1: ranked app list (API.md §2.4).
+pub async fn apps(
+    State(state): State<Arc<AppState>>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> Response {
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    match crate::apps::apps_page(&state.db, now, raw.as_deref()).await {
+        Ok(rows) => Json(rows).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
 /// `GET /connections` — C2 history episodes: keyset pagination, whitelist
 /// filters/sort, raw window + beyond-window aggregate rows (API.md §2.2).
 /// The raw query string is parsed by hand so every error uses the §1.3
@@ -169,6 +181,7 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
             axum::routing::get(connection_by_id),
         )
         .route("/api/v1/connections", axum::routing::get(connections))
+        .route("/api/v1/apps", axum::routing::get(apps))
         .route("/api/v1/usage/summary", axum::routing::get(usage_summary))
         .route("/api/v1/usage/timeline", axum::routing::get(usage_timeline))
         .route(

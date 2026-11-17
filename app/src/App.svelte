@@ -4,6 +4,7 @@
   import StatusChip from '$lib/components/status-chip/StatusChip.svelte';
   import Live from '$lib/screens/live/Live.svelte';
   import History from '$lib/screens/history/History.svelte';
+  import Dashboard from '$lib/screens/dashboard/Dashboard.svelte';
   import { daemonStore } from '$lib/stores/daemon.svelte';
 
   let connected = $state(daemonStore.connection === 'connected');
@@ -108,75 +109,7 @@
         <History />
       {/if}
       {#if activeRoute === 'dashboard'}
-        <section class="welcome-row">
-          <div>
-            <h2>Your network, clearly in view.</h2>
-            <p>Private monitoring that stays on this device.</p>
-          </div>
-          <span class="local-badge"><span></span> LOCAL ONLY</span>
-        </section>
-        <section class="metrics" aria-label="Usage summary">
-          <article class="metric-card">
-            <div class="metric-label">DATA TODAY <span class="metric-icon">↓</span></div>
-            <strong>—</strong>
-            <p>Usage history starts in Phase 3</p>
-          </article>
-          <article class="metric-card">
-            <div class="metric-label">ACTIVE APPS <span class="metric-icon">◉</span></div>
-            <strong>—</strong>
-            <p>App attribution starts in Phase 2</p>
-          </article>
-          <article class="metric-card metric-card--status">
-            <div class="metric-label">MONITORING <span class="metric-icon">⌁</span></div>
-            <strong
-              >{daemonStore.daemon === 'monitoring'
-                ? 'On'
-                : daemonStore.daemon === 'degraded'
-                  ? 'Limited'
-                  : 'Off'}</strong
-            >
-            <p>
-              {daemonStore.recording
-                ? 'Traffic recording is active'
-                : 'Waiting for daemon connection'}
-            </p>
-          </article>
-        </section>
-        <section class="lower-grid">
-          <article class="panel timeline-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">NETWORK ACTIVITY</p>
-                <h2>Usage timeline</h2>
-              </div>
-              <span class="period">TODAY⌄</span>
-            </div>
-            <div class="empty-chart">
-              <div class="chart-glyph" aria-hidden="true">⌁</div>
-              <h3>Waiting for your first data</h3>
-              <p>Once monitoring is enabled, your activity will appear here.</p>
-              <div class="chart-baseline"></div>
-            </div>
-          </article>
-          <article class="panel apps-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">BY APPLICATION</p>
-                <h2>Top apps</h2>
-              </div>
-              <a href="#apps">View all</a>
-            </div>
-            <div class="empty-apps">
-              <div class="app-orbit" aria-hidden="true">◎</div>
-              <p>Application usage will show up here after monitoring begins.</p>
-            </div>
-            <div class="privacy-note">
-              <span>◇</span><span
-                ><strong>Your data stays yours</strong><br />Stored locally. Never sent to a server.</span
-              >
-            </div>
-          </article>
-        </section>
+        <Dashboard />
       {/if}
       <footer class="page-footer">
         <span>NET WATCH PRO <i>·</i> PRIVATE BY DESIGN</span><span
@@ -286,15 +219,13 @@
     color: var(--nwp-text-secondary);
     font-size: var(--nwp-size-label);
   }
-  .connection-dot,
-  .local-badge span {
+  .connection-dot {
     width: 7px;
     height: 7px;
     border-radius: var(--nwp-radius-full);
     background: var(--nwp-text-disabled);
   }
-  .connection-dot.online,
-  .local-badge span {
+  .connection-dot.online {
     background: var(--nwp-success);
   }
   .main-column {
@@ -358,203 +289,6 @@
     margin: 4px 0 0;
     color: var(--nwp-text-secondary);
   }
-  .welcome-row {
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
-    gap: var(--nwp-space-4);
-    margin-bottom: var(--nwp-space-6);
-  }
-  h2 {
-    margin: 0;
-    font-size: var(--nwp-size-title-2);
-    font-weight: 600;
-    letter-spacing: -0.02em;
-  }
-  .welcome-row p {
-    margin: var(--nwp-space-2) 0 0;
-    color: var(--nwp-text-secondary);
-  }
-  .local-badge {
-    display: flex;
-    align-items: center;
-    gap: var(--nwp-space-2);
-    border: 1px solid var(--nwp-border);
-    border-radius: var(--nwp-radius-full);
-    background: var(--nwp-surface);
-    padding: 6px 10px;
-    color: var(--nwp-text-secondary);
-    font-family: var(--nwp-font-mono);
-    font-size: var(--nwp-size-caption);
-    letter-spacing: 0.04em;
-  }
-  .metrics {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--nwp-space-4);
-    margin-bottom: var(--nwp-space-4);
-  }
-  .metric-card,
-  .panel {
-    border: 1px solid var(--nwp-border);
-    border-radius: var(--nwp-radius-lg);
-    background: var(--nwp-surface);
-  }
-  .metric-card {
-    min-height: 144px;
-    padding: var(--nwp-space-5);
-  }
-  .metric-label {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    color: var(--nwp-text-secondary);
-    font-family: var(--nwp-font-mono);
-    font-size: var(--nwp-size-caption);
-    letter-spacing: 0.045em;
-  }
-  .metric-icon {
-    display: grid;
-    width: 27px;
-    height: 27px;
-    place-items: center;
-    border-radius: var(--nwp-radius-md);
-    background: var(--nwp-primary-soft);
-    color: var(--nwp-primary);
-    font-size: var(--nwp-size-body);
-  }
-  .metric-card > strong {
-    display: block;
-    margin-top: var(--nwp-space-3);
-    font-family: var(--nwp-font-mono);
-    font-size: var(--nwp-size-data-lg);
-    font-weight: 600;
-  }
-  .metric-card > p {
-    margin: var(--nwp-space-1) 0 0;
-    color: var(--nwp-text-secondary);
-    font-size: var(--nwp-size-label);
-  }
-  .lower-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1.7fr) minmax(290px, 1fr);
-    gap: var(--nwp-space-4);
-  }
-  .panel {
-    min-height: 326px;
-    padding: var(--nwp-space-5);
-  }
-  .panel-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .panel-heading h2 {
-    font-size: var(--nwp-size-title-3);
-  }
-  .panel-heading a {
-    color: var(--nwp-primary);
-    text-decoration: none;
-    font-size: var(--nwp-size-label);
-  }
-  .panel-heading a:focus-visible {
-    outline: 2px solid var(--nwp-primary);
-    outline-offset: 3px;
-  }
-  .period {
-    border: 1px solid var(--nwp-border);
-    border-radius: var(--nwp-radius-md);
-    padding: 7px 9px;
-    color: var(--nwp-text-secondary);
-    font-family: var(--nwp-font-mono);
-    font-size: var(--nwp-size-caption);
-  }
-  .empty-chart {
-    position: relative;
-    display: flex;
-    min-height: 245px;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    text-align: center;
-  }
-  .chart-glyph,
-  .app-orbit {
-    display: grid;
-    width: 44px;
-    height: 44px;
-    place-items: center;
-    border-radius: var(--nwp-radius-full);
-    background: var(--nwp-surface-2);
-    color: var(--nwp-primary);
-    font-size: 25px;
-  }
-  .empty-chart h3 {
-    margin: var(--nwp-space-3) 0 var(--nwp-space-1);
-    font-size: var(--nwp-size-body);
-    font-weight: 600;
-  }
-  .empty-chart p,
-  .empty-apps p {
-    max-width: 32ch;
-    margin: 0;
-    color: var(--nwp-text-secondary);
-    font-size: var(--nwp-size-label);
-    line-height: 1.6;
-  }
-  .chart-baseline {
-    position: absolute;
-    right: 0;
-    bottom: 12px;
-    left: 0;
-    height: 48px;
-    border-bottom: 1px solid var(--nwp-border);
-    background: linear-gradient(
-      transparent 24%,
-      var(--nwp-border) 25%,
-      transparent 26%,
-      transparent 49%,
-      var(--nwp-border) 50%,
-      transparent 51%,
-      transparent 74%,
-      var(--nwp-border) 75%,
-      transparent 76%
-    );
-    opacity: 0.55;
-  }
-  .empty-apps {
-    display: flex;
-    min-height: 188px;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--nwp-space-3);
-    text-align: center;
-  }
-  .app-orbit {
-    color: var(--nwp-secondary);
-    background: var(--nwp-secondary-soft);
-  }
-  .privacy-note {
-    display: flex;
-    align-items: center;
-    gap: var(--nwp-space-3);
-    border-top: 1px solid var(--nwp-border);
-    padding-top: var(--nwp-space-4);
-    color: var(--nwp-text-secondary);
-    font-size: var(--nwp-size-caption);
-    line-height: 1.6;
-  }
-  .privacy-note > span:first-child {
-    color: var(--nwp-success);
-    font-size: 20px;
-  }
-  .privacy-note strong {
-    color: var(--nwp-text);
-    font-size: var(--nwp-size-label);
-    font-weight: 600;
-  }
   .page-footer {
     display: flex;
     justify-content: space-between;
@@ -601,33 +335,12 @@
       padding-left: var(--nwp-space-6);
     }
   }
-  @media (max-width: 900px) {
-    .lower-grid {
-      grid-template-columns: 1fr;
-    }
-    .metrics {
-      grid-template-columns: 1fr 1fr;
-    }
-    .metric-card:last-child {
-      grid-column: span 2;
-    }
-  }
   @media (max-width: 600px) {
     .topbar {
       padding: 0 var(--nwp-space-4);
     }
     .content {
       padding: var(--nwp-space-5) var(--nwp-space-4);
-    }
-    .metrics {
-      grid-template-columns: 1fr;
-    }
-    .metric-card:last-child {
-      grid-column: auto;
-    }
-    .welcome-row {
-      align-items: start;
-      flex-direction: column;
     }
     .page-footer {
       gap: var(--nwp-space-2);

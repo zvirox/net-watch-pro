@@ -132,6 +132,7 @@ async fn top_apps(
                 SUM(r.bytes_up + r.bytes_down) AS bytes_total
            FROM usage_rollup_15m r JOIN apps a ON a.id = r.app_id
           WHERE r.bucket_start >= ?1 AND r.bucket_start < ?2
+            AND a.deleted_at IS NULL
           GROUP BY a.id, a.name
           ORDER BY bytes_total DESC, a.id ASC
           LIMIT ?3",

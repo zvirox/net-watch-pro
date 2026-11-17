@@ -11,6 +11,7 @@
 // assertions is standard and expected.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod apps;
 pub mod auth;
 pub mod calendar;
 pub mod error;
@@ -25,14 +26,14 @@ pub mod usage;
 use std::path::Path;
 use std::sync::Arc;
 
-use netwatch_common::StatusSnapshot;
+use netwatch_common::{StatusSnapshot, UsageTotals};
 use tokio::net::UnixListener;
 use tokio::sync::{broadcast, watch};
 
 pub use state::AppState;
 
-/// Receiving halves of the daemon's live-data publishers
-/// (`netwatchd::live`): the current snapshot plus a broadcast of deltas.
+/// Receiving halves of the daemon's publishers (live, usage totals): the
+/// current live snapshot plus deltas, and the latest headline totals.
 /// Cloned freely; each WS connection derives its own delta receiver.
 #[derive(Clone)]
 pub struct LiveFeed {
@@ -40,6 +41,8 @@ pub struct LiveFeed {
     pub snapshot: watch::Receiver<Arc<Vec<netwatch_common::LiveConnectionRow>>>,
     /// Delta frames broadcast to every subscribed client (API.md §3).
     pub deltas: broadcast::Sender<netwatch_common::LiveDelta>,
+    /// Latest headline totals, replaced once per second (API.md §3).
+    pub totals: watch::Receiver<Arc<UsageTotals>>,
 }
 
 /// Serve the API on a Unix domain socket until `shutdown` resolves.

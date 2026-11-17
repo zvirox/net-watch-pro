@@ -1,9 +1,9 @@
 # Net Watch Pro — API.md (Local API Reference)
 
-**Version:** 1.2 · **Date:** 2026-11-15  
+**Version:** 1.2.1 · **Date:** 2026-11-17
 **Source of truth:** `PRD.md` (features, freemium gating) · `ARCHITECTURE.md` §5.3 (transport contract) · `DATABASE.md` (tables) · `docs/decisions.md` (owner decisions D1a–D5a)
 
-**Version history:** 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a).
+**Version history:** 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a).
 
 > **Binding:** every endpoint below maps to a PRD feature and a DATABASE.md table (§10 traceability matrix). Anything flagged as not doing so is explicitly justified there. Implementation of this file lives in `docs/api-contract.md` (ARCHITECTURE.md §4) and must not drift.
 
@@ -219,7 +219,7 @@ Errors: 400, 401, 404, 429.
   "month": {"total": 9864320000, "attributed": 9123456000, "unattributed": 740864000},
   "top_apps": [ {"id":1,"name":"Firefox","bytes_total":986432000} ] }
 ```
-**`total`** comes from `usage_interface_15m` (interface kernel counters — ISP-billed bytes). **`attributed`** is the sum of per-app rollups; **`unattributed`** = total − attributed (headers, ACKs, retransmits, kernel-handled/VPN traffic — shown as the "Unattributed / system" row in DESIGN.md §8.3).
+**`total`** comes from `usage_interface_15m` (interface kernel counters — ISP-billed bytes). **`attributed`** is the sum of per-app rollups; **`unattributed`** = total − attributed (headers, ACKs, retransmits, kernel-handled/VPN traffic — shown as the "Unattributed / system" row in DESIGN.md §8.3). Soft-deleted apps are excluded from `top_apps` so the ranking matches `GET /apps`.
 Errors: 401, 429, 500, 503 (no data yet → 200 with zeroed totals + `"state":"collecting"`, DESIGN.md §8.3 empty state).
 
 **U2 `GET /usage/timeline`** — dashboard chart series. Query: `?granularity=hour|day&since=&until=&interface_id=`. Shape identical to A3 minus `app_id` (system-wide). Errors: 400, 401, 429, 500.

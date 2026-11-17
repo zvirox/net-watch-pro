@@ -16,6 +16,7 @@ mod config;
 mod db;
 mod live;
 mod sampler;
+mod usage;
 
 use netwatch_common::{DaemonState, EbpfState, StatusSnapshot};
 use std::sync::Arc;
@@ -109,6 +110,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     // P4.2: interface counters use their own cadence; the first tick only
     // establishes the cumulative-counter baseline.
     let sampler_abort = sampler::spawn(pool.clone());
+    let (totals_tx, totals_abort) = usage::spawn(pool.clone());
 
     // P2.5/P2.6 wiring: live service owns the episode store; the writer
     // task persists flush batches (≤ 1 tx/s); the API serves snapshot +
@@ -172,6 +174,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
         netwatch_api::LiveFeed {
             snapshot: snapshot_rx,
             deltas: delta_tx,
+            totals: totals_tx.subscribe(),
         },
         pool,
         shutdown,
@@ -179,5 +182,6 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     .await
     .map_err(|e| StartupError::Server(format!("api server: {e}")));
     sampler_abort.abort();
+    totals_abort.abort();
     result
 }

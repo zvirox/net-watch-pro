@@ -78,15 +78,15 @@
 - [x] P4.3 `GET /usage/summary` (total/attributed/unattributed + top apps) <!-- U1 contract + IANA day/billing boundaries (D4a); 4 calendar + 3 API tests green; chrono/chrono-tz approved 2026-11-17 -->
 - [x] P4.4 `GET /usage/timeline` (15m; day/hour in configured timezone) <!-- raw+rollup seam union, local hour/day buckets, interface filter; 1 calendar + 4 API tests green -->
 - [x] P4.5 `GET /usage/interfaces` (from `usage_interface_15m`; `lo` excluded) <!-- U3 shape + local-day default range; 2 API tests green, excluded interface never returned -->
-- [ ] P4.6 ECharts token theme wrapper
-- [ ] P4.7 Dashboard screen (headline total/attributed/unattributed, timeline, top apps, Unattributed row, interfaces)
-- [ ] P4.8 `usage.totals` socket stream → headline cards
-- [ ] P4.9 Dashboard empty state
+- [x] P4.6 ECharts token theme wrapper <!-- token-derived theme + reusable Chart.svelte; verified light/dark series colors browser-side; echarts 6.1.0 approved -->
+- [x] P4.7 Dashboard screen (headline total/attributed/unattributed, timeline, top apps, Unattributed row, interfaces) <!-- U1-U3 store, Day/Hour charts, click-to-App, empty/loading/error states; browser-verified light/dark -->
+- [x] P4.8 `usage.totals` socket stream → headline cards <!-- real 1Hz publisher from U3 totals, WS subscribe on connect, live headline update; 3 Rust tests + browser frame check green -->
+- [x] P4.9 Dashboard empty state <!-- shared DESIGN §7.11 EmptyState; fresh db shows — not 0 B, three consistent empty panels; browser-verified fresh + populated -->
 - [ ] **DoD: totals equal kernel counters by construction; ≥95% attributed; tag `v0.4.0-alpha.4`**
 
 ## Phase 5 — Apps Slice → `v0.5.0-alpha.5` (~40 h)
 
-- [ ] P5.1 `GET /apps` (ranking, include_deleted)
+- [x] P5.1 `GET /apps` (ranking, include_deleted) <!-- A1 sort/limit/soft-delete contract; ranking matches U1 top apps; 3 API tests green; API.md 1.2.1 clarified -->
 - [ ] P5.2 `GET /apps/{id}` + icon resource
 - [ ] P5.3 `GET /apps/{id}/usage` + `/endpoints`
 - [ ] P5.4 App Detail screen (3 tabs)

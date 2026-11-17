@@ -14,7 +14,8 @@
     "test": "echo \"vitest lands with the first component/store test (TESTING.md §8 gate)\" && exit 0"
   },
   "dependencies": {
-    "@tauri-apps/api": "2.12.4"
+    "@tauri-apps/api": "2.12.4",
+    "echarts": "^6.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
