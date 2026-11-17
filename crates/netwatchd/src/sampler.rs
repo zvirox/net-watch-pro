@@ -35,6 +35,13 @@ pub fn spawn(pool: SqlitePool) -> tokio::task::AbortHandle {
                 // Degraded, not dead (ARCHITECTURE.md §7.1): a failed sample
                 // leaves earlier totals intact and the next tick retries.
                 warn!("interface sampling failed; totals unchanged: {e}");
+                crate::record_degraded_event(
+                    &pool,
+                    now,
+                    "INTERFACE_SAMPLE_FAILED",
+                    format!("interface sampling failed; totals unchanged: {e}"),
+                )
+                .await;
             }
         }
     })

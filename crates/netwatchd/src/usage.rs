@@ -29,7 +29,16 @@ pub fn spawn(pool: SqlitePool) -> (watch::Sender<Arc<UsageTotals>>, tokio::task:
                 Ok(totals) => {
                     publisher.send_replace(Arc::new(totals));
                 }
-                Err(e) => warn!("usage totals sample failed; keeping last values: {e}"),
+                Err(e) => {
+                    warn!("usage totals sample failed; keeping last values: {e}");
+                    crate::record_degraded_event(
+                        &pool,
+                        now,
+                        "USAGE_TOTALS_FAILED",
+                        format!("usage totals sample failed; keeping last values: {e}"),
+                    )
+                    .await;
+                }
             }
         }
     });

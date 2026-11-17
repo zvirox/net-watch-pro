@@ -228,6 +228,43 @@ pub struct LiveDelta {
     pub removed: Vec<u64>,
 }
 
+/// Severity of a daemon state/event log entry (ARCHITECTURE.md §7.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EventLevel {
+    /// Informational state change.
+    Info,
+    /// Degraded state; monitoring continues.
+    Warn,
+    /// Failure that needs diagnosis.
+    Error,
+}
+
+impl EventLevel {
+    /// Canonical database value (DATABASE.md §2.8).
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Info => "info",
+            Self::Warn => "warn",
+            Self::Error => "error",
+        }
+    }
+}
+
+/// One immutable diagnostics event (DATABASE.md §2.8).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DaemonEvent {
+    /// Severity.
+    pub level: EventLevel,
+    /// Stable taxonomy code, e.g. `EBPF_ATTACH_FAILED`.
+    pub code: String,
+    /// Human-readable explanation (≤ 2000 chars).
+    pub message: String,
+    /// Optional structured context as JSON text.
+    pub detail_json: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

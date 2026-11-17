@@ -39,7 +39,7 @@
       if (protocol !== 'all' && row.protocol !== protocol) return false;
       if (needle === '') return true;
       return (
-        row.app.name.toLowerCase().includes(needle) ||
+        displayAppName(row).toLowerCase().includes(needle) ||
         (row.process_name?.toLowerCase().includes(needle) ?? false) ||
         row.remote_ip.includes(needle) ||
         (row.remote_host?.toLowerCase().includes(needle) ?? false)
@@ -91,8 +91,23 @@
     return `${value >= 100 ? value.toFixed(0) : value.toFixed(1)} ${unitLabel}`;
   }
 
+  function displayAppName(row: LiveConnectionRow): string {
+    if (!displayAppName(row) || displayAppName(row) === 'unknown') return 'Unknown process';
+    return displayAppName(row);
+  }
+
   function appInitial(row: LiveConnectionRow): string {
-    return (row.app.name || row.process_name || '?').charAt(0).toUpperCase();
+    return displayAppName(row).charAt(0).toUpperCase();
+  }
+
+  function openApp(id: number): void {
+    window.location.hash = `apps/${String(id)}`;
+  }
+
+  function onRowKeydown(event: KeyboardEvent, id: number): void {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    openApp(id);
   }
 </script>
 
@@ -182,13 +197,34 @@
               </tr>
             {/if}
             {#each windowed as row (row.id)}
-              <tr class="live-row" in:fade={{ duration: 200 }} style="height:{ROW_H}px">
+              <tr
+                class="live-row"
+                role="link"
+                tabindex="0"
+                aria-label="Open details for {displayAppName(row)}"
+                in:fade={{ duration: 200 }}
+                style="height:{ROW_H}px"
+                onclick={() => {
+                  openApp(row.app.id);
+                }}
+                onkeydown={(event) => {
+                  onRowKeydown(event, row.app.id);
+                }}
+              >
                 <TableCell>
                   <span class="app-cell">
                     <span class="app-icon" aria-hidden="true">{appInitial(row)}</span>
                     <span class="app-name">
-                      {row.app.name}
-                      {#if row.process_name && row.process_name !== row.app.name}
+                      <a
+                        class="app-link"
+                        href="#apps/{String(row.app.id)}"
+                        onclick={(event) => {
+                          event.stopPropagation();
+                        }}
+                      >
+                        {displayAppName(row)}
+                      </a>
+                      {#if row.process_name && row.process_name !== displayAppName(row)}
                         <span class="app-process">{row.process_name}</span>
                       {/if}
                     </span>
@@ -315,6 +351,28 @@
   .live-row :global(.nwp-table-cell) {
     block-size: 100%;
     padding-block: 0;
+  }
+  .live-row {
+    cursor: pointer;
+  }
+  .live-row:hover {
+    background: var(--nwp-surface-2);
+  }
+  .live-row:focus-visible {
+    outline: 2px solid var(--nwp-primary);
+    outline-offset: -2px;
+  }
+  .app-link {
+    color: inherit;
+    text-decoration: none;
+  }
+  .app-link:hover {
+    color: var(--nwp-primary);
+    text-decoration: underline;
+  }
+  .app-link:focus-visible {
+    outline: 2px solid var(--nwp-primary);
+    outline-offset: 2px;
   }
 
   .app-cell {

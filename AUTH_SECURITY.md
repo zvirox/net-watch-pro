@@ -1,9 +1,9 @@
 # AUTH_SECURITY.md — Authentication & Security Design
 
-**Version:** 1.3 · **Date:** 2026-11-15  
+**Version:** 1.3.1 · **Date:** 2026-11-17
 **Sources:** `PRD.md` §4/§10 (non-goals, risks) · `ARCHITECTURE.md` §5.3/§7/§8.3 (API, errors, env) · `API.md` §1 (auth, roles, limits) · `DATABASE.md` §6 (access rules) · `REAPM.md` §12 (reference security model) · `docs/decisions.md` (owner decisions D1a–D5a)
 
-**Version history:** 1.3 (2026-11-15): peer-credential UID allowlist replaces per-boot token + Polkit helper (F-06/D1a); CORS/CSRF/Origin become N/A on Unix socket; capability list updated for measured set (F-05/D5a); secrets section reflects no per-boot token at rest.
+**Version history:** 1.3.1 (2026-11-17): define the offline license key wire format and embedded public-key location. 1.3 (2026-11-15): peer-credential UID allowlist replaces per-boot token + Polkit helper (F-06/D1a); CORS/CSRF/Origin become N/A on Unix socket; capability list updated for measured set (F-05/D5a); secrets section reflects no per-boot token at rest.
 
 > **Scope decision:** this is a **local-only desktop app** (PRD §4: no cloud, no accounts, no telemetry). There is no server, therefore no login/signup/password-reset surface exists. This file documents the *actual* security model and marks every classic web-auth item **N/A with a one-line reason** — inventing accounts to satisfy a template would violate PRD non-goals and add attack surface, not security.
 
@@ -56,6 +56,8 @@ The per-boot bearer token, `packaging/polkit/org.netwatchpro.token-helper.policy
 
 ### 2.4 License activation (the only credential-like flow)
 
+- Key format: `NWP1-<payload>-<signature>` with standard unpadded base64 segments. Payload bytes are version `1`, tier `1` (Pro), an 8-byte big-endian expiry (`0` = perpetual), and a 16-byte nonce. The Ed25519 signature covers the payload bytes.
+- Verifier uses the public key at `packaging/licenses/nwp-public.hex`; the private signing key stays in release infrastructure and is never committed.
 - User pastes a signed key in the Upgrade modal (DESIGN.md §8.8) → daemon verifies signature offline (embedded public key) → stores only a SHA-256 **fingerprint**, `tier`, timestamps (DATABASE.md §2.7).
 - Raw license keys are **never persisted** — one-line reason: a fingerprint proves the row corresponds to the verified key without becoming a replayable credential.
 - Deactivation (`DELETE /license`) resets to `free`; started export jobs get a grace window (FEATURES.md F9).

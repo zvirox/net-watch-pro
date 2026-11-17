@@ -5,7 +5,9 @@
   import Live from '$lib/screens/live/Live.svelte';
   import History from '$lib/screens/history/History.svelte';
   import Dashboard from '$lib/screens/dashboard/Dashboard.svelte';
+  import AppDetail from '$lib/screens/app-detail/AppDetail.svelte';
   import { daemonStore } from '$lib/stores/daemon.svelte';
+  import { appDetailStore } from '$lib/stores/app-detail.svelte';
 
   let connected = $state(daemonStore.connection === 'connected');
   const routes = [
@@ -17,8 +19,12 @@
   ];
   const navigationIcons = ['◫', '⌁', '◉', '◷', '⚙'];
   let activeRoute = $state('dashboard');
+  let selectedAppId = $state<number | null>(null);
+  const navRoute = $derived(activeRoute === 'app-detail' ? 'apps' : activeRoute);
   const routeLabel = $derived(
-    routes.find((route) => route.key === activeRoute)?.label ?? 'Dashboard',
+    activeRoute === 'app-detail'
+      ? (appDetailStore.detail?.name ?? 'App detail')
+      : (routes.find((route) => route.key === activeRoute)?.label ?? 'Dashboard'),
   );
 
   onMount(() => {
@@ -26,8 +32,18 @@
       connected = state === 'connected';
     });
     const updateRoute = () => {
-      const route = window.location.hash.slice(1);
+      const raw = window.location.hash.slice(1);
+      const [route = '', argument] = raw.split('/');
+      if (route === 'apps' && argument !== undefined) {
+        const id = Number(argument);
+        if (Number.isInteger(id) && id > 0) {
+          activeRoute = 'app-detail';
+          selectedAppId = id;
+          return;
+        }
+      }
       activeRoute = routes.some((item) => item.key === route) ? route : 'dashboard';
+      selectedAppId = null;
     };
     window.addEventListener('hashchange', updateRoute);
     updateRoute();
@@ -55,9 +71,9 @@
       <p class="nav-heading">MONITOR</p>
       {#each routes as route, index (route.key)}
         <a
-          class:active={activeRoute === route.key}
+          class:active={navRoute === route.key}
           href="#{route.key}"
-          aria-current={activeRoute === route.key ? 'page' : undefined}
+          aria-current={navRoute === route.key ? 'page' : undefined}
           onclick={() => (activeRoute = route.key)}
         >
           <span class="nav-icon" aria-hidden="true">{navigationIcons[index]}</span>
@@ -77,7 +93,13 @@
   <div class="main-column">
     <header class="topbar">
       <div>
-        <p class="eyebrow">{activeRoute === 'dashboard' ? 'OVERVIEW' : 'MONITOR'}</p>
+        <p class="eyebrow">
+          {activeRoute === 'dashboard'
+            ? 'OVERVIEW'
+            : activeRoute === 'app-detail'
+              ? 'APPS / DETAIL'
+              : 'MONITOR'}
+        </p>
         <h1>{routeLabel}</h1>
       </div>
       <div class="topbar-actions">
@@ -85,7 +107,7 @@
       </div>
     </header>
     <main class="content">
-      {#if activeRoute !== 'dashboard' && activeRoute !== 'live' && activeRoute !== 'history'}
+      {#if activeRoute !== 'dashboard' && activeRoute !== 'live' && activeRoute !== 'history' && activeRoute !== 'app-detail'}
         <section class="notice" role="status">
           <div>
             <strong>{routes.find((route) => route.key === activeRoute)?.label}</strong>
@@ -110,6 +132,9 @@
       {/if}
       {#if activeRoute === 'dashboard'}
         <Dashboard />
+      {/if}
+      {#if activeRoute === 'app-detail' && selectedAppId !== null}
+        <AppDetail appId={selectedAppId} />
       {/if}
       <footer class="page-footer">
         <span>NET WATCH PRO <i>·</i> PRIVATE BY DESIGN</span><span

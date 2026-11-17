@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path;
 use std::time::Duration;
 
+use netwatch_common::DaemonEvent;
 use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use thiserror::Error;
@@ -50,6 +51,37 @@ pub async fn open(path: &Path) -> Result<SqlitePool, DbError> {
 /// sqlx refuses unknown migration versions, which is exactly the §8 rule.
 pub async fn migrate(pool: &SqlitePool) -> Result<(), DbError> {
     sqlx::migrate!("./src/db/migrations").run(pool).await?;
+    Ok(())
+}
+
+/// Append one immutable diagnostics event and keep the newest 5,000 rows
+/// (DATABASE.md §2.8). A failed event write never replaces the original
+/// degraded-state handling; callers log the write failure.
+///
+/// # Errors
+///
+/// Propagates SQLite failures (including an over-long message).
+pub async fn record_event(pool: &SqlitePool, now: i64, event: &DaemonEvent) -> Result<(), DbError> {
+    let mut tx = pool.begin().await?;
+    sqlx::query(
+        "INSERT INTO daemon_events (
+            occurred_at, level, code, message, detail_json, created_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?1)",
+    )
+    .bind(now)
+    .bind(event.level.as_str())
+    .bind(&event.code)
+    .bind(&event.message)
+    .bind(event.detail_json.as_deref())
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM daemon_events
+          WHERE id NOT IN (SELECT id FROM daemon_events ORDER BY id DESC LIMIT 5000)",
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -555,6 +587,7 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)] // tests, not daemon paths
 
     use super::*;
+    use netwatch_common::EventLevel;
 
     /// Fresh database → migrations 0001+0002 applied, tables + seeds exist
     /// (P2.4 acceptance, DATABASE.md §8).
@@ -610,14 +643,18 @@ mod tests {
         assert_eq!(connections, 1);
 
         // All migrations recorded in the human ledger (DATABASE.md §2.1):
-        // 0001 init_core, 0002 apps_connections, 0003 rollups.
+        // 0001 init_core, 0002 apps_connections, 0003 rollups, 0004 daemon_events.
         let rows: Vec<(i64, String)> =
             sqlx::query_as("SELECT version, name FROM schema_migrations ORDER BY version")
                 .fetch_all(&pool)
                 .await
                 .unwrap();
         println!("schema_migrations rows: {rows:?}");
-        assert_eq!(rows.len(), 3);
+        assert_eq!(rows.len(), 4);
+        assert_eq!(
+            rows.last().map(|(_, name)| name.as_str()),
+            Some("daemon_events")
+        );
         // Rollup tables + the deferred remote-host index exist (§2.5/§5).
         let rollups: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table'
@@ -627,6 +664,15 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(rollups, 3);
+        let (events_table, events_index): (i64, i64) = sqlx::query_as(
+            "SELECT
+                (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='daemon_events'),
+                (SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_daemon_events_occurred')",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!((events_table, events_index), (1, 1));
     }
 
     /// §8 runtime rules hold on a fresh open: WAL + `foreign_keys` ON.
@@ -903,5 +949,54 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(raw, 1);
+    }
+
+    /// P6.1: diagnostics events are appended as immutable rows and the
+    /// newest-5,000 ring is enforced (DATABASE.md §2.8).
+    #[tokio::test]
+    async fn daemon_events_are_bounded() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(SqliteConnectOptions::new().in_memory(true))
+            .await
+            .unwrap();
+        migrate(&pool).await.unwrap();
+        for index in 0..5_001 {
+            record_event(
+                &pool,
+                1_000 + index,
+                &DaemonEvent {
+                    level: EventLevel::Warn,
+                    code: "EBPF_ATTACH_FAILED".to_string(),
+                    message: format!("attach failed {index}"),
+                    detail_json: None,
+                },
+            )
+            .await
+            .unwrap();
+        }
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM daemon_events")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 5_000);
+        let (code, level, occurred_at, created_at): (String, String, i64, i64) = sqlx::query_as(
+            "SELECT code, level, occurred_at, created_at
+                   FROM daemon_events ORDER BY id DESC LIMIT 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(code, "EBPF_ATTACH_FAILED");
+        assert_eq!(level, "warn");
+        assert_eq!(occurred_at, 6_000);
+        assert_eq!(created_at, 6_000);
+        let oldest: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM daemon_events WHERE message = 'attach failed 0'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(oldest, 0, "oldest row must be pruned");
     }
 }

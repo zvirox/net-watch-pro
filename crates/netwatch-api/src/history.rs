@@ -844,18 +844,12 @@ pub async fn connections_page(
     // Free-tier gate against the license table (DATABASE.md §6: gating is
     // never UI-only).
     let required = pro_required_filters(&q);
-    if !required.is_empty() {
-        let tier: Option<String> = sqlx::query_scalar("SELECT tier FROM license WHERE id = 1")
-            .fetch_optional(pool)
-            .await
-            .map_err(db_error)?;
-        if tier.as_deref() != Some("pro") {
-            return Err(ApiError::new(
-                ErrorCode::ExportProRequired,
-                axum::http::StatusCode::FORBIDDEN,
-                format!("Pro required for: {}", required.join(", ")),
-            ));
-        }
+    if !required.is_empty() && !crate::license::is_pro(pool).await? {
+        return Err(ApiError::new(
+            ErrorCode::ExportProRequired,
+            axum::http::StatusCode::FORBIDDEN,
+            format!("Pro required for: {}", required.join(", ")),
+        ));
     }
 
     let raw_window_days: Option<String> =

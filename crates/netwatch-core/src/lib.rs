@@ -8,4 +8,5 @@ pub mod accounting;
 pub mod attribution;
 pub mod episode;
 pub mod interfaces;
+pub mod license;
 pub mod retention;

@@ -17,7 +17,9 @@ pub mod calendar;
 pub mod error;
 pub mod history;
 pub mod interfaces_usage;
+pub mod license;
 pub mod routes;
+pub mod settings;
 pub mod state;
 pub mod stream;
 pub mod timeline;
@@ -56,7 +58,7 @@ pub struct LiveFeed {
 /// allowed-UID list. One admin prompt at onboarding, none per launch (D1a).
 pub async fn serve_unix(
     socket_path: &Path,
-    status: watch::Receiver<StatusSnapshot>,
+    status_tx: watch::Sender<StatusSnapshot>,
     live: LiveFeed,
     db: sqlx::SqlitePool,
     shutdown: impl std::future::Future<Output = ()> + Send + 'static,
@@ -72,7 +74,8 @@ pub async fn serve_unix(
         )
     })?;
 
-    let state = Arc::new(AppState::new(status, live, db));
+    let status_rx = status_tx.subscribe();
+    let state = Arc::new(AppState::new(status_tx, status_rx, live, db));
     let app = crate::routes::router(state).into_make_service();
 
     axum::serve(listener, app)

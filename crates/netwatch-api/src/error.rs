@@ -72,6 +72,18 @@ impl ApiError {
     pub fn query_invalid(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::QueryInvalid, StatusCode::BAD_REQUEST, message)
     }
+
+    /// 403 — offline license key rejected (bad signature, payload, or expiry).
+    #[must_use]
+    pub fn license_invalid(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::LicenseInvalid, StatusCode::FORBIDDEN, message)
+    }
+
+    /// 409 — conflicting state, e.g. activating an already-Pro license.
+    #[must_use]
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::Conflict, StatusCode::CONFLICT, message)
+    }
 }
 
 impl IntoResponse for ApiError {

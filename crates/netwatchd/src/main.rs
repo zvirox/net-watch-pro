@@ -18,7 +18,7 @@ mod live;
 mod sampler;
 mod usage;
 
-use netwatch_common::{DaemonState, EbpfState, StatusSnapshot};
+use netwatch_common::{DaemonEvent, DaemonState, EbpfState, EventLevel, StatusSnapshot};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, mpsc, watch};
@@ -29,6 +29,35 @@ enum StartupError {
     Db(db::DbError),
     /// API server failed — server class.
     Server(String),
+}
+
+/// Record a degraded-state event without letting diagnostics writes break the
+/// daemon path that discovered the problem (ARCHITECTURE.md §7.1).
+pub(crate) async fn record_degraded_event(
+    pool: &sqlx::SqlitePool,
+    now: i64,
+    code: &str,
+    message: String,
+) {
+    let event = DaemonEvent {
+        level: EventLevel::Warn,
+        code: code.to_string(),
+        message,
+        detail_json: None,
+    };
+    if let Err(e) = db::record_event(pool, now, &event).await {
+        tracing::warn!("cannot record daemon event {code}: {e}");
+    }
+}
+
+fn epoch_now() -> i64 {
+    i64::try_from(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+    )
+    .unwrap_or_default()
 }
 
 fn main() {
@@ -87,13 +116,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     // P4.1: compact raw episodes that already aged past the raw window on
     // boot. A failure is degraded state, never a startup failure (§7.1);
     // P7.1's scheduled pruner will own recurring runs.
-    let now = i64::try_from(
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs(),
-    )
-    .unwrap_or_default();
+    let now = epoch_now();
     match db::compact_old_connections(&pool, now, netwatch_core::retention::DEFAULT_ENDPOINT_CAP)
         .await
     {
@@ -104,7 +127,16 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
             "raw-window compaction complete"
         ),
         Ok(_) => {}
-        Err(e) => tracing::warn!("compaction failed; raw rows kept: {e}"),
+        Err(e) => {
+            tracing::warn!("compaction failed; raw rows kept: {e}");
+            record_degraded_event(
+                &pool,
+                now,
+                "COMPACTION_FAILED",
+                format!("compaction failed; raw rows kept: {e}"),
+            )
+            .await;
+        }
     }
 
     // P4.2: interface counters use their own cadence; the first tick only
@@ -143,18 +175,20 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
             // next checkpoint upserts absolute totals — no accumulation
             // error possible.
             if let Err(e) = db::persist_episodes(&writer_pool, &batch).await {
-                tracing::warn!("episode flush failed ({} rows): {e}", batch.len());
+                let message = format!("episode flush failed ({} rows): {e}", batch.len());
+                tracing::warn!("{message}");
+                record_degraded_event(&writer_pool, epoch_now(), "EPISODE_WRITE_FAILED", message)
+                    .await;
             }
         }
         tracing::info!("writer task stopped");
     });
 
-    let (status_tx, status_rx) = watch::channel(StatusSnapshot {
+    let (status_tx, _status_rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
         ebpf: EbpfState::Attached,
         recording: true,
     });
-    let _ = status_tx; // Phase 2 tasks will publish changes through this
 
     // Install signal handlers up front (fail-fast on handler errors).
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
@@ -170,7 +204,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     tracing::info!("serving API on {}", cfg.socket_path.display());
     let result = netwatch_api::serve_unix(
         &cfg.socket_path,
-        status_rx,
+        status_tx,
         netwatch_api::LiveFeed {
             snapshot: snapshot_rx,
             deltas: delta_tx,

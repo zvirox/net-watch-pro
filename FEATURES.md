@@ -128,7 +128,7 @@ Covers: *"As a metered-connection user, I want to see today's and this month's d
 
 ### Acceptance criteria
 - [ ] Daily totals equal kernel interface counters by construction; ≥95% of bytes attributed; unattributed row shows gap (accuracy harness)
-- [ ] Top apps order matches summary; click-through routes to F4
+- [x] Top apps order matches summary; click-through routes to F4
 - [x] Compaction preserves totals (raw + rollup = constant across the seam)
 - [ ] Soft-deleted app's history still resolves name/icon
 - [ ] Timezone caption correct on day/month boundaries
@@ -208,7 +208,7 @@ Loading: per-tab skeletons. Empty (brand-new app with no bytes yet): tab-specifi
 - [ ] All three tabs populated from real data; tabs keyboard-navigable (§9.3)
 - [ ] Click-through works from Dashboard and Live
 - [ ] Soft-deleted/pruned cases render honestly with captions
-- [ ] Unknown-icon fallback shown; confidence badge on non-exact attribution
+- [x] Unknown-icon fallback shown; confidence badge on non-exact attribution
 - [ ] Endpoint ranking matches manual SQL spot-check
 
 ---

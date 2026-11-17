@@ -32,7 +32,7 @@ Status mapping: 400 QUERY_INVALID · 401 AUTH_INVALID · 403 PERMISSION_DENIED/E
 | System | `GET /health` (no auth) · `GET /status` · `GET /diagnostics` · `GET /events` |
 | Connections | `GET /connections` · `GET /connections/{id}` · `GET /connections/live` |
 | Exports (Pro) | `POST /exports` · `GET /exports/{id}` · `GET /exports/{id}/content` |
-| Apps | `GET /apps` · `GET /apps/{id}` · `GET /apps/{id}/usage` · `GET /apps/{id}/endpoints` |
+| Apps | `GET /apps` · `GET /apps/{id}` · `GET /apps/{id}/icon` · `GET /apps/{id}/usage` · `GET /apps/{id}/endpoints` |
 | Usage | `GET /usage/summary` · `GET /usage/timeline` · `GET /usage/interfaces` |
 | Interfaces | `GET /interfaces` · `PATCH /interfaces/{id}` |
 | Settings | `GET /settings` · `PUT /settings/{key}` |

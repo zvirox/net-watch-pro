@@ -18,6 +18,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use netwatch_api::state::AppState;
 use netwatch_common::{DaemonState, EbpfState, StatusSnapshot, UsageTotals};
@@ -71,16 +72,38 @@ async fn test_db() -> sqlx::SqlitePool {
 /// Minimal history schema for tests (mirrors migrations 0001–0003 columns
 /// the history queries touch).
 pub(crate) async fn seed_history_schema(pool: &sqlx::SqlitePool) {
-    sqlx::query("CREATE TABLE license (id INTEGER PRIMARY KEY CHECK (id = 1), tier TEXT NOT NULL DEFAULT 'free')")
-        .execute(pool).await.unwrap();
-    sqlx::query("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("INSERT INTO settings (key, value) VALUES ('raw_window_days', '7')")
-        .execute(pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "CREATE TABLE license (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            tier TEXT NOT NULL DEFAULT 'free',
+            key_fingerprint TEXT,
+            activated_at INTEGER,
+            expires_at INTEGER,
+            signature_verified_at INTEGER,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0)",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "CREATE TABLE settings (
+            key TEXT PRIMARY KEY, value TEXT NOT NULL,
+            created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO settings (key, value) VALUES
+            ('retention_days', '90'), ('start_on_boot', '1'),
+            ('theme_default', 'system'), ('metered_policy', 'ask'),
+            ('raw_window_days', '7'), ('timezone', 'UTC'),
+            ('billing_cycle_day', '1')",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
     sqlx::query("INSERT INTO license (id, tier) VALUES (1, 'free')")
         .execute(pool)
         .await
@@ -88,6 +111,7 @@ pub(crate) async fn seed_history_schema(pool: &sqlx::SqlitePool) {
     sqlx::query(
         "CREATE TABLE apps (
             id INTEGER PRIMARY KEY, name TEXT NOT NULL, icon_path TEXT,
+            exe_path TEXT NOT NULL DEFAULT '',
             attribution_confidence TEXT NOT NULL DEFAULT 'exact',
             first_seen_at INTEGER NOT NULL DEFAULT 0,
             last_seen_at INTEGER NOT NULL DEFAULT 0,
@@ -167,7 +191,7 @@ async fn spawn_server_with_feed(
     db: sqlx::SqlitePool,
     feed: netwatch_api::LiveFeed,
 ) -> (std::path::PathBuf, watch::Sender<StatusSnapshot>) {
-    let (tx, rx) = watch::channel(StatusSnapshot {
+    let (tx, _rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
         ebpf: EbpfState::Attached,
         recording: true,
@@ -186,8 +210,9 @@ async fn spawn_server_with_feed(
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let sock_for_serve = sock.clone();
+    let serve_tx = tx.clone();
     let handle = tokio::spawn(async move {
-        if let Err(e) = netwatch_api::serve_unix(&sock_for_serve, rx, feed, db, async move {
+        if let Err(e) = netwatch_api::serve_unix(&sock_for_serve, serve_tx, feed, db, async move {
             let _ = shutdown_rx.await;
         })
         .await
@@ -275,7 +300,7 @@ async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
     std::fs::create_dir_all(&dir).unwrap();
     let sock = dir.join("api.sock");
 
-    let (_status_tx, status_rx) = watch::channel(StatusSnapshot {
+    let (status_tx, _status_rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
         ebpf: EbpfState::Attached,
         recording: true,
@@ -313,7 +338,7 @@ async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
     let serve_sock = sock.clone();
     let handle = tokio::spawn(async move {
         let db = test_db().await;
-        let _ = netwatch_api::serve_unix(&serve_sock, status_rx, live, db, async move {
+        let _ = netwatch_api::serve_unix(&serve_sock, status_tx, live, db, async move {
             let _ = shutdown_rx.await;
         })
         .await;
@@ -376,7 +401,7 @@ async fn connections_live_rest_matches_ws_snapshot() {
     std::fs::create_dir_all(&dir).unwrap();
     let sock = dir.join("api.sock");
 
-    let (_status_tx, status_rx) = watch::channel(StatusSnapshot {
+    let (status_tx, _status_rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
         ebpf: EbpfState::Attached,
         recording: true,
@@ -414,7 +439,7 @@ async fn connections_live_rest_matches_ws_snapshot() {
     let serve_sock = sock.clone();
     let handle = tokio::spawn(async move {
         let db = test_db().await;
-        let _ = netwatch_api::serve_unix(&serve_sock, status_rx, live, db, async move {
+        let _ = netwatch_api::serve_unix(&serve_sock, status_tx, live, db, async move {
             let _ = shutdown_rx.await;
         })
         .await;
@@ -562,6 +587,78 @@ async fn http_get(sock: &std::path::Path, path: &str) -> (u16, String) {
     (status, body)
 }
 
+/// Raw GET that preserves binary bytes and response headers (icon resource).
+async fn http_get_raw(sock: &std::path::Path, path: &str) -> (u16, Option<String>, Vec<u8>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = UnixStream::connect(sock).await.unwrap();
+    let request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        let n = stream.read(&mut chunk).await.unwrap();
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        assert!(buf.len() <= 64 * 1024, "response exceeds 64 KiB bound");
+    }
+    let split = buf
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .expect("no HTTP header terminator");
+    let head = String::from_utf8_lossy(&buf[..split]);
+    let status: u16 = head
+        .split_whitespace()
+        .nth(1)
+        .and_then(|value| value.parse().ok())
+        .expect("no HTTP status line");
+    let content_type = head.lines().find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        name.eq_ignore_ascii_case("content-type")
+            .then(|| value.trim().to_string())
+    });
+    (status, content_type, buf[split + 4..].to_vec())
+}
+
+/// Raw HTTP request against an explicit socket path.
+async fn http_request_at(
+    socket: &std::path::Path,
+    method: &str,
+    path: &str,
+    body: Option<&str>,
+) -> (u16, String) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = UnixStream::connect(socket).await.unwrap();
+    let body_text = body.unwrap_or("");
+    let request = format!(
+        "{method} {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body_text}",
+        body_text.len()
+    );
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        let n = stream.read(&mut chunk).await.unwrap();
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        assert!(buf.len() <= 64 * 1024, "response exceeds 64 KiB bound");
+    }
+    let text = String::from_utf8(buf).unwrap();
+    let status: u16 = text
+        .split_whitespace()
+        .nth(1)
+        .and_then(|value| value.parse().ok())
+        .expect("no HTTP status line");
+    let body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body.to_string())
+        .unwrap_or_default();
+    (status, body)
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn health_over_socket_returns_contract_shape() {
     let (sock, _tx) = spawn_server().await;
@@ -631,12 +728,12 @@ async fn wrong_method_over_socket_is_405_envelope() {
 /// WS client counting feeds `ws_clients` in `GET /status` (S2).
 #[tokio::test]
 async fn client_counting_bumps_status_counter() {
-    let (_tx, rx) = watch::channel(StatusSnapshot {
+    let (tx, rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
         ebpf: EbpfState::Attached,
         recording: true,
     });
-    let state = Arc::new(AppState::new(rx, live_feed().0, test_db().await));
+    let state = Arc::new(AppState::new(tx, rx, live_feed().0, test_db().await));
     state.client_delta(1);
     assert_eq!(state.client_count(), 1);
     state.client_delta(-1);
@@ -659,7 +756,7 @@ async fn stale_socket_file_is_removed_before_bind() {
     // Pre-existing regular file at the socket path → serve must clear it.
     std::fs::write(&sock, b"stale").unwrap();
 
-    let (_stale_tx, rx) = watch::channel(StatusSnapshot {
+    let (stale_tx, _rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
         ebpf: EbpfState::Attached,
         recording: true,
@@ -669,7 +766,7 @@ async fn stale_socket_file_is_removed_before_bind() {
     let serve_sock = sock.clone();
     let handle = tokio::spawn(async move {
         let db = test_db().await;
-        let _ = netwatch_api::serve_unix(&serve_sock, rx, feed, db, async move {
+        let _ = netwatch_api::serve_unix(&serve_sock, stale_tx, feed, db, async move {
             let _ = shutdown_rx.await;
         })
         .await;
@@ -920,11 +1017,14 @@ async fn usage_summary_rejects_invalid_top_limit() {
 // ---------------------------------------------------- §2.5 U2 usage timeline
 
 async fn set_timezone(pool: &sqlx::SqlitePool, name: &str) {
-    sqlx::query("INSERT INTO settings (key, value) VALUES ('timezone', ?1)")
-        .bind(name)
-        .execute(pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "INSERT INTO settings (key, value) VALUES ('timezone', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    )
+    .bind(name)
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 async fn insert_rollup(pool: &sqlx::SqlitePool, bucket: i64, up: i64, down: i64, connections: i64) {
@@ -1273,4 +1373,407 @@ async fn apps_ranking_rejects_invalid_queries() {
         let v: Value = serde_json::from_str(&body).unwrap();
         assert_eq!(v["error"]["code"], "QUERY_INVALID");
     }
+}
+
+// ------------------------------------------------------- §2.4 A2 app detail
+
+struct IconFixture {
+    path: std::path::PathBuf,
+}
+
+impl IconFixture {
+    fn new(bytes: &[u8]) -> Self {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("nwp-icon-{}-{nonce}.png", std::process::id()));
+        std::fs::write(&path, bytes).unwrap();
+        Self { path }
+    }
+}
+
+impl Drop for IconFixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn app_detail_returns_a2_shape_including_soft_deleted() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    set_timezone(&db, "UTC").await;
+    let icon = IconFixture::new(b"PNGPAYLOAD");
+    sqlx::query(
+        "INSERT INTO apps (id, name, icon_path, exe_path, attribution_confidence, first_seen_at, last_seen_at, deleted_at)
+         VALUES (?1, 'Firefox', ?2, '/usr/bin/firefox', 'exact', 1000, 2000, NULL),
+                (2, 'Old App', NULL, '/usr/bin/old', 'heuristic', 500, 900, 5000)",
+    )
+    .bind(1)
+    .bind(icon.path.to_string_lossy().as_ref())
+    .execute(&db)
+    .await
+    .unwrap();
+    let bucket = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        / 900
+        * 900;
+    sqlx::query(
+        "INSERT INTO usage_rollup_15m (app_id, bucket_start, bytes_up, bytes_down)
+         VALUES (1, ?1, 10, 20)",
+    )
+    .bind(i64::try_from(bucket).unwrap())
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let (sock, _tx) = spawn_server_with(db).await;
+    let (status, body) = http_get(&sock, "/api/v1/apps/1").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["id"], 1);
+    assert_eq!(v["name"], "Firefox");
+    assert_eq!(v["icon"], "ic:1");
+    assert_eq!(v["exe_path"], "/usr/bin/firefox");
+    assert!(v["deleted_at"].is_null());
+    assert_eq!(v["usage"]["today"]["up"], 10);
+    assert_eq!(v["usage"]["month"]["down"], 20);
+
+    let (status, body) = http_get(&sock, "/api/v1/apps/2").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["deleted_at"], 5000);
+    assert_eq!(v["exe_path"], "/usr/bin/old");
+
+    let (status, body) = http_get(&sock, "/api/v1/apps/999").await;
+    assert_eq!(status, 404, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "NOT_FOUND");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn app_icon_serves_registered_image_and_falls_back_on_missing() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    let icon = IconFixture::new(b"PNGPAYLOAD");
+    sqlx::query(
+        "INSERT INTO apps (id, name, icon_path) VALUES
+            (1, 'Firefox', ?1),
+            (2, 'No Icon', NULL),
+            (3, 'Not Image', 'notes.txt')",
+    )
+    .bind(icon.path.to_string_lossy().as_ref())
+    .execute(&db)
+    .await
+    .unwrap();
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, content_type, bytes) = http_get_raw(&sock, "/api/v1/apps/1/icon").await;
+    assert_eq!(status, 200);
+    assert_eq!(content_type.as_deref(), Some("image/png"));
+    assert_eq!(bytes, b"PNGPAYLOAD");
+
+    for path in [
+        "/api/v1/apps/2/icon",
+        "/api/v1/apps/3/icon",
+        "/api/v1/apps/999/icon",
+        "/api/v1/apps/not-a-number/icon",
+    ] {
+        let (status, _, _) = http_get_raw(&sock, path).await;
+        assert_eq!(status, 404, "unexpected success for {path}");
+    }
+}
+
+// ------------------------------------------------- §2.4 A3/A4 app analytics
+
+#[tokio::test(flavor = "multi_thread")]
+async fn app_usage_merges_raw_and_rollup_for_one_app() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    set_timezone(&db, "UTC").await;
+    sqlx::query("INSERT INTO apps (id, name) VALUES (1, 'Firefox'), (2, 'Chrome')")
+        .execute(&db)
+        .await
+        .unwrap();
+    let now = i64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    )
+    .unwrap();
+    let cutoff = now - 7 * 86_400;
+    let since = cutoff - 7_200;
+    let until = cutoff + 7_200;
+    sqlx::query(
+        "INSERT INTO usage_rollup_15m (app_id, bucket_start, bytes_up, bytes_down, connection_count)
+         VALUES (1, ?1, 100, 200, 3), (2, ?1, 9999, 9999, 9)",
+    )
+    .bind(cutoff - 3_600)
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO connections (app_id, pid, protocol, local_ip, local_port,
+                                  remote_ip, remote_port, bytes_up, bytes_down,
+                                  first_seen_at, last_seen_at)
+         VALUES (1, 42, 'tcp', '10.0.0.2', 51000, '198.51.100.1', 443,
+                 10, 20, ?1, ?2),
+                (2, 42, 'tcp', '10.0.0.2', 51000, '198.51.100.1', 443,
+                 9999, 9999, ?1, ?2)",
+    )
+    .bind(cutoff)
+    .bind(cutoff + 60)
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let (sock, _tx) = spawn_server_with(db).await;
+    let path = format!("/api/v1/apps/1/usage?granularity=hour&since={since}&until={until}");
+    let (status, body) = http_get(&sock, &path).await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["granularity"], "hour");
+    let data = v["data"].as_array().unwrap();
+    let up: i64 = data.iter().map(|row| row["up"].as_i64().unwrap()).sum();
+    let down: i64 = data.iter().map(|row| row["down"].as_i64().unwrap()).sum();
+    let connections: i64 = data
+        .iter()
+        .map(|row| row["connections"].as_i64().unwrap())
+        .sum();
+    assert_eq!((up, down, connections), (110, 220, 4), "app 2 data leaked");
+
+    let (status, body) = http_get(&sock, "/api/v1/apps/999/usage").await;
+    assert_eq!(status, 404, "body: {body}");
+    let (status, body) = http_get(&sock, "/api/v1/apps/1/usage?granularity=week").await;
+    assert_eq!(status, 400, "body: {body}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn app_endpoints_merge_raw_and_aggregate_rows() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    set_timezone(&db, "UTC").await;
+    sqlx::query("INSERT INTO apps (id, name) VALUES (1, 'Firefox')")
+        .execute(&db)
+        .await
+        .unwrap();
+    let now = i64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    )
+    .unwrap();
+    let cutoff = now - 7 * 86_400;
+    sqlx::query(
+        "INSERT INTO connections (app_id, pid, protocol, local_ip, local_port,
+                                  remote_ip, remote_port, remote_host, bytes_up,
+                                  bytes_down, first_seen_at, last_seen_at)
+         VALUES (1, 42, 'tcp', '10.0.0.2', 51000, '198.51.100.1', 443,
+                 'example.com', 100, 200, ?1, ?2)",
+    )
+    .bind(now - 120)
+    .bind(now - 60)
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO usage_endpoint_day (
+            app_id, bucket_start, remote_ip, remote_port, protocol,
+            bytes_up, bytes_down, connection_count, first_seen_at, last_seen_at
+         ) VALUES
+            (1, ?1, '198.51.100.1', 443, 'tcp', 1000, 2000, 5, ?2, ?2),
+            (1, ?1, '203.0.113.9', 80, 'tcp', 500, 0, 2, ?2, ?2)",
+    )
+    .bind(cutoff - 86_400)
+    .bind(cutoff - 100)
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let (sock, _tx) = spawn_server_with(db).await;
+    let (status, body) = http_get(&sock, "/api/v1/apps/1/endpoints").await;
+    assert_eq!(status, 200, "body: {body}");
+    let rows: Value = serde_json::from_str(&body).unwrap();
+    let rows = rows.as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["remote_ip"], "198.51.100.1");
+    assert_eq!(rows[0]["remote_host"], "example.com");
+    assert_eq!(rows[0]["port"], 443);
+    assert_eq!(rows[0]["bytes_total"], 3300);
+    assert_eq!(rows[0]["connections"], 6);
+    assert_eq!(rows[0]["last_seen_at"], now - 60);
+    assert_eq!(rows[1]["remote_ip"], "203.0.113.9");
+    assert_eq!(rows[1]["bytes_total"], 500);
+
+    let (status, body) = http_get(&sock, "/api/v1/apps/999/endpoints").await;
+    assert_eq!(status, 404, "body: {body}");
+    for query in ["?limit=0", "?limit=101", "?order=connections", "?bogus=1"] {
+        let (status, body) = http_get(&sock, &format!("/api/v1/apps/1/endpoints{query}")).await;
+        assert_eq!(status, 400, "query {query}: {body}");
+        let v: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(v["error"]["code"], "QUERY_INVALID");
+    }
+}
+
+// -------------------------------------------------------- §2.8 License L1-L3
+
+#[tokio::test(flavor = "multi_thread")]
+async fn license_state_is_free_and_rejects_bad_keys() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/license").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["tier"], "free");
+    assert_eq!(v["entitlements"]["advanced_filters"], false);
+    assert_eq!(v["entitlements"]["export"], false);
+    assert_eq!(v["entitlements"]["retention_max_days"], 90);
+
+    let (status, body) = http_request_at(
+        &sock,
+        "POST",
+        "/api/v1/license/activate",
+        Some(r#"{"key":"BAD-KEY"}"#),
+    )
+    .await;
+    assert_eq!(status, 400, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "QUERY_INVALID");
+
+    let payload = base64::engine::general_purpose::STANDARD_NO_PAD.encode(vec![0_u8; 26]);
+    let signature = base64::engine::general_purpose::STANDARD_NO_PAD.encode(vec![0_u8; 64]);
+    let fake_key = format!("NWP1-{payload}-{signature}");
+    let body_json = format!(r#"{{"key":"{fake_key}"}}"#);
+    let (status, body) =
+        http_request_at(&sock, "POST", "/api/v1/license/activate", Some(&body_json)).await;
+    assert_eq!(status, 403, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "LICENSE_INVALID");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn license_conflict_and_deactivate_broadcasts_status() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    sqlx::query("UPDATE license SET tier = 'pro'")
+        .execute(&db)
+        .await
+        .unwrap();
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/license").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["tier"], "pro");
+    assert_eq!(v["entitlements"]["retention_max_days"], 365);
+
+    let (status, body) = http_request_at(
+        &sock,
+        "POST",
+        "/api/v1/license/activate",
+        Some(r#"{"key":"NWP1-A-B"}"#),
+    )
+    .await;
+    assert_eq!(status, 409, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "CONFLICT");
+
+    let mut ws = ws_connect(&sock).await;
+    ws_send(&mut ws, json!({ "op": "subscribe", "channel": "status" })).await;
+    let _initial = ws_next(&mut ws).await;
+
+    let (status, body) = http_request_at(&sock, "DELETE", "/api/v1/license", None).await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["tier"], "free");
+    let update = ws_next(&mut ws).await;
+    assert_eq!(update["channel"], "status");
+}
+
+// ------------------------------------------------------- §2.7 Settings T1/T2
+
+#[tokio::test(flavor = "multi_thread")]
+async fn settings_list_and_free_retention_ceiling() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/settings").await;
+    assert_eq!(status, 200, "body: {body}");
+    let rows: Value = serde_json::from_str(&body).unwrap();
+    let rows = rows.as_array().unwrap();
+    assert_eq!(rows.len(), 7);
+    let retention = rows
+        .iter()
+        .find(|row| row["key"] == "retention_days")
+        .unwrap();
+    assert_eq!(retention["max"], 90);
+    assert_eq!(retention["pro_max"], 365);
+
+    let (status, body) = http_request_at(
+        &sock,
+        "PUT",
+        "/api/v1/settings/retention_days",
+        Some(r#"{"value":120}"#),
+    )
+    .await;
+    assert_eq!(status, 403, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "EXPORT_PRO_REQUIRED");
+
+    let (status, body) = http_request_at(
+        &sock,
+        "PUT",
+        "/api/v1/settings/retention_days",
+        Some(r#"{"value":"many"}"#),
+    )
+    .await;
+    assert_eq!(status, 400, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "QUERY_INVALID");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pro_retention_above_90_is_allowed() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    sqlx::query("UPDATE license SET tier = 'pro'")
+        .execute(&db)
+        .await
+        .unwrap();
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_request_at(
+        &sock,
+        "PUT",
+        "/api/v1/settings/retention_days",
+        Some(r#"{"value":120}"#),
+    )
+    .await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["value"], 120);
+
+    let (status, body) = http_get(&sock, "/api/v1/settings").await;
+    assert_eq!(status, 200, "body: {body}");
+    let rows: Value = serde_json::from_str(&body).unwrap();
+    let retention = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["key"] == "retention_days")
+        .unwrap();
+    assert_eq!(retention["value"], 120);
+    assert_eq!(retention["max"], 365);
 }

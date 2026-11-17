@@ -14,7 +14,7 @@ use sqlx::{Row, SqlitePool};
 use crate::calendar::{Bucket, bucket_start, resolve_timezone};
 use crate::error::ApiError;
 
-const DAY_S: i64 = 24 * 60 * 60;
+pub(crate) const DAY_S: i64 = 24 * 60 * 60;
 const HOUR_S: i64 = 60 * 60;
 const DEFAULT_DAY_BUCKETS: i64 = 90;
 const DEFAULT_HOUR_BUCKETS: i64 = 168;
@@ -48,6 +48,7 @@ struct Query {
     until: i64,
     limit: i64,
     interface_id: Option<i64>,
+    app_id: Option<i64>,
 }
 
 /// Build the U2 payload for one request.
@@ -61,14 +62,38 @@ pub async fn timeline(
     now: i64,
     raw_query: Option<&str>,
 ) -> Result<Timeline, ApiError> {
-    let query = parse_query(raw_query, now)?;
+    timeline_for_app(pool, now, raw_query, None).await
+}
+
+/// Build the A3 payload for one app (same shape as U2, app-scoped).
+///
+/// # Errors
+///
+/// `NOT_FOUND` for unknown apps; `QUERY_INVALID` for bad parameters;
+/// `DB_ERROR` for SQLite failures.
+pub async fn app_timeline(
+    pool: &SqlitePool,
+    now: i64,
+    app_id: i64,
+    raw_query: Option<&str>,
+) -> Result<Timeline, ApiError> {
+    if !crate::apps::app_exists(pool, app_id).await? {
+        return Err(ApiError::not_found());
+    }
+    timeline_for_app(pool, now, raw_query, Some(app_id)).await
+}
+
+async fn timeline_for_app(
+    pool: &SqlitePool,
+    now: i64,
+    raw_query: Option<&str>,
+    app_id: Option<i64>,
+) -> Result<Timeline, ApiError> {
+    let mut query = parse_query(raw_query, now)?;
+    query.app_id = app_id;
     let timezone = crate::usage::setting(pool, "timezone", "local").await?;
     let tz = resolve_timezone(&timezone);
-    let window = crate::usage::setting(pool, "raw_window_days", "7")
-        .await?
-        .parse::<i64>()
-        .unwrap_or(7);
-    let cutoff = now.saturating_sub(window.clamp(1, i64::MAX).saturating_mul(DAY_S));
+    let cutoff = raw_cutoff(pool, now).await?;
 
     let mut buckets = BTreeMap::new();
     if let Some(interface_id) = query.interface_id {
@@ -87,6 +112,15 @@ pub async fn timeline(
         granularity: granularity_name(query.bucket),
         data,
     })
+}
+
+/// Shared raw-window boundary for timeline and endpoint aggregation (API.md C2).
+pub(crate) async fn raw_cutoff(pool: &SqlitePool, now: i64) -> Result<i64, ApiError> {
+    let window = crate::usage::setting(pool, "raw_window_days", "7")
+        .await?
+        .parse::<i64>()
+        .unwrap_or(7);
+    Ok(now.saturating_sub(window.clamp(1, i64::MAX).saturating_mul(DAY_S)))
 }
 
 fn granularity_name(bucket: Bucket) -> &'static str {
@@ -129,16 +163,31 @@ async fn load_raw(
     if start >= query.until {
         return Ok(());
     }
-    let rows = sqlx::query(
-        "SELECT bytes_up, bytes_down, last_seen_at
-           FROM connections
-          WHERE last_seen_at >= ?1 AND last_seen_at < ?2",
-    )
-    .bind(start)
-    .bind(query.until)
-    .fetch_all(pool)
-    .await
-    .map_err(crate::history::db_error)?;
+    let rows = if let Some(app_id) = query.app_id {
+        sqlx::query(
+            "SELECT bytes_up, bytes_down, last_seen_at
+               FROM connections
+              WHERE last_seen_at >= ?1 AND last_seen_at < ?2
+                AND app_id = ?3",
+        )
+        .bind(start)
+        .bind(query.until)
+        .bind(app_id)
+        .fetch_all(pool)
+        .await
+        .map_err(crate::history::db_error)?
+    } else {
+        sqlx::query(
+            "SELECT bytes_up, bytes_down, last_seen_at
+               FROM connections
+              WHERE last_seen_at >= ?1 AND last_seen_at < ?2",
+        )
+        .bind(start)
+        .bind(query.until)
+        .fetch_all(pool)
+        .await
+        .map_err(crate::history::db_error)?
+    };
     for row in rows {
         let at: i64 = row
             .try_get("last_seen_at")
@@ -166,16 +215,31 @@ async fn load_rollups(
     if query.since >= end {
         return Ok(());
     }
-    let rows = sqlx::query(
-        "SELECT bucket_start, bytes_up, bytes_down, connection_count
-           FROM usage_rollup_15m
-          WHERE bucket_start >= ?1 AND bucket_start < ?2",
-    )
-    .bind(query.since)
-    .bind(end)
-    .fetch_all(pool)
-    .await
-    .map_err(crate::history::db_error)?;
+    let rows = if let Some(app_id) = query.app_id {
+        sqlx::query(
+            "SELECT bucket_start, bytes_up, bytes_down, connection_count
+               FROM usage_rollup_15m
+              WHERE bucket_start >= ?1 AND bucket_start < ?2
+                AND app_id = ?3",
+        )
+        .bind(query.since)
+        .bind(end)
+        .bind(app_id)
+        .fetch_all(pool)
+        .await
+        .map_err(crate::history::db_error)?
+    } else {
+        sqlx::query(
+            "SELECT bucket_start, bytes_up, bytes_down, connection_count
+               FROM usage_rollup_15m
+              WHERE bucket_start >= ?1 AND bucket_start < ?2",
+        )
+        .bind(query.since)
+        .bind(end)
+        .fetch_all(pool)
+        .await
+        .map_err(crate::history::db_error)?
+    };
     for row in rows {
         let source: i64 = row
             .try_get("bucket_start")
@@ -278,6 +342,7 @@ fn parse_query(raw: Option<&str>, now: i64) -> Result<Query, ApiError> {
         until,
         limit,
         interface_id,
+        app_id: None,
     })
 }
 

@@ -62,6 +62,72 @@ pub async fn apps(
     }
 }
 
+/// `GET /apps/{id}` — A2: one app, including soft-deleted history rows.
+pub async fn app_detail(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let Ok(id) = id.parse::<i64>() else {
+        return ApiError::not_found().into_response();
+    };
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    match crate::apps::app_detail(&state.db, now, id).await {
+        Ok(row) => Json(row).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `GET /apps/{id}/icon` — registered icon bytes, keyed by ID (A2).
+pub async fn app_icon(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let Ok(id) = id.parse::<i64>() else {
+        return ApiError::not_found().into_response();
+    };
+    match crate::apps::app_icon(&state.db, id).await {
+        Ok((content_type, bytes)) => (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, content_type)],
+            bytes,
+        )
+            .into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `GET /apps/{id}/usage` — A3: app-scoped usage series.
+pub async fn app_usage(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> Response {
+    let Ok(id) = id.parse::<i64>() else {
+        return ApiError::not_found().into_response();
+    };
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    match crate::timeline::app_timeline(&state.db, now, id, raw.as_deref()).await {
+        Ok(payload) => Json(payload).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `GET /apps/{id}/endpoints` — A4: ranked remote endpoints.
+pub async fn app_endpoints(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> Response {
+    let Ok(id) = id.parse::<i64>() else {
+        return ApiError::not_found().into_response();
+    };
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    match crate::apps::app_endpoints(&state.db, now, id, raw.as_deref()).await {
+        Ok(rows) => Json(rows).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
 /// `GET /connections` — C2 history episodes: keyset pagination, whitelist
 /// filters/sort, raw window + beyond-window aggregate rows (API.md §2.2).
 /// The raw query string is parsed by hand so every error uses the §1.3
@@ -137,6 +203,86 @@ pub async fn usage_summary(
     }
 }
 
+/// `GET /license` — L1: current tier and server-side entitlements.
+pub async fn license_state(State(state): State<Arc<AppState>>) -> Response {
+    match crate::license::current(&state.db).await {
+        Ok(payload) => Json(payload).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `POST /license/activate` — L2: verify an offline-signed key.
+pub async fn license_activate(
+    State(state): State<Arc<AppState>>,
+    request: axum::extract::Request,
+) -> Response {
+    use axum::body::to_bytes;
+
+    let (_, body) = request.into_parts();
+    let Ok(bytes) = to_bytes(body, 16 * 1024).await else {
+        return ApiError::query_invalid("Request body is too large").into_response();
+    };
+    let value: serde_json::Value = match serde_json::from_slice(&bytes) {
+        Ok(value) => value,
+        Err(_) => return ApiError::query_invalid("Request body must be JSON").into_response(),
+    };
+    let Some(key) = value.get("key").and_then(serde_json::Value::as_str) else {
+        return ApiError::query_invalid("Missing license key").into_response();
+    };
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    match crate::license::activate(&state.db, key, now).await {
+        Ok(payload) => {
+            // PRD Flow 4: Pro features unlock instantly without a restart.
+            state.status_tx.send_modify(|_| {});
+            Json(payload).into_response()
+        }
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `DELETE /license` — L3: reset to free immediately.
+pub async fn license_deactivate(State(state): State<Arc<AppState>>) -> Response {
+    match crate::license::deactivate(&state.db).await {
+        Ok(payload) => {
+            state.status_tx.send_modify(|_| {});
+            Json(payload).into_response()
+        }
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `GET /settings` — T1: typed settings with tier-aware bounds.
+pub async fn settings_list(State(state): State<Arc<AppState>>) -> Response {
+    match crate::settings::list(&state.db).await {
+        Ok(rows) => Json(rows).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `PUT /settings/{key}` — T2: validate and persist one setting.
+pub async fn settings_update(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(key): axum::extract::Path<String>,
+    request: axum::extract::Request,
+) -> Response {
+    use axum::body::to_bytes;
+
+    let (_, body) = request.into_parts();
+    let Ok(bytes) = to_bytes(body, 16 * 1024).await else {
+        return ApiError::query_invalid("Request body is too large").into_response();
+    };
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return ApiError::query_invalid("Request body must be JSON").into_response();
+    };
+    let Some(new_value) = value.get("value") else {
+        return ApiError::query_invalid("Missing setting value").into_response();
+    };
+    match crate::settings::update(&state.db, &key, new_value).await {
+        Ok(entry) => Json(entry).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
 /// Epoch seconds for serve-time stamps.
 fn epoch_now() -> u64 {
     std::time::SystemTime::now()
@@ -182,6 +328,26 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
         )
         .route("/api/v1/connections", axum::routing::get(connections))
         .route("/api/v1/apps", axum::routing::get(apps))
+        .route("/api/v1/apps/{id}/icon", axum::routing::get(app_icon))
+        .route("/api/v1/apps/{id}/usage", axum::routing::get(app_usage))
+        .route(
+            "/api/v1/apps/{id}/endpoints",
+            axum::routing::get(app_endpoints),
+        )
+        .route("/api/v1/apps/{id}", axum::routing::get(app_detail))
+        .route(
+            "/api/v1/license",
+            axum::routing::get(license_state).delete(license_deactivate),
+        )
+        .route(
+            "/api/v1/license/activate",
+            axum::routing::post(license_activate),
+        )
+        .route("/api/v1/settings", axum::routing::get(settings_list))
+        .route(
+            "/api/v1/settings/{key}",
+            axum::routing::put(settings_update),
+        )
         .route("/api/v1/usage/summary", axum::routing::get(usage_summary))
         .route("/api/v1/usage/timeline", axum::routing::get(usage_timeline))
         .route(

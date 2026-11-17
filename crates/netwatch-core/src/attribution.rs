@@ -1,14 +1,11 @@
 //! Per-app process attribution.
 //!
-//! Phase 2: attribute socket connections to applications using cgroup identity
-//! captured at exec/connect time (Design 1/D2 from spike), with `/proc` reads
-//! as fallback.
+//! F-05/D5a: cgroup-derived identity first, `exe_path` as fallback. The
+//! collector can cache an identity at exec/connect time so short-lived
+//! processes stay attributable after `/proc/<pid>` disappears.
 //!
-//! F-05/D5a: cgroup-derived identity first, `exe_path` as fallback. Handles
-//! Flatpak, Snap, script interpreters, and short-lived processes.
-//!
-//! DATABASE.md §2.2: `apps` table uses `app_key` as unique identity key;
-//! `exe_path` is non-unique display/provenance data.
+//! DATABASE.md §2.2: `app_key` is the unique identity key; `exe_path` is
+//! non-unique provenance, so a new binary at the same path gets a new row.
 
 use std::collections::HashMap;
 use std::fs;
@@ -67,6 +64,10 @@ pub struct AppIdentity {
 pub struct Attribution {
     /// Socket cookie → `app_key` mapping.
     socket_to_app: HashMap<u64, AppKey>,
+    /// PID → identity captured at exec/connect time (short-lived processes).
+    pid_identity: HashMap<u32, AppKey>,
+    /// Identity key → `app_key`, so non-unique `exe_path` values stay distinct.
+    by_identity_key: HashMap<String, AppKey>,
     /// `app_key` → [`AppIdentity`] registry.
     apps: HashMap<AppKey, AppIdentity>,
     /// Next `app_key` to assign.
@@ -86,128 +87,173 @@ impl Attribution {
     /// Attribute a socket connection to an app.
     ///
     /// Called when eBPF `cgroup_skb` or kprobe hooks observe a new socket.
-    /// Returns the `app_key` for the connection.
+    /// Cached exec-time identities win over a now-vanished `/proc` entry.
     pub fn attribute(&mut self, cookie: u64, pid: u32, exe_path: Option<&str>) -> AppKey {
-        // If we've seen this socket cookie before, return existing app_key.
         if let Some(&app_key) = self.socket_to_app.get(&cookie) {
             return app_key;
         }
-
-        // Try cgroup identity first (D5a: cgroup-first, exe_path fallback).
-        if let Some(app_key) = self.identify_by_cgroup(pid) {
-            self.socket_to_app.insert(cookie, app_key);
-            return app_key;
-        }
-
-        // Fallback to /proc/<pid>/exe attribution.
-        if let Some(app_key) = self.identify_by_exe(exe_path) {
-            self.socket_to_app.insert(cookie, app_key);
-            return app_key;
-        }
-
-        // Last resort: create a new unknown app entry.
-        let app_key = self.next_app_key;
-        self.next_app_key += 1;
-        self.apps.insert(
-            app_key,
-            AppIdentity {
-                app_key,
-                identity_kind: IdentityKind::Exe,
-                exe_path: exe_path.unwrap_or("unknown").to_string(),
-                exe_hash: None,
-                icon_path: None,
-                confidence: AttributionConfidence::Unknown,
-                first_seen_at: now_secs(),
-                last_seen_at: now_secs(),
-            },
-        );
+        let app_key = if let Some(&app_key) = self.pid_identity.get(&pid) {
+            self.touch(app_key);
+            app_key
+        } else if let Ok(content) = fs::read_to_string(format!("/proc/{pid}/cgroup")) {
+            self.register_cgroup(&content, exe_path)
+                .unwrap_or_else(|| self.register_exe(exe_path))
+        } else {
+            self.register_exe(exe_path)
+        };
         self.socket_to_app.insert(cookie, app_key);
         app_key
     }
 
-    /// Try to identify a process by cgroup path (systemd app-*.scope,
-    /// Flatpak, Snap).
-    fn identify_by_cgroup(&mut self, pid: u32) -> Option<AppKey> {
-        // Read /proc/<pid>/cgroup to get cgroup path.
-        let cgroup_file = format!("/proc/{pid}/cgroup");
-        let cgroup_content = fs::read_to_string(&cgroup_file).ok()?;
-
-        // Parse cgroup v2 format: "0::/system.slice/app-foo.scope"
-        for line in cgroup_content.lines() {
-            let parts: Vec<&str> = line.splitn(3, ':').collect();
-            if parts.len() < 3 {
-                continue;
-            }
-            let cgroup_path = parts[2];
-            let Some(app_name) = cgroup_path.strip_prefix("system.slice/app-") else {
-                continue;
-            };
-            // Compare the extension case-insensitively (Clippy's file
-            // extension rule) without treating arbitrary suffixes as paths.
-            let Some((name, extension)) = app_name.rsplit_once('.') else {
-                continue;
-            };
-            if !extension.eq_ignore_ascii_case("scope") {
-                continue;
-            }
-            let app_key = hash_app_key(&format!("cgroup:{cgroup_path}"));
-            if let Some(existing) = self.apps.get(&app_key) {
-                return Some(existing.app_key);
-            }
-            let app_key = self.next_app_key;
-            self.next_app_key += 1;
-            self.apps.insert(
-                app_key,
-                AppIdentity {
-                    app_key,
-                    identity_kind: IdentityKind::CgroupApp,
-                    exe_path: name.to_string(),
-                    exe_hash: None,
-                    icon_path: None,
-                    confidence: AttributionConfidence::Exact,
-                    first_seen_at: now_secs(),
-                    last_seen_at: now_secs(),
-                },
-            );
-            return Some(app_key);
-        }
-        None
+    /// Remember an identity observed at exec/connect time.
+    ///
+    /// The collector calls this before a short-lived process exits; later
+    /// socket attribution uses this cache instead of reading `/proc`.
+    #[must_use]
+    pub fn cache_identity(
+        &mut self,
+        pid: u32,
+        cgroup_content: &str,
+        exe_path: Option<&str>,
+    ) -> Option<AppKey> {
+        let app_key = match self.register_cgroup(cgroup_content, exe_path) {
+            Some(app_key) => app_key,
+            None => self.register_exe(exe_path),
+        };
+        self.pid_identity.insert(pid, app_key);
+        Some(app_key)
     }
 
-    /// Identify a process by its executable path.
-    fn identify_by_exe(&mut self, exe_path: Option<&str>) -> Option<AppKey> {
-        let exe_path = exe_path?;
-        let exe_hash = fs::read(exe_path).ok().map(|bytes| {
+    /// Look up the identity behind an `app_key` (for tests and diagnostics).
+    #[must_use]
+    pub fn identity(&self, app_key: AppKey) -> Option<&AppIdentity> {
+        self.apps.get(&app_key)
+    }
+
+    fn register_cgroup(&mut self, content: &str, exe_path: Option<&str>) -> Option<AppKey> {
+        let (kind, identity_key, display_name) = parse_cgroup_identity(content)?;
+        let provenance = exe_path.unwrap_or(&display_name).to_string();
+        Some(self.register(
+            kind,
+            identity_key,
+            provenance,
+            None,
+            AttributionConfidence::Exact,
+        ))
+    }
+
+    fn register_exe(&mut self, exe_path: Option<&str>) -> AppKey {
+        let Some(exe_path) = exe_path else {
+            return self.register(
+                IdentityKind::Exe,
+                "unknown".to_string(),
+                "unknown".to_string(),
+                None,
+                AttributionConfidence::Unknown,
+            );
+        };
+        let hash = fs::read(exe_path).ok().map(|bytes| {
             use std::hash::{Hash, Hasher};
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             bytes.hash(&mut hasher);
-            hasher.finish()
+            hasher.finish().to_string()
         });
+        let identity_key = match &hash {
+            Some(hash) => format!("exe:{exe_path}#{hash}"),
+            None => format!("exe:{exe_path}"),
+        };
+        self.register(
+            IdentityKind::Exe,
+            identity_key,
+            exe_path.to_string(),
+            hash,
+            AttributionConfidence::Heuristic,
+        )
+    }
 
-        // Check if we've seen this exe_path before (same app, new socket).
-        for app in self.apps.values() {
-            if app.exe_path == exe_path && app.identity_kind == IdentityKind::Exe {
-                return Some(app.app_key);
-            }
+    fn register(
+        &mut self,
+        identity_kind: IdentityKind,
+        identity_key: String,
+        exe_path: String,
+        exe_hash: Option<String>,
+        confidence: AttributionConfidence,
+    ) -> AppKey {
+        if let Some(&app_key) = self.by_identity_key.get(&identity_key) {
+            self.touch(app_key);
+            return app_key;
         }
-
         let app_key = self.next_app_key;
         self.next_app_key += 1;
+        let now = now_secs();
         self.apps.insert(
             app_key,
             AppIdentity {
                 app_key,
-                identity_kind: IdentityKind::Exe,
-                exe_path: exe_path.to_string(),
-                exe_hash: exe_hash.map(|hash| hash.to_string()),
+                identity_kind,
+                exe_path,
+                exe_hash,
                 icon_path: None,
-                confidence: AttributionConfidence::Heuristic,
-                first_seen_at: now_secs(),
-                last_seen_at: now_secs(),
+                confidence,
+                first_seen_at: now,
+                last_seen_at: now,
             },
         );
-        Some(app_key)
+        self.by_identity_key.insert(identity_key, app_key);
+        app_key
     }
+
+    fn touch(&mut self, app_key: AppKey) {
+        if let Some(identity) = self.apps.get_mut(&app_key) {
+            identity.last_seen_at = now_secs();
+        }
+    }
+}
+
+/// Extract a stable identity from cgroup v2 content.
+///
+/// Returns `(kind, identity key, display name)`. The paths mirror the three
+/// cgroup-backed identity kinds in DATABASE.md §2.2.
+fn parse_cgroup_identity(content: &str) -> Option<(IdentityKind, String, String)> {
+    for line in content.lines() {
+        let parts: Vec<&str> = line.splitn(3, ':').collect();
+        if parts.len() < 3 {
+            continue;
+        }
+        let path = parts[2];
+        let leaf = path.rsplit('/').next().unwrap_or(path);
+        let leaf_without_scope = leaf.strip_suffix(".scope").unwrap_or(leaf);
+        if leaf.contains("flatpak")
+            || (leaf_without_scope.starts_with("app-") && leaf_without_scope.contains('.'))
+        {
+            let id = leaf_without_scope
+                .strip_prefix("app-")
+                .unwrap_or(leaf_without_scope);
+            return Some((
+                IdentityKind::Flatpak,
+                format!("flatpak:{id}"),
+                id.to_string(),
+            ));
+        }
+        if leaf.contains("snap.") || path.contains("/snap/") {
+            let name = leaf.trim_start_matches("snap.").trim_end_matches(".scope");
+            return Some((IdentityKind::Snap, format!("snap:{name}"), name.to_string()));
+        }
+        let Some(name) = leaf.strip_suffix(".scope") else {
+            continue;
+        };
+        let name = name
+            .strip_prefix("app-")
+            .unwrap_or(name)
+            .strip_prefix("systemd-")
+            .unwrap_or(name);
+        return Some((
+            IdentityKind::CgroupApp,
+            format!("cgroup:{path}"),
+            name.to_string(),
+        ));
+    }
+    None
 }
 
 /// Get current time in seconds since epoch.
@@ -218,46 +264,99 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
-/// Hash a string to an `app_key` (u64).
-fn hash_app_key(s: &str) -> AppKey {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish()
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)] // tests, not daemon paths
 
     use super::*;
 
+    const SYSTEMD_SCOPE: &str = "0::/system.slice/app-firefox.scope";
+    const FLATPAK_SCOPE: &str = "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.mozilla.firefox-1234.scope";
+    const SNAP_SCOPE: &str = "0::/system.slice/snap.firefox.firefox.service";
+
+    struct ExeFixture {
+        path: std::path::PathBuf,
+    }
+
+    impl ExeFixture {
+        fn new(bytes: &[u8]) -> Self {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!("nwp-exe-{}-{nonce}", std::process::id()));
+            fs::write(&path, bytes).unwrap();
+            Self { path }
+        }
+
+        fn rewrite(&self, bytes: &[u8]) {
+            fs::write(&self.path, bytes).unwrap();
+        }
+    }
+
+    impl Drop for ExeFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+
     #[test]
     fn attribute_new_socket_creates_app() {
         let mut attr = Attribution::new();
         let key1 = attr.attribute(1, 1234, Some("/usr/bin/firefox"));
         assert!(key1 > 0);
-        // Same cookie returns same app_key
         assert_eq!(attr.attribute(1, 1234, Some("/usr/bin/firefox")), key1);
-        // Different cookie gets different app_key
         assert_ne!(attr.attribute(2, 5678, Some("/usr/bin/chrome")), key1);
     }
 
     #[test]
-    fn exe_path_deduplication() {
+    fn cgroup_first_beats_exe_fallback() {
         let mut attr = Attribution::new();
-        let key1 = attr.attribute(1, 1234, Some("/usr/bin/firefox"));
-        let key2 = attr.attribute(2, 5678, Some("/usr/bin/firefox"));
-        assert_eq!(key1, key2);
+        let _ = attr.cache_identity(2213, SYSTEMD_SCOPE, Some("/usr/bin/firefox"));
+        // Short-lived process: /proc is gone and the exe path is misleading.
+        let key = attr.attribute(1, 2213, Some("/usr/bin/chrome"));
+        let identity = attr.identity(key).unwrap();
+        assert_eq!(identity.identity_kind, IdentityKind::CgroupApp);
+        assert_eq!(identity.confidence, AttributionConfidence::Exact);
+        assert_eq!(identity.exe_path, "/usr/bin/firefox");
     }
 
     #[test]
-    fn cgroup_identity_priority() {
+    fn flatpak_and_snap_get_distinct_identity_kinds() {
         let mut attr = Attribution::new();
-        // First attribution via exe_path
-        let key1 = attr.attribute(1, 1234, Some("/usr/bin/firefox"));
-        // Second socket with same exe_path should use same app_key
-        let key2 = attr.attribute(2, 5678, Some("/usr/bin/firefox"));
-        assert_eq!(key1, key2);
+        let flatpak = attr.cache_identity(1, FLATPAK_SCOPE, None).unwrap();
+        let snap = attr.cache_identity(2, SNAP_SCOPE, None).unwrap();
+        assert_eq!(
+            attr.identity(flatpak).unwrap().identity_kind,
+            IdentityKind::Flatpak
+        );
+        assert_eq!(
+            attr.identity(snap).unwrap().identity_kind,
+            IdentityKind::Snap
+        );
+        assert_ne!(flatpak, snap);
+    }
+
+    #[test]
+    fn same_exe_path_with_new_binary_hash_is_a_new_app() {
+        let fixture = ExeFixture::new(b"binary-v1");
+        let mut attr = Attribution::new();
+        let first = attr.attribute(1, 9001, Some(fixture.path.to_str().unwrap()));
+        fixture.rewrite(b"binary-v2-different");
+        let second = attr.attribute(2, 9002, Some(fixture.path.to_str().unwrap()));
+        assert_ne!(first, second, "exe_path is provenance, not identity");
+        assert_eq!(
+            attr.identity(first).unwrap().confidence,
+            AttributionConfidence::Heuristic
+        );
+    }
+
+    #[test]
+    fn unknown_process_is_honest() {
+        let mut attr = Attribution::new();
+        let key = attr.attribute(3, u32::MAX, None);
+        let identity = attr.identity(key).unwrap();
+        assert_eq!(identity.confidence, AttributionConfidence::Unknown);
+        assert_eq!(identity.exe_path, "unknown");
     }
 }

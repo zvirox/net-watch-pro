@@ -87,19 +87,19 @@
 ## Phase 5 — Apps Slice → `v0.5.0-alpha.5` (~40 h)
 
 - [x] P5.1 `GET /apps` (ranking, include_deleted) <!-- A1 sort/limit/soft-delete contract; ranking matches U1 top apps; 3 API tests green; API.md 1.2.1 clarified -->
-- [ ] P5.2 `GET /apps/{id}` + icon resource
-- [ ] P5.3 `GET /apps/{id}/usage` + `/endpoints`
-- [ ] P5.4 App Detail screen (3 tabs)
-- [ ] P5.5 Click-through routes from Dashboard/Live
-- [ ] P5.6 Attribution edge cases: cgroup-first identity, short-lived procs, confidence display (F-05/D5a)
+- [x] P5.2 `GET /apps/{id}` + icon resource <!-- A2 detail with exe_path/deleted_at + ID-keyed icon endpoint with allowlisted image types; 2 API tests green; API.md 1.3.0 -->
+- [x] P5.3 `GET /apps/{id}/usage` + `/endpoints` <!-- A3 app-scoped raw/rollup timeline + A4 merged endpoint ranking; 2 API tests green, 99 total Rust tests -->
+- [x] P5.4 App Detail screen (3 tabs) <!-- A2-A4 + app-filtered C2 store, keyboard tabs, themed timeline, connections/endpoints tables; browser-verified all tabs -->
+- [x] P5.5 Click-through routes from Dashboard/Live <!-- dashboard bars + live rows (mouse and Enter) route to #apps/{id}; browser-verified -->
+- [x] P5.6 Attribution edge cases: cgroup-first identity, short-lived procs, confidence display (F-05/D5a) <!-- identity-key dedup + pid cache + flatpak/snap parse; 5 core tests; heuristic/unknown UI badge verified -->
 - [ ] **DoD: every app opens a meaningful detail page; tag `v0.5.0-alpha.5`**
 
 ## Phase 6 — Freemium Slice → `v0.6.0-alpha.6` (~40 h)
 
-- [ ] P6.1 Migration 0004: `daemon_events`
-- [ ] P6.2 License verifier (offline signature, no network)
-- [ ] P6.3 License endpoints (get/activate/deactivate)
-- [ ] P6.4 Server-side Pro gating (filters, retention ceiling)
+- [x] P6.1 Migration 0004: `daemon_events` <!-- immutable bounded log + idx; shared event type; degraded paths record events; 9 daemon DB tests, 102 workspace tests -->
+- [x] P6.2 License verifier (offline signature, no network) <!-- Ed25519 key format + embedded public key + SHA-256 fingerprint; 4 core tests, 106 workspace tests; deps approved -->
+- [x] P6.3 License endpoints (get/activate/deactivate) <!-- L1-L3 with offline verifier, fingerprint-only storage, 409 conflict, status broadcast; 4 API tests, 109 workspace tests -->
+- [x] P6.4 Server-side Pro gating (filters, retention ceiling) <!-- C2 uses shared license gate; T1/T2 enforce 90-day free ceiling with typed validation; 4 settings + 2 gating tests, 113 workspace tests -->
 - [ ] P6.5 Export engine (job → CSV/JSON, rate limits)
 - [ ] P6.6 Upgrade modal + license states
 - [ ] P6.7 History Pro locks (chips + tooltips)

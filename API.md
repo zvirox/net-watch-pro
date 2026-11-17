@@ -1,9 +1,9 @@
 # Net Watch Pro — API.md (Local API Reference)
 
-**Version:** 1.2.1 · **Date:** 2026-11-17
+**Version:** 1.3.1 · **Date:** 2026-11-17
 **Source of truth:** `PRD.md` (features, freemium gating) · `ARCHITECTURE.md` §5.3 (transport contract) · `DATABASE.md` (tables) · `docs/decisions.md` (owner decisions D1a–D5a)
 
-**Version history:** 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a).
+**Version history:** 1.3.1 (2026-11-17): reference the offline license key wire format in `AUTH_SECURITY.md` §2.4. 1.3.0 (2026-11-17): document the A2 icon resource endpoint and the `deleted_at` field on app details for soft-deleted history views. 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a).
 
 > **Binding:** every endpoint below maps to a PRD feature and a DATABASE.md table (§10 traceability matrix). Anything flagged as not doing so is explicitly justified there. Implementation of this file lives in `docs/api-contract.md` (ARCHITECTURE.md §4) and must not drift.
 
@@ -178,6 +178,7 @@ Errors: 400 (empty/invalid filters), 401, 403 `EXPORT_PRO_REQUIRED`, 429, 500.
 |---|---|---|---|---|
 | A1 | `GET /api/v1/apps` | yes | §6.1 #2 per-app usage ranking / Top apps | `apps` (+ rollup join) |
 | A2 | `GET /api/v1/apps/{id}` | yes | §6.1 #4 App detail page | `apps` |
+| A2i | `GET /api/v1/apps/{id}/icon` | yes | §6.1 #4 App icon | `apps.icon_path` |
 | A3 | `GET /api/v1/apps/{id}/usage` | yes | §6.1 #4 per-app usage over time | `usage_rollup_15m`, `connections` (raw window) |
 | A4 | `GET /api/v1/apps/{id}/endpoints` | yes | §6.1 #4 endpoint summary | `connections` (aggregate) |
 
@@ -189,7 +190,13 @@ Errors: 400 (empty/invalid filters), 401, 403 `EXPORT_PRO_REQUIRED`, 429, 500.
 ```
 Errors: 400, 401, 429, 500.
 
-**A2 `GET /apps/{id}`** — one app. Success 200: A1 row + `exe_path` (never exposes icon bytes; icons resolve via `icon` handle → `profile/icon`-style resource served by the same server). Errors: 404 (pruned/not found), 401, 429.
+**A2 `GET /apps/{id}`** — one app, including soft-deleted rows so history detail
+still resolves. Success 200: A1 row + `exe_path` + `deleted_at` (`null` while
+active). The A1 `icon` handle `ic:{id}` resolves to
+`GET /api/v1/apps/{id}/icon`, which serves only registered image files
+(`png`, `ico`, `svg`, `webp`, `jpg`/`jpeg`) by app ID; no filesystem path is
+accepted from the request. Errors: 404 (not found, no icon, unsupported type,
+or unreadable icon — UI uses its fallback), 401, 429.
 
 **A3 `GET /apps/{id}/usage`** — series for the App-detail chart. Query: `?granularity=hour|day&since=&until=&limit=` (day default 90; hour default 168). Rows come from `usage_rollup_15m`; the raw window (< 7 days) is aggregated live from `connections`. Boundaries computed at query time in the configured timezone (`DATABASE.md §2.6`). Success 200:
 ```json
@@ -278,7 +285,7 @@ Note `max` vs `pro_max` — the server reports the tier ceiling; the pruner enfo
 ```
 Errors: 401, 429.
 
-**L2** — activate offline-signed key. Request body: `{"key": "NWP1-XXXX-XXXX-XXXX-XXXX"}`. Server verifies signature with the embedded public key (`packaging/licenses/`, no network — PRD §6.1 #9). Success 200: L1 shape with `tier:"pro"`; WS `status` update broadcast so Pro features unlock instantly without restart (PRD Flow 4). Errors: 400 (malformed), 403 `LICENSE_INVALID` (bad signature/expired), 409 `CONFLICT` (already pro — message offers no-op), 401, 429.
+**L2** — activate offline-signed key. Request body: `{"key": "NWP1-XXXX-XXXX-XXXX-XXXX"}`. Server verifies the offline Ed25519 signature with the embedded public key (`packaging/licenses/`, wire format in `AUTH_SECURITY.md` §2.4; no network — PRD §6.1 #9). Success 200: L1 shape with `tier:"pro"`; WS `status` update broadcast so Pro features unlock instantly without restart (PRD Flow 4). Errors: 400 (malformed), 403 `LICENSE_INVALID` (bad signature/expired), 409 `CONFLICT` (already pro — message offers no-op), 401, 429.
 
 **L3** — reset to free. Request body: none. Success 200: L1 shape, `tier:"free"`. Errors: 401, 429. UI wraps this in a destructive confirm (DESIGN.md §7.4); the API is immediate.
 
@@ -320,7 +327,7 @@ Rules: deltas replace by row `id` (keyed, not positional); server pushes at most
 |---|---|---|---|---|
 | System | `/health`, `/status`, `/diagnostics`, `/events` | — | — | — |
 | Connections | `/connections`, `/connections/{id}`, `/connections/live` | — | — | — |
-| Apps | `/apps`, `/apps/{id}`, `/apps/{id}/usage`, `/apps/{id}/endpoints` | — | — | — |
+| Apps | `/apps`, `/apps/{id}`, `/apps/{id}/icon`, `/apps/{id}/usage`, `/apps/{id}/endpoints` | — | — | — |
 | Usage | `/usage/summary`, `/usage/timeline`, `/usage/interfaces` | — | — | — |
 | Exports | `/exports/{id}`, `/exports/{id}/content` | `/exports` | — | — |
 | Interfaces | `/interfaces` | — | `PATCH /interfaces/{id}` | — |
@@ -328,7 +335,7 @@ Rules: deltas replace by row `id` (keyed, not positional); server pushes at most
 | License | `/license` | `/license/activate` | — | `DELETE /license` |
 | Stream | `(ws) /stream` | — | — | — |
 
-**23 REST endpoints + 1 WS upgrade + 3 channels.** No create/update/delete on connections or apps — those are *observed* data written only by the daemon (monitor-only MVP; the firewall phase-in, PRD §12, adds command endpoints without touching these).
+**24 REST endpoints + 1 WS upgrade + 3 channels.** No create/update/delete on connections or apps — those are *observed* data written only by the daemon (monitor-only MVP; the firewall phase-in, PRD §12, adds command endpoints without touching these).
 
 ---
 
@@ -350,7 +357,7 @@ Coverage check (every DATABASE table is served):
 
 | Table | Serving endpoints |
 |---|---|
-| `apps` | A1–A4 (C2, U1 join) |
+| `apps` | A1–A2i, A3–A4 (C2, U1 join) |
 | `interfaces` | I1–I2, U3 |
 | `connections` | C1–C3, E1/E3, A3/A4/U2 (raw window) |
 | `usage_rollup_15m` | U1 (attributed), U2, A3, E1/E3 |

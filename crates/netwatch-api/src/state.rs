@@ -17,6 +17,8 @@ use crate::LiveFeed;
 pub struct AppState {
     /// Latest status published by the daemon task.
     pub status: watch::Receiver<StatusSnapshot>,
+    /// Sender used by license activation to trigger a status refresh (L2/L3).
+    pub status_tx: watch::Sender<StatusSnapshot>,
     /// Live connection snapshot + delta feed (P2.6).
     pub live: LiveFeed,
     /// Read-side SQLite pool for query endpoints (history; API.md §2.2).
@@ -31,9 +33,15 @@ pub struct AppState {
 impl AppState {
     /// Build state from the daemon's channels.
     #[must_use]
-    pub fn new(status: watch::Receiver<StatusSnapshot>, live: LiveFeed, db: SqlitePool) -> Self {
+    pub fn new(
+        status_tx: watch::Sender<StatusSnapshot>,
+        status: watch::Receiver<StatusSnapshot>,
+        live: LiveFeed,
+        db: SqlitePool,
+    ) -> Self {
         Self {
             status,
+            status_tx,
             live,
             db,
             ws_clients: AtomicU64::new(0),

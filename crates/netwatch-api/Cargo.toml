@@ -8,8 +8,9 @@ description = "API server: WS routes, token auth, request/validation types (API.
 
 [dependencies]
 netwatch-common = { path = "../netwatch-common" }
+netwatch-core = { path = "../netwatch-core" }
 axum = { version = "0.8", features = ["ws"] }
-tokio = { version = "1", features = ["sync", "net", "time", "macros"] }
+tokio = { version = "1", features = ["sync", "net", "time", "macros", "fs"] }
 # sqlx: read-side queries for history endpoints (same workspace dep as the
 # daemon's writer; approved stack per ARCHITECTURE.md §2).
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
@@ -28,6 +29,8 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
+ed25519-dalek = "3"
+base64 = "0.23"
 
 [lints]
 workspace = true
