@@ -119,7 +119,7 @@
 - [x] P7.6 Theme switching, persisted, charts re-theme <!-- settings-ui store persists theme_default via T2, applies data-theme at app start (any screen), reacts to OS dark preference, Settings General uses it; Chart.svelte re-registers ECharts theme on data-theme mutation; UI checks + browser system-dark smoke clean -->
 - [x] P7.7 metered_policy + start_on_boot plumbed <!-- core policy/action helpers + tests, sampler applies policy to new interfaces only (test), daemon service task polls and syncs systemctl enable/disable on change with degraded events, UI policy selector + start-on-boot switch; 141 workspace tests -->
 - [x] **DoD: tray quit keeps daemon; retention correct per tier** <!-- tray exits UI only; pruner re-clamps 90/365 by tier; settings persist via T1/T2 -->
-- [ ] **Release: tag `v0.7.0-alpha.7` + GitHub pre-release** <!-- source-only alpha; in progress -->
+- [x] **Release: tag `v0.7.0-alpha.7` + GitHub pre-release** <!-- source-only alpha; changelog + tracker in tagged commit -->
 
 ## Phase 8 — Packaging Slice → `v0.8.0-alpha.8` (~40 h) — *first public alpha*
 
