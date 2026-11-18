@@ -8,6 +8,49 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.5.0-alpha.5] — 2026-11-18
+
+Source-only alpha (no `.deb`/`.rpm`/AUR packages — packaging lands in PLAN
+Phase 8). Tagged at current `main`: the Phase 5 Apps slice is complete and the
+first seven Phase 6 freemium tasks are already merged. Phase 6 itself is **not**
+complete — P6.8 (export menu + native save dialog) and P6.9 (usage budgets and
+alerts) remain — so read this tag as "Phase 5 + freemium preview", not the
+Phase 6 DoD release.
+
+### Added
+
+- **Apps slice (P5.1–P5.6):** A1 ranking, A2 detail + icon, A3 usage and A4
+  endpoint APIs; three-tab App Detail screen with click-through routes from
+  Dashboard and Live; cgroup-first attribution with honest confidence badges.
+- **Freemium backend (P6.1–P6.5):** `daemon_events` migration and degraded-path
+  event recording; offline Ed25519 license verifier (public key only in-repo);
+  L1–L3 license endpoints storing only a key fingerprint; server-side Pro gating
+  for C2 filters and the T2 retention ceiling; E1–E3 export engine producing
+  CSV/JSON with 5/min creation and 10/min download limits.
+- **Freemium UI (P6.6–P6.7):** license store with WS-driven state refresh, glass
+  upgrade modal with §7.2 inline validation, and locked History filter chips
+  that open the upgrade dialog for free-tier users.
+
+### Changed
+
+- Settings T1/T2 report tier-aware retention bounds (90 days free, 365 Pro).
+- Rate-limit failures use `RATE_LIMITED` with `details.retry_after_s` and a
+  `Retry-After` header.
+
+### Fixed
+
+- CI builds `netwatchd` before process-level tests; workspace Clippy is clean
+  under `-D warnings`.
+
+**Verification:** workspace tests 128 passed; Clippy 0 errors; UI `svelte-check`,
+ESLint/Prettier and `vite build` clean.
+
+**Known open items:** the upgrade modal's "Buy a license" target is a placeholder
+until a storefront URL is defined; end-to-end activation against a live daemon
+was not exercised in this release.
+
+---
+
 ## [v0.0.1-alpha.1] — 2026-11-14
 
 Phase 0 — Foundation & Tooling (PLAN.md §2). Documentation-phase → scaffolded
@@ -127,6 +170,7 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.4.0-alpha.4...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.5.0-alpha.5...HEAD
+[v0.5.0-alpha.5]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.5.0-alpha.5
 [v0.4.0-alpha.4]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.4.0-alpha.4
 [v0.0.1-alpha.1]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.0.1-alpha.1
