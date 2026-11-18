@@ -303,6 +303,7 @@
 ## 15. Global Rules
 
 - **Runnable after every phase** — a phase that can't demo its slice isn't done.
+- **Released after every phase** (owner directive, 2026-11-18) — the tag named in §1 / the phase DoD is part of the DoD, not a follow-up. Code complete with no tag and no GitHub release means the phase is still open. Release procedure: AGENTS.md §6.
 - **Docs move with code** (AGENTS.md §4.5): the task that changes an endpoint/schema/token carries its doc edit.
 - **No new dependencies** without explicit user approval (AGENTS.md §5).
 - **OQ4 (demo mode)** is deliberately deferred to P8.6 — decide there, don't pre-build it.

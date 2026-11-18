@@ -1,6 +1,6 @@
 # CHECKLIST.md — Plan Tracker
 
-**Companion to `PLAN.md`** (task details: what/files/verify/deps live there; this file is for ticking). Rules: tick only verified work; a phase is done when its DoD box is ticked; release tags gate on the phase DoD.
+**Companion to `PLAN.md`** (task details: what/files/verify/deps live there; this file is for ticking). Rules: tick only verified work; a phase is done when its **DoD and Release** boxes are both ticked — release is part of the phase, not a follow-up (owner directive, 2026-11-18; procedure in AGENTS.md §6).
 
 **Legend:** `[ ]` open · `[x]` done · `[~]` in progress · `[!]` blocked (note why inline)
 
@@ -92,7 +92,8 @@
 - [x] P5.4 App Detail screen (3 tabs) <!-- A2-A4 + app-filtered C2 store, keyboard tabs, themed timeline, connections/endpoints tables; browser-verified all tabs -->
 - [x] P5.5 Click-through routes from Dashboard/Live <!-- dashboard bars + live rows (mouse and Enter) route to #apps/{id}; browser-verified -->
 - [x] P5.6 Attribution edge cases: cgroup-first identity, short-lived procs, confidence display (F-05/D5a) <!-- identity-key dedup + pid cache + flatpak/snap parse; 5 core tests; heuristic/unknown UI badge verified -->
-- [ ] **DoD: every app opens a meaningful detail page; tag `v0.5.0-alpha.5`**
+- [x] **DoD: every app opens a meaningful detail page; tag `v0.5.0-alpha.5`** <!-- pinned to the retroactive release on 2026-11-18 -->
+- [x] **Release: `v0.5.0-alpha.5` tagged + GitHub pre-release published** <!-- commit 510ebbd; source-only alpha; changelog updated -->
 
 ## Phase 6 — Freemium Slice → `v0.6.0-alpha.6` (~40 h)
 
@@ -106,6 +107,7 @@
 - [ ] P6.8 Export menu + native save dialog
 - [ ] P6.9 Usage budgets & alerts (MVP free tier; D6a)
 - [ ] **DoD: activate → instant unlock; deactivate → locks return; zero network calls; tag `v0.6.0-alpha.6`**
+- [ ] **Release: tag `v0.6.0-alpha.6` + GitHub pre-release** <!-- after P6.8/P6.9 + zero-outbound check; source-only -->
 
 ## Phase 7 — System Slice → `v0.7.0-alpha.7` (~40 h)
 
@@ -117,6 +119,7 @@
 - [ ] P7.6 Theme switching, persisted, charts re-theme
 - [ ] P7.7 metered_policy + start_on_boot plumbed
 - [ ] **DoD: tray quit keeps daemon; retention correct per tier; tag `v0.7.0-alpha.7`**
+- [ ] **Release: tag `v0.7.0-alpha.7` + GitHub pre-release** <!-- source-only alpha -->
 
 ## Phase 8 — Packaging Slice → `v0.8.0-alpha.8` (~40 h) — *first public alpha*
 
@@ -129,6 +132,7 @@
 - [ ] P8.7 Uninstall completeness
 - [ ] P8.8 Signing: package signing + release workflow (hosted build services until after beta)
 - [ ] **DoD: install → onboard → monitor via GitHub Releases + AUR `-git`; self-hosted apt/dnf repos deferred (F-10); tag `v0.8.0-alpha.8`**
+- [ ] **Release: tag `v0.8.0-alpha.8` + GitHub pre-release with `.deb`/`.rpm` artifacts** <!-- first installable/public alpha; AUR `-git` separate -->
 
 ## Phase 9 — Diagnostics & Accessibility → `v0.9.0-beta.1` (~40 h) — *public beta*
 
@@ -140,6 +144,7 @@
 - [ ] P9.6 Chart data-table fallbacks
 - [ ] P9.7 Reduced motion + 200% zoom
 - [ ] **DoD: PRD DoD #3/#5/#6 pass; zero a11y blockers; tag `v0.9.0-beta.1`**
+- [ ] **Release: tag `v0.9.0-beta.1` + GitHub release** <!-- public beta; signing/packaging matrix from P8 -->
 
 ## Phase 10 — Beta Hardening → `v0.9.x-beta.N` (~80 h)
 
@@ -150,6 +155,7 @@
 - [ ] P10.5 Security review: unit sandbox, socket peer-credential, API surface
 - [ ] P10.6 Beta feedback fixes (patch-tagged)
 - [ ] **DoD: PRD §11 DoD #1–#8 signed off; tag `v0.9.9-beta.N`**
+- [ ] **Release: final `v0.9.x-beta.N` release** <!-- patch-tag each beta feedback fix; final tag after DoD sign-off -->
 
 ## Phase 11 — Launch → `v1.0.0` (~40 h)
 
@@ -158,6 +164,7 @@
 - [ ] P11.3 README screenshots + landing copy
 - [ ] P11.4 Tag `v1.0.0` + release notes
 - [ ] **DoD: stable GA shipped; post-1.0 firewall roadmap opens**
+- [ ] **Release: tag `v1.0.0` + GitHub release (not pre-release)** <!-- stable repos live; release notes verify zero-outbound -->
 
 ---
 
@@ -168,5 +175,12 @@
 | `*-alpha.N` | phase DoD ticked; artifacts on GitHub Releases; breakage banner |
 | `*-beta.N` | packaging matrix done (P8); no a11y blockers (P9); crash-free ≥ 99.5% |
 | `v1.0.0` | PRD §11 DoD #1–#8 all signed; signed repos live |
+
+**Release workflow (every phase, no re-ask):** all P-tasks + DoD verified → add
+CHANGELOG entry for the planned tag (date + link refs) → tick the phase's Release
+box above → commit (`docs(release): …`) → annotated tag from PLAN.md → push commit
++ tag → `gh release create <tag> --prerelease` (attach packages from Phase 8;
+omit `--prerelease` for `v1.0.0`). Only an undefined tag, failed credentials, or
+a publish error warrants stopping to report. See AGENTS.md §6 and PLAN.md §15.
 
 **Flatpak:** not on the roadmap — flagged in PLAN.md §1 (beyond PRD scope; needs PRD update + user go-ahead). No checkbox until approved.

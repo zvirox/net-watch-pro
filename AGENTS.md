@@ -1,6 +1,6 @@
 # AGENTS.md — Rulebook for AI Coding Assistants
 
-**Version:** 1.1 · **Date:** 2026-11-15  
+**Version:** 1.2 · **Date:** 2026-11-18
 **Every AI assistant working in this repo must follow these rules.** They are binding, not suggestions. When a rule is unclear, ask the user. When a rule conflicts with a source-of-truth file, see §3.
 
 ---
@@ -96,6 +96,7 @@ Additional standing rules:
 - Every commit message: Conventional Commits (ARCHITECTURE.md §8.1), referencing the task.
 - If you cannot verify a change (no build, no tests runnable), say so in the summary — never claim verification you didn't perform.
 - If a task turns out bigger than the plan predicted, stop, re-plan, and report — don't improvise scope.
+- **A phase is not done until it is released** (owner directive, 2026-11-18). When every P-task and the phase DoD in `PLAN.md` are verified, complete the planned release in the *same* change — do not ask for permission again for a tag the plan already names. Sequence: (1) add the `CHANGELOG.md` entry for the planned tag with today's date and update its link refs; (2) tick the phase's release box in `CHECKLIST.md`; (3) commit (`docs(release): …`) so every artifact is inside the tagged commit; (4) create the **annotated** tag named in `PLAN.md` §1 / the phase DoD; (5) push commit **and** tag; (6) publish the GitHub release with `gh release create <tag> --prerelease` (source-only through Phase 8; attach packages from Phase 8 onward). Stop and report only if the plan names no tag, credentials fail, or publishing errors — never guess a version or skip the release.
 
 ---
 
@@ -109,6 +110,7 @@ Additional standing rules:
 - [ ] No new dependencies without user approval; no secrets; no network calls
 - [ ] Relevant source-of-truth file(s) updated in the same change, if the change touched their domain
 - [ ] Short summary written: what changed, what was verified, what's open
+- [ ] If the phase DoD is met: planned tag pushed + GitHub release published (no follow-up, no re-ask)
 
 ---
 
