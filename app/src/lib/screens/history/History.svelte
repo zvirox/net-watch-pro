@@ -3,8 +3,8 @@
   // sidebar/topbar). Data comes from the history store (REST C2, keyset
   // pagination); infinite scroll reuses the Live screen's manual windowing
   // (fixed row height + spacers) and triggers the next page at the end.
-  // Free tier: app search only — the Pro filter chips/Export land in P6.7/
-  // P6.8 (§8.6). Errors/loading/empty states per DESIGN.md §7.9/§8.6.
+  // Free tier: app search only; Pro filter chips are visibly locked and open
+  // the upgrade modal (DESIGN.md §8.6). Errors/loading/empty per §7.9.
   import {
     Button,
     Input,
@@ -16,6 +16,7 @@
     TableCell,
   } from '$lib/components/ui';
   import { historyStore, type HistoryRow } from '$lib/stores/history.svelte';
+  import { licenseStore } from '$lib/stores/license.svelte';
   import { formatBytes } from '$lib/utils/format';
 
   // Manual windowing (same approach as Live §8.4): fixed row height, render
@@ -26,8 +27,22 @@
 
   let scrollTop = $state(0);
   let viewportH = $state(480);
+  let expandedChip = $state<ChipKey | null>(null);
+
+  type ChipKey = 'since' | 'remote_host' | 'remote_port' | 'protocol';
+  type Chip = { key: ChipKey; label: string; tooltip: string };
+
+  // Pro chips (API.md C2 advanced set). Locked chips stay visible so the
+  // entitlement is discoverable instead of silently missing (DESIGN.md §7.5).
+  const proChips: Chip[] = [
+    { key: 'since', label: 'Date range', tooltip: 'Filter by start and end date' },
+    { key: 'remote_host', label: 'Remote host', tooltip: 'Filter by hostname substring' },
+    { key: 'remote_port', label: 'Port', tooltip: 'Filter by remote port' },
+    { key: 'protocol', label: 'Protocol', tooltip: 'Filter by TCP, UDP, ICMP or other' },
+  ];
 
   const connected = $derived(historyStore.connection === 'connected');
+  const isPro = $derived(licenseStore.isPro);
   const rows = $derived(historyStore.rows);
   const winStart = $derived(Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN));
   const winEnd = $derived(
@@ -44,6 +59,34 @@
 
   function onSearchInput(event: Event): void {
     historyStore.setAppSearch((event.currentTarget as HTMLInputElement).value);
+  }
+
+  function onChipClick(key: ChipKey): void {
+    if (!isPro) {
+      // §7.5: a disabled Pro-gated control is never silent — it opens Upgrade.
+      licenseStore.openUpgrade();
+      return;
+    }
+    expandedChip = expandedChip === key ? null : key;
+  }
+
+  function dateToEpoch(value: string, endOfDay: boolean): number | null {
+    if (!value) return null;
+    const parsed = Date.parse(`${value}${endOfDay ? 'T23:59:59Z' : 'T00:00:00Z'}`);
+    return Number.isNaN(parsed) ? null : Math.floor(parsed / 1000);
+  }
+
+  function onDateInput(key: 'since' | 'until', event: Event, endOfDay: boolean): void {
+    const value = (event.currentTarget as HTMLInputElement).value;
+    historyStore.setProFilter(key, dateToEpoch(value, endOfDay));
+  }
+
+  function onTextFilter(key: 'remote_host' | 'remote_port', event: Event): void {
+    historyStore.setProFilter(key, (event.currentTarget as HTMLInputElement).value);
+  }
+
+  function onProtocol(event: Event): void {
+    historyStore.setProFilter('protocol', (event.currentTarget as HTMLSelectElement).value);
   }
 
   function fmtDate(timestamp: number): string {
@@ -73,7 +116,7 @@
       <p>The daemon is not linked. History will appear once the connection is restored.</p>
     </div>
   {:else}
-    <!-- Filter row (§8.6): free tier = app search; Pro chips land in P6.7 -->
+    <!-- Filter row (§8.6): free search + visibly locked Pro chips -->
     <div class="filter-row">
       <Input
         class="filter-search"
@@ -82,7 +125,103 @@
         aria-label="Search history by app"
         oninput={onSearchInput}
       />
+      <div class="chip-row" aria-label="Advanced filters">
+        {#each proChips as chip (chip.key)}
+          <span class="chip-wrap">
+            <button
+              type="button"
+              class="chip"
+              class:chip--locked={!isPro}
+              class:chip--active={isPro && historyStore.hasProFilter(chip.key)}
+              aria-disabled={!isPro}
+              aria-expanded={isPro ? expandedChip === chip.key : undefined}
+              aria-describedby={`tip-${chip.key}`}
+              onclick={() => {
+                onChipClick(chip.key);
+              }}
+            >
+              {#if !isPro}
+                <svg
+                  class="lock"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <rect x="4" y="11" width="16" height="10" rx="2" /><path
+                    d="M8 11V7a4 4 0 0 1 8 0v4"
+                  />
+                </svg>
+              {/if}
+              <span>{chip.label}</span>
+            </button>
+            <span id={`tip-${chip.key}`} class="tooltip" role="tooltip">
+              {isPro ? chip.tooltip : `${chip.tooltip} · requires Pro`}
+            </span>
+          </span>
+        {/each}
+      </div>
     </div>
+
+    {#if isPro && expandedChip !== null}
+      <div class="filter-panel">
+        {#if expandedChip === 'since'}
+          <Input
+            type="date"
+            label="From"
+            aria-label="History start date"
+            oninput={(event: Event) => {
+              onDateInput('since', event, false);
+            }}
+          />
+          <Input
+            type="date"
+            label="To"
+            aria-label="History end date"
+            oninput={(event: Event) => {
+              onDateInput('until', event, true);
+            }}
+          />
+        {:else if expandedChip === 'remote_host'}
+          <Input
+            label="Hostname contains"
+            placeholder="example.com"
+            aria-label="Filter by remote host"
+            oninput={(event: Event) => {
+              onTextFilter('remote_host', event);
+            }}
+          />
+        {:else if expandedChip === 'remote_port'}
+          <Input
+            type="number"
+            min="0"
+            max="65535"
+            label="Remote port"
+            placeholder="443"
+            aria-label="Filter by remote port"
+            oninput={(event: Event) => {
+              onTextFilter('remote_port', event);
+            }}
+          />
+        {:else}
+          <label class="panel-field">
+            <span>Protocol</span>
+            <select
+              aria-label="Filter by protocol"
+              value={historyStore.proFilters.protocol}
+              onchange={onProtocol}
+            >
+              <option value="any">Any</option>
+              <option value="tcp">TCP</option>
+              <option value="udp">UDP</option>
+              <option value="icmp">ICMP</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+        {/if}
+      </div>
+    {/if}
 
     {#if historyStore.loading}
       <!-- Loading (§7.9): first page in flight -->
@@ -196,7 +335,10 @@
         {#if historyStore.loadingMore}
           <p class="more-note" role="status">Loading more…</p>
         {:else if !historyStore.hasMore}
-          <p class="more-note">End of results · {rows.length} rows loaded</p>
+          <p class="more-note">
+            End of results · {rows.length} rows · retention: {licenseStore.entitlements
+              .retention_max_days} days
+          </p>
         {/if}
       </div>
     {/if}
@@ -220,6 +362,123 @@
   .filter-row :global(.filter-search) {
     flex: 1 1 240px;
     max-inline-size: 340px;
+  }
+
+  /* §7.7/§8.6: Pro chips stay visible when locked (§7.5) and open Upgrade. */
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nwp-space-2);
+  }
+  .chip-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+  .chip {
+    display: inline-flex;
+    min-height: 28px;
+    align-items: center;
+    gap: var(--nwp-space-2);
+    padding: 2px var(--nwp-space-3);
+    border: 1px solid var(--nwp-border-strong);
+    border-radius: var(--nwp-radius-sm);
+    background: var(--nwp-surface);
+    color: var(--nwp-text-secondary);
+    font-size: var(--nwp-size-label);
+    cursor: pointer;
+  }
+  .chip:hover {
+    border-color: var(--nwp-primary);
+    color: var(--nwp-text);
+  }
+  .chip:focus-visible {
+    outline: 2px solid var(--nwp-primary);
+    outline-offset: 2px;
+  }
+  .chip--locked {
+    border-color: var(--nwp-secondary-soft);
+    background: var(--nwp-secondary-soft);
+    color: var(--nwp-secondary);
+  }
+  .chip--locked:hover {
+    border-color: var(--nwp-secondary);
+    color: var(--nwp-secondary);
+  }
+  .chip--active {
+    border-color: var(--nwp-primary);
+    background: var(--nwp-primary-soft);
+    color: var(--nwp-primary);
+  }
+  .lock {
+    inline-size: 14px;
+    block-size: 14px;
+    flex: none;
+  }
+
+  /* §7.12: 300ms show / 0ms hide, hover + keyboard focus, no interactive content. */
+  .tooltip {
+    position: absolute;
+    top: calc(100% + var(--nwp-space-2));
+    left: 0;
+    z-index: 20;
+    max-inline-size: 280px;
+    padding: var(--nwp-space-2);
+    border: 1px solid var(--nwp-border);
+    border-radius: var(--nwp-radius-md);
+    background: var(--nwp-surface);
+    box-shadow: var(--nwp-shadow-md);
+    color: var(--nwp-text);
+    font-size: var(--nwp-size-label);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity var(--nwp-dur-fast) var(--nwp-ease-standard),
+      visibility 0ms linear var(--nwp-dur-fast);
+  }
+  .chip-wrap:hover .tooltip,
+  .chip-wrap:focus-within .tooltip {
+    opacity: 1;
+    visibility: visible;
+    transition:
+      opacity var(--nwp-dur-base) var(--nwp-ease-standard) 300ms,
+      visibility 0ms;
+  }
+
+  .filter-panel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--nwp-space-3);
+    padding: var(--nwp-space-3);
+    border: 1px solid var(--nwp-border);
+    border-radius: var(--nwp-radius-md);
+    background: var(--nwp-surface-2);
+  }
+  .filter-panel :global(.nwp-field) {
+    flex: 1 1 180px;
+  }
+  .panel-field {
+    display: flex;
+    flex: 1 1 180px;
+    flex-direction: column;
+    gap: var(--nwp-space-2);
+    color: var(--nwp-text);
+    font-size: var(--nwp-size-label);
+  }
+  .panel-field select {
+    block-size: 36px;
+    padding: var(--nwp-space-2);
+    border: 1px solid var(--nwp-border-strong);
+    border-radius: var(--nwp-radius-md);
+    background: var(--nwp-surface);
+    color: var(--nwp-text);
+    font: inherit;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tooltip {
+      transition: none;
+    }
   }
 
   .state-card {

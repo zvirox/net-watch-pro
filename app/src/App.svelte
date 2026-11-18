@@ -6,8 +6,10 @@
   import History from '$lib/screens/history/History.svelte';
   import Dashboard from '$lib/screens/dashboard/Dashboard.svelte';
   import AppDetail from '$lib/screens/app-detail/AppDetail.svelte';
+  import UpgradeModal from '$lib/screens/upgrade/UpgradeModal.svelte';
   import { daemonStore } from '$lib/stores/daemon.svelte';
   import { appDetailStore } from '$lib/stores/app-detail.svelte';
+  import { licenseStore } from '$lib/stores/license.svelte';
 
   let connected = $state(daemonStore.connection === 'connected');
   const routes = [
@@ -81,7 +83,17 @@
         </a>
       {/each}
       <p class="nav-heading nav-heading--lower">ACCOUNT</p>
-      <a href="#upgrade"><span class="nav-icon" aria-hidden="true">◇</span><span>Upgrade</span></a>
+      <a
+        href="#upgrade"
+        onclick={(event) => {
+          event.preventDefault();
+          licenseStore.openUpgrade();
+        }}
+      >
+        <span class="nav-icon" aria-hidden="true">◇</span>
+        <span class="nav-label">Upgrade</span>
+        {#if licenseStore.isPro}<span class="pro-badge">PRO</span>{/if}
+      </a>
     </nav>
     <div class="sidebar-foot">
       <span class="connection-dot" class:online={connected}></span>{connected
@@ -144,6 +156,8 @@
     </main>
   </div>
 </div>
+
+<UpgradeModal />
 
 <style>
   :global(*) {
@@ -222,6 +236,16 @@
   nav a.active {
     background: var(--nwp-primary-soft);
     color: var(--nwp-primary);
+    font-weight: 600;
+  }
+  /* §7.7: secondary-soft pill marks the Pro entitlement */
+  .pro-badge {
+    border-radius: var(--nwp-radius-sm);
+    background: var(--nwp-secondary-soft);
+    padding: 2px var(--nwp-space-2);
+    color: var(--nwp-secondary);
+    font-family: var(--nwp-font-mono);
+    font-size: var(--nwp-size-caption);
     font-weight: 600;
   }
   nav a:focus-visible,
@@ -346,6 +370,8 @@
     }
     .brand > span:last-child,
     nav a > span:last-child,
+    .nav-label,
+    .pro-badge,
     .nav-heading,
     .sidebar-foot {
       display: none;

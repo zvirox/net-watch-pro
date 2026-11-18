@@ -283,6 +283,63 @@ pub async fn settings_update(
     }
 }
 
+/// `POST /exports` — E1: create an export job (Pro only, API.md §2.3).
+pub async fn export_create(
+    State(state): State<Arc<AppState>>,
+    request: axum::extract::Request,
+) -> Response {
+    use axum::body::to_bytes;
+
+    let now = epoch_now();
+    let (_, body) = request.into_parts();
+    let Ok(bytes) = to_bytes(body, 64 * 1024).await else {
+        return ApiError::query_invalid("Request body is too large").into_response();
+    };
+    match crate::exports::create_job(
+        &state.db,
+        &state.exports,
+        &state.export_create_limiter,
+        &bytes,
+        now,
+    )
+    .await
+    {
+        Ok(payload) => (StatusCode::ACCEPTED, Json(payload)).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `GET /exports/{id}` — E2: job status.
+pub async fn export_status(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    match crate::exports::job_status(&state.exports, &id) {
+        Ok(payload) => Json(payload).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `GET /exports/{id}/content` — E3: download the generated file with a
+/// `Content-Disposition` attachment header (API.md E3).
+pub async fn export_content(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    match crate::exports::job_content(&state.exports, &state.export_download_limiter, &id) {
+        Ok(content) => {
+            let disposition = format!("attachment; filename=\"{}\"", content.filename);
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(axum::http::header::CONTENT_TYPE, content.content_type)
+                .header(axum::http::header::CONTENT_DISPOSITION, disposition)
+                .body(axum::body::Body::from(content.body))
+                .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
+        }
+        Err(err) => err.into_response(),
+    }
+}
+
 /// Epoch seconds for serve-time stamps.
 fn epoch_now() -> u64 {
     std::time::SystemTime::now()
@@ -347,6 +404,12 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
         .route(
             "/api/v1/settings/{key}",
             axum::routing::put(settings_update),
+        )
+        .route("/api/v1/exports", axum::routing::post(export_create))
+        .route("/api/v1/exports/{id}", axum::routing::get(export_status))
+        .route(
+            "/api/v1/exports/{id}/content",
+            axum::routing::get(export_content),
         )
         .route("/api/v1/usage/summary", axum::routing::get(usage_summary))
         .route("/api/v1/usage/timeline", axum::routing::get(usage_timeline))

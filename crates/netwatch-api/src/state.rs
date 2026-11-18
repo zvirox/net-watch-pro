@@ -6,12 +6,15 @@
 //! socket peer-credential.
 
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use netwatch_common::StatusSnapshot;
 use sqlx::SqlitePool;
 use tokio::sync::watch;
 
 use crate::LiveFeed;
+use crate::exports::ExportRegistry;
+use crate::ratelimit::RateLimiter;
 
 /// Whole-process state shared with all routes/extractors.
 pub struct AppState {
@@ -28,6 +31,12 @@ pub struct AppState {
     pub ws_clients: AtomicU64,
     /// Server start time, for `uptime_s` in `/status`.
     pub started_at: std::time::Instant,
+    /// In-memory export jobs (API.md E2; process-global, no schema).
+    pub exports: ExportRegistry,
+    /// 5 exports created per minute (API.md §1.5).
+    pub export_create_limiter: RateLimiter,
+    /// 10 export downloads per minute (API.md §1.5).
+    pub export_download_limiter: RateLimiter,
 }
 
 impl AppState {
@@ -46,6 +55,9 @@ impl AppState {
             db,
             ws_clients: AtomicU64::new(0),
             started_at: std::time::Instant::now(),
+            exports: ExportRegistry::new(),
+            export_create_limiter: RateLimiter::new(5, Duration::from_secs(60)),
+            export_download_limiter: RateLimiter::new(10, Duration::from_secs(60)),
         }
     }
 

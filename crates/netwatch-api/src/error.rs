@@ -6,10 +6,10 @@
 //! `netwatch_common::ErrorCode` for the full set.
 
 use axum::Json;
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use netwatch_common::ErrorCode;
-use serde_json::json;
+use serde_json::{Map, Value, json};
 
 /// API error with a stable code and HTTP mapping (API.md §1.3 table).
 #[derive(Debug, thiserror::Error)]
@@ -18,6 +18,10 @@ pub struct ApiError {
     code: ErrorCode,
     status: StatusCode,
     message: String,
+    /// Structured detail fields rendered under `error.details` (API.md §1.3).
+    details: Map<String, Value>,
+    /// When set, emitted as a `Retry-After` response header (API.md §1.5).
+    retry_after_s: Option<u64>,
 }
 
 impl ApiError {
@@ -27,6 +31,23 @@ impl ApiError {
             code,
             status,
             message: message.into(),
+            details: Map::new(),
+            retry_after_s: None,
+        }
+    }
+
+    /// 429 — a per-process rate limit was exceeded (API.md §1.5). Carries
+    /// `details.retry_after_s` and a `Retry-After` header so clients can back off.
+    #[must_use]
+    pub fn rate_limited(retry_after_s: u64) -> Self {
+        let mut details = Map::new();
+        details.insert("retry_after_s".to_string(), json!(retry_after_s));
+        Self {
+            code: ErrorCode::RateLimited,
+            status: StatusCode::TOO_MANY_REQUESTS,
+            message: format!("Rate limit exceeded; retry in {retry_after_s}s"),
+            details,
+            retry_after_s: Some(retry_after_s),
         }
     }
 
@@ -90,15 +111,28 @@ impl IntoResponse for ApiError {
     /// Render the §1.3 envelope. `details` is always an object; `request_id`
     /// is an opaque short hex id (never a secret) for log correlation.
     fn into_response(self) -> Response {
+        let Self {
+            code,
+            status,
+            message,
+            details,
+            retry_after_s,
+        } = self;
         let body = json!({
             "error": {
-                "code": self.code,
-                "message": self.message,
-                "details": {},
+                "code": code,
+                "message": message,
+                "details": details,
                 "request_id": request_id(),
             }
         });
-        (self.status, Json(body)).into_response()
+        let mut response = (status, Json(body)).into_response();
+        if let Some(seconds) = retry_after_s
+            && let Ok(value) = HeaderValue::from_str(&seconds.to_string())
+        {
+            response.headers_mut().insert(header::RETRY_AFTER, value);
+        }
+        response
     }
 }
 
@@ -132,5 +166,16 @@ mod tests {
         assert_eq!(v["error"]["code"], "AUTH_INVALID");
         assert_eq!(v["error"]["details"], serde_json::json!({}));
         assert_eq!(v["error"]["request_id"].as_str().unwrap().len(), 16);
+    }
+
+    #[tokio::test]
+    async fn rate_limited_has_details_and_retry_after() {
+        let resp = ApiError::rate_limited(42).into_response();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(resp.headers()[header::RETRY_AFTER], "42");
+        let bytes = to_bytes(resp.into_body(), 4096).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["error"]["code"], "RATE_LIMITED");
+        assert_eq!(v["error"]["details"]["retry_after_s"], 42);
     }
 }

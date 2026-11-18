@@ -659,6 +659,45 @@ async fn http_request_at(
     (status, body)
 }
 
+/// Raw request returning `(status, headers, body bytes)` — used for the export
+/// file download (binary body + Content-Disposition/Retry-After headers).
+async fn http_request_full(
+    socket: &std::path::Path,
+    method: &str,
+    path: &str,
+    body: Option<&str>,
+) -> (u16, String, Vec<u8>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = UnixStream::connect(socket).await.unwrap();
+    let body_text = body.unwrap_or("");
+    let request = format!(
+        "{method} {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body_text}",
+        body_text.len()
+    );
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        let n = stream.read(&mut chunk).await.unwrap();
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        assert!(buf.len() <= 64 * 1024, "response exceeds 64 KiB bound");
+    }
+    let split = buf
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .expect("no HTTP header terminator");
+    let head = String::from_utf8_lossy(&buf[..split]).to_string();
+    let status: u16 = head
+        .split_whitespace()
+        .nth(1)
+        .and_then(|value| value.parse().ok())
+        .expect("no HTTP status line");
+    (status, head, buf[split + 4..].to_vec())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn health_over_socket_returns_contract_shape() {
     let (sock, _tx) = spawn_server().await;
@@ -1776,4 +1815,224 @@ async fn pro_retention_above_90_is_allowed() {
         .unwrap();
     assert_eq!(retention["value"], 120);
     assert_eq!(retention["max"], 365);
+}
+
+// -------------------------------------------------------- §2.3 Exports E1-E3
+
+async fn seed_export_rows(db: &sqlx::SqlitePool) {
+    sqlx::query("INSERT INTO apps (id, name) VALUES (1, 'Firefox')")
+        .execute(db)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO connections (app_id, pid, process_name, protocol, local_ip, local_port,
+            remote_ip, remote_port, remote_host, bytes_up, bytes_down, packets_up, packets_down,
+            first_seen_at, last_seen_at, is_open, interface_id)
+         VALUES (1, 42, 'firefox', 'tcp', '10.0.0.2', 50000, '198.51.100.1', 443,
+            'example.com', 100, 200, 3, 4, 1733165200, 1733170600, 0, NULL)",
+    )
+    .execute(db)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO usage_rollup_15m (app_id, bucket_start, bytes_up, bytes_down, connection_count)
+         VALUES (1, 1733165100, 100, 200, 3), (1, 1733166000, 50, 60, 1)",
+    )
+    .execute(db)
+    .await
+    .unwrap();
+}
+
+async fn export_server(pro: bool) -> (std::path::PathBuf, watch::Sender<StatusSnapshot>) {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    seed_export_rows(&db).await;
+    if pro {
+        sqlx::query("UPDATE license SET tier = 'pro'")
+            .execute(&db)
+            .await
+            .unwrap();
+    }
+    spawn_server_with(db).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn export_csv_creation_status_and_download() {
+    let (sock, _tx) = export_server(true).await;
+    let request = r#"{"scope":"connections","format":"csv","filters":{"app_id":1}}"#;
+    let (status, _, body) =
+        http_request_full(&sock, "POST", "/api/v1/exports", Some(request)).await;
+    assert_eq!(status, 202, "body: {}", String::from_utf8_lossy(&body));
+    let created: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(created["state"], "queued");
+    assert_eq!(created["expires_in_s"], 600);
+    assert_eq!(created["estimated_rows"], 1);
+    let id = created["id"].as_str().unwrap();
+    assert!(id.starts_with("exp_"), "id: {id}");
+
+    let (status, _, body) =
+        http_request_full(&sock, "GET", &format!("/api/v1/exports/{id}"), None).await;
+    assert_eq!(status, 200, "body: {}", String::from_utf8_lossy(&body));
+    let state: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(state["state"], "done");
+    assert_eq!(state["rows"], 1);
+    assert!(state["size_bytes"].as_i64().is_some_and(|size| size > 0));
+
+    let (status, head, bytes) =
+        http_request_full(&sock, "GET", &format!("/api/v1/exports/{id}/content"), None).await;
+    assert_eq!(status, 200);
+    let head = head.to_ascii_lowercase();
+    assert!(head.contains("content-type: text/csv"), "headers: {head}");
+    assert!(
+        head.contains("content-disposition: attachment; filename=\"netwatch-pro-export-"),
+        "headers: {head}"
+    );
+    let text = String::from_utf8(bytes).unwrap();
+    assert!(text.starts_with("id,app_id,interface_id,"));
+    assert!(text.contains("198.51.100.1"));
+    assert!(text.contains("example.com"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn export_json_and_unknown_job_are_contract_shaped() {
+    let (sock, _tx) = export_server(true).await;
+    let request = r#"{"scope":"usage_daily","format":"json","filters":{"app_id":1}}"#;
+    let (status, _, body) =
+        http_request_full(&sock, "POST", "/api/v1/exports", Some(request)).await;
+    assert_eq!(status, 202, "body: {}", String::from_utf8_lossy(&body));
+    let created: Value = serde_json::from_slice(&body).unwrap();
+    let id = created["id"].as_str().unwrap();
+
+    let (status, head, bytes) =
+        http_request_full(&sock, "GET", &format!("/api/v1/exports/{id}/content"), None).await;
+    assert_eq!(status, 200);
+    assert!(head.to_ascii_lowercase().contains("application/json"));
+    let rows: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rows[0]["bytes_up"], 150);
+    assert_eq!(rows[0]["connection_count"], 4);
+
+    for path in [
+        "/api/v1/exports/exp_nope".to_string(),
+        "/api/v1/exports/exp_nope/content".to_string(),
+    ] {
+        let (status, _, body) = http_request_full(&sock, "GET", &path, None).await;
+        assert_eq!(
+            status,
+            404,
+            "path {path}: {}",
+            String::from_utf8_lossy(&body)
+        );
+        let v: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["error"]["code"], "NOT_FOUND");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn export_requires_pro_and_valid_filters() {
+    let (sock, _tx) = export_server(false).await;
+    let request = r#"{"scope":"connections","format":"csv","filters":{"app_id":1}}"#;
+    let (status, _, body) =
+        http_request_full(&sock, "POST", "/api/v1/exports", Some(request)).await;
+    assert_eq!(status, 403, "body: {}", String::from_utf8_lossy(&body));
+    let v: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(v["error"]["code"], "EXPORT_PRO_REQUIRED");
+
+    // Activation unlocks exports immediately on the same running server.
+    let (status, body) = http_request_at(
+        &sock,
+        "POST",
+        "/api/v1/license/activate",
+        Some(r#"{"key":"NWP1-A-B"}"#),
+    )
+    .await;
+    assert_eq!(status, 400, "body: {body}"); // malformed key — Pro not granted
+
+    let (sock, _tx) = export_server(true).await;
+    for request in [
+        r#"{"scope":"connections","format":"csv","filters":{}}"#,
+        r#"{"scope":"connections","format":"csv","filters":{"bogus":1}}"#,
+        r#"{"scope":"connections","format":"xml","filters":{"app_id":1}}"#,
+        r#"{"scope":"bogus","format":"csv","filters":{"app_id":1}}"#,
+    ] {
+        let (status, _, body) =
+            http_request_full(&sock, "POST", "/api/v1/exports", Some(request)).await;
+        assert_eq!(
+            status,
+            400,
+            "request {request}: {}",
+            String::from_utf8_lossy(&body)
+        );
+        let v: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["error"]["code"], "QUERY_INVALID");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sixth_export_in_a_minute_is_rate_limited() {
+    let (sock, _tx) = export_server(true).await;
+    let request = r#"{"scope":"connections","format":"csv","filters":{"app_id":1}}"#;
+    for _ in 0..5 {
+        let (status, _, body) =
+            http_request_full(&sock, "POST", "/api/v1/exports", Some(request)).await;
+        assert_eq!(status, 202, "body: {}", String::from_utf8_lossy(&body));
+    }
+    let (status, head, body) =
+        http_request_full(&sock, "POST", "/api/v1/exports", Some(request)).await;
+    assert_eq!(status, 429, "body: {}", String::from_utf8_lossy(&body));
+    let v: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(v["error"]["code"], "RATE_LIMITED");
+    assert!(v["error"]["details"]["retry_after_s"].is_u64());
+    assert!(head.to_ascii_lowercase().contains("retry-after:"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn eleventh_download_in_a_minute_is_rate_limited() {
+    let (sock, _tx) = export_server(true).await;
+    let request = r#"{"scope":"connections","format":"csv","filters":{"app_id":1}}"#;
+    let (status, _, body) =
+        http_request_full(&sock, "POST", "/api/v1/exports", Some(request)).await;
+    assert_eq!(status, 202);
+    let created: Value = serde_json::from_slice(&body).unwrap();
+    let id = created["id"].as_str().unwrap();
+    let path = format!("/api/v1/exports/{id}/content");
+    for _ in 0..10 {
+        let (status, _, _) = http_request_full(&sock, "GET", &path, None).await;
+        assert_eq!(status, 200);
+    }
+    let (status, head, body) = http_request_full(&sock, "GET", &path, None).await;
+    assert_eq!(status, 429, "body: {}", String::from_utf8_lossy(&body));
+    let v: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(v["error"]["code"], "RATE_LIMITED");
+    assert!(head.to_ascii_lowercase().contains("retry-after:"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn deactivation_lets_started_export_finish_but_blocks_new_ones() {
+    let (sock, _tx) = export_server(true).await;
+    let request = r#"{"scope":"connections","format":"csv","filters":{"app_id":1}}"#;
+    let (status, _, body) =
+        http_request_full(&sock, "POST", "/api/v1/exports", Some(request)).await;
+    assert_eq!(status, 202, "body: {}", String::from_utf8_lossy(&body));
+    let created: Value = serde_json::from_slice(&body).unwrap();
+    let id = created["id"].as_str().unwrap();
+
+    let (status, _) = http_request_at(&sock, "DELETE", "/api/v1/license", None).await;
+    assert_eq!(status, 200);
+
+    let (status, _, body) =
+        http_request_full(&sock, "GET", &format!("/api/v1/exports/{id}"), None).await;
+    assert_eq!(status, 200, "body: {}", String::from_utf8_lossy(&body));
+    let state: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(state["state"], "done");
+    let (status, _, bytes) =
+        http_request_full(&sock, "GET", &format!("/api/v1/exports/{id}/content"), None).await;
+    assert_eq!(status, 200);
+    assert!(String::from_utf8_lossy(&bytes).contains("198.51.100.1"));
+
+    let (status, _, body) =
+        http_request_full(&sock, "POST", "/api/v1/exports", Some(request)).await;
+    assert_eq!(status, 403, "body: {}", String::from_utf8_lossy(&body));
+    let v: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(v["error"]["code"], "EXPORT_PRO_REQUIRED");
 }

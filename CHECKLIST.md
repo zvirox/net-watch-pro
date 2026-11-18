@@ -100,9 +100,9 @@
 - [x] P6.2 License verifier (offline signature, no network) <!-- Ed25519 key format + embedded public key + SHA-256 fingerprint; 4 core tests, 106 workspace tests; deps approved -->
 - [x] P6.3 License endpoints (get/activate/deactivate) <!-- L1-L3 with offline verifier, fingerprint-only storage, 409 conflict, status broadcast; 4 API tests, 109 workspace tests -->
 - [x] P6.4 Server-side Pro gating (filters, retention ceiling) <!-- C2 uses shared license gate; T1/T2 enforce 90-day free ceiling with typed validation; 4 settings + 2 gating tests, 113 workspace tests -->
-- [ ] P6.5 Export engine (job → CSV/JSON, rate limits)
-- [ ] P6.6 Upgrade modal + license states
-- [ ] P6.7 History Pro locks (chips + tooltips)
+- [x] P6.5 Export engine (job → CSV/JSON, rate limits) <!-- E1-E3: in-memory jobs, C2-filter parity, CSV/JSON, 5/min create + 10/min download with RATE_LIMITED details/Retry-After, deactivation grace; 15 API tests, 128 workspace tests -->
+- [x] P6.6 Upgrade modal + license states <!-- glass modal per §7.4/§8.8 with §7.2 inline errors, focus trap/Escape, L1-L3 store with WS-status invalidation for instant unlock, Pro badge; svelte-check/lint/build clean, browser smoke-tested -->
+- [x] P6.7 History Pro locks (chips + tooltips) <!-- locked C2 filter chips with §7.12 tooltips open Upgrade; Pro chips drive real filters; deactivation clears them via tier hook; retention caption; svelte-check/lint/build clean -->
 - [ ] P6.8 Export menu + native save dialog
 - [ ] P6.9 Usage budgets & alerts (MVP free tier; D6a)
 - [ ] **DoD: activate → instant unlock; deactivate → locks return; zero network calls; tag `v0.6.0-alpha.6`**
