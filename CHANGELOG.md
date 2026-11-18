@@ -8,6 +8,55 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.6.0-alpha.6] — 2026-11-18
+
+Source-only alpha completing the Phase 6 freemium slice. The full loop is now
+implemented: activate offline → Pro unlocks without restart → filters, exports
+and retention unlock; deactivate → locks return. No outbound product traffic.
+
+### Added
+
+- **Offline licensing (P6.1–P6.4):** `daemon_events` migration and degraded-path
+  recording; Ed25519 verifier with only the public key and a SHA-256 fingerprint
+  in-repo; L1–L3 license endpoints; server-side Pro gating for C2 filters and
+  the T2 retention ceiling.
+- **Exports (P6.5, P6.8):** E1–E3 in-memory jobs producing CSV/JSON with 5/min
+  creation and 10/min download limits, `RATE_LIMITED` details + `Retry-After`,
+  deactivation grace for started jobs, and a History topbar menu that saves via
+  the native Tauri dialog.
+- **Freemium UI (P6.6–P6.7):** WS-driven license store, glass upgrade modal with
+  inline validation, and locked History filter chips with tooltips.
+- **Budgets & alerts (P6.9):** pure core evaluation with warning/breach levels,
+  five free-tier budget settings keys, metered-aware budget state on U1, a
+  Settings screen with usage bars, and deduped desktop notifications via the
+  official Tauri notification plugin.
+
+### Changed
+
+- U1 gains an additive `budgets` object (top-10 per-app states); settings gains
+  `budget_*` keys in whole MB with `0` meaning disabled.
+- Removed the unused `reqwest` declaration from the Tauri shell so the
+  zero-outbound claim is enforceable by the dependency graph.
+- Plan tracker reconciled against verified code; kernel-blocked eBPF items are
+  marked blocked rather than done.
+
+### Verification
+
+Workspace tests 134 passed, 0 failed; Clippy `-D warnings` clean; Tauri shell
+builds with both plugins and their least-privilege capabilities; UI
+`svelte-check`, ESLint/Prettier and `vite build` clean. Zero outbound calls
+audited in product code (no fetch/XHR/CSS CDN; no daemon HTTP client).
+
+### Known open items
+
+- eBPF attach remains blocked by kernel `-EPERM` (spike report); the daemon uses
+  `/sys` interface counters and records degraded events.
+- End-to-end notification delivery and live-daemon activation were not run; they
+  are verified by contract tests, capability generation and code review.
+- Phase tags `v0.1.0-alpha.1` through `v0.3.0-alpha.3` were never published.
+
+---
+
 ## [v0.5.0-alpha.5] — 2026-11-18
 
 Source-only alpha (no `.deb`/`.rpm`/AUR packages — packaging lands in PLAN
@@ -170,7 +219,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.5.0-alpha.5...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.6.0-alpha.6...HEAD
+[v0.6.0-alpha.6]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.6.0-alpha.6
 [v0.5.0-alpha.5]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.5.0-alpha.5
 [v0.4.0-alpha.4]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.4.0-alpha.4
 [v0.0.1-alpha.1]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.0.1-alpha.1
