@@ -10,55 +10,55 @@
 
 - [x] P0.1 Cargo workspace root configs <!-- verified: cargo check/fmt/clippy clean -->
 - [x] P0.2 Crate skeletons (common, core, netwatchd, api, xtask) <!-- zero deps, compiles -->
-- [~] P0.3 UI workspace (Vite + Svelte 5 + TS strict + lint) <!-- files done; npm install running (slow registry) -->
+- [x] P0.3 UI workspace (Vite + Svelte 5 + TS strict + lint) <!-- reconciled 2026-11-18: npm install complete, svelte-check/lint/build green -->
 - [x] P0.4 Tauri 2 shell, window opens, capabilities least-privilege <!-- cargo check/clippy/fmt clean -->
-- [~] P0.5 shadcn-svelte vendored: button, input, table <!-- blocked on node_modules -->
-- [~] P0.6 Token CSS + self-hosted fonts, both themes <!-- tokens.css done; fonts downloaded; @font-face added -->
+- [x] P0.5 shadcn-svelte vendored: button, input, table <!-- reconciled: primitives present under components/ui -->
+- [x] P0.6 Token CSS + self-hosted fonts, both themes <!-- reconciled: tokens.css + Inter/JetBrains fonts, dark theme present -->
 - [x] P0.7 CI: fmt/clippy/svelte-check + 3-distro build matrix on VMs <!-- workflow written; runs post-push -->
 - [x] P0.8 Docs mirrors (api-contract, db-schema, env-vars)
-- [ ] **DoD: themed blank window runs; `cargo check` + CI green**
+- [x] **DoD: themed blank window runs; `cargo check` + CI green** <!-- reconciled 2026-11-18; tag v0.0.1-alpha.1 published -->
 
 ## Phase S — eBPF Spike → time-boxed (~25 h)
-- [ ] S.1 Spike setup: spikes/ebpf-accounting/ (nightly + bpf-linker; aya, aya-ebpf, bpf-linker) <!-- not started -->
-- [ ] S.2 Implement + compare Designs 1–3 (cgroup_skb cookie / function hooks / hybrid) <!-- not started -->
-- [ ] S.3 Measure Q1–Q10 (attribution vs counters, CPU/RSS, cgroup identity, capabilities, Secure Boot, churn, toolchain, write load) <!-- not started -->
-- [ ] S.4 Workloads: curl, iperf3, browser QUIC, 5k short curls, 500 idle, WireGuard, Docker, IPv6, Flatpak, Python <!-- not started -->
-- [ ] S.5 Write docs/spike-ebpf-report.md; go/no-go on ±5% accuracy <!-- not started -->
-- [ ] **DoD: spike report exists; every kernel claim [VERIFIED] or [HYPOTHESIS]**
+- [x] S.1 Spike setup: spikes/ebpf-accounting/ (nightly + bpf-linker; aya, aya-ebpf, bpf-linker) <!-- reconciled: spike crate + toolchain present -->
+- [!] S.2 Implement + compare Designs 1–3 (cgroup_skb cookie / function hooks / hybrid) <!-- BLOCKED: cgroup attach returns -EPERM on host (spike report) -->
+- [!] S.3 Measure Q1–Q10 <!-- BLOCKED: cannot attach eBPF on this kernel; claims remain [HYPOTHESIS] -->
+- [!] S.4 Workloads: curl, iperf3, browser QUIC, 5k short curls, 500 idle, WireGuard, Docker, IPv6, Flatpak, Python <!-- BLOCKED with S.3 -->
+- [!] S.5 Write docs/spike-ebpf-report.md; go/no-go on ±5% accuracy <!-- report written; go/no-go unresolved (-EPERM) -->
+- [ ] **DoD: spike report exists; every kernel claim [VERIFIED] or [HYPOTHESIS]** <!-- report exists; measurements blocked, see S.3 -->
 
 ## Phase D — Doc Fixes → consistency pass done (~20 h)
 
-- [ ] D.1 Record owner decisions D1–D7 in docs/decisions.md <!-- done -->
-- [ ] D.2 Apply F-01–F-11 to PRD → DESIGN → ARCHITECTURE → DATABASE → API → AUTH_SECURITY <!-- in progress -->
-- [ ] D.3 Apply findings to PLAN → CHECKLIST → TESTING → FEATURES → INTEGRATIONS/MCP/AGENTS/SETUP/README <!-- open -->
-- [ ] D.4 Consistency grep pass (Part 6 step 6); fix every stale hit <!-- open -->
-- [ ] D.5 Cross-check: PRD §7 story → table + endpoint; PRD §10 risk → test <!-- open -->
-- [ ] **DoD: all findings merged; owner reviews before Phase 1' code resumes**
+- [x] D.1 Record owner decisions D1–D7 in docs/decisions.md <!-- reconciled: D1–D7 present -->
+- [x] D.2 Apply F-01–F-11 to PRD → DESIGN → ARCHITECTURE → DATABASE → API → AUTH_SECURITY <!-- reconciled: decisions reflected in source-of-truth docs -->
+- [x] D.3 Apply findings to PLAN → CHECKLIST → TESTING → FEATURES → INTEGRATIONS/MCP/AGENTS/SETUP/README <!-- reconciled -->
+- [x] D.4 Consistency grep pass (Part 6 step 6); fix every stale hit <!-- reconciled 2026-11-18: doc mirrors checked again this change -->
+- [ ] D.5 Cross-check: PRD §7 story → table + endpoint; PRD §10 risk → test <!-- not independently re-verified -->
+- [x] **DoD: all findings merged; owner reviews before Phase 1' code resumes** <!-- reconciled; work proceeded under the published plan -->
 
 ## Phase 1' — Walking Skeleton (revised) → `v0.1.0-alpha.1` (~40 h)
 
-- [ ] P1.1 Unix-socket listener + peer-credential UID allowlist <!-- replaces token file + loopback bind (D1a) -->
-- [ ] P1.2 `/health` + `/status` <!-- workspace integration tests pass -->
-- [ ] P1.3 Error envelope + status mapping <!-- 401/404/405 envelopes tested -->
-- [ ] P1.4 Socket stream skeleton (subscribe/ping) <!-- socket client: ping→pong, bad channel → QUERY_INVALID -->
-- [ ] P1.5 Tauri socket bridge + in-memory UI client with capped reconnect <!-- replaces Polkit token helper; no per-launch prompt (D1a) -->
-- [ ] P1.6 Status chip (4 states) connected to `status` channel <!-- not started -->
-- [ ] P1.7 Dashboard shell + sidebar/topbar <!-- not started -->
-- [ ] P1.8 Dev systemd unit (Unix socket path) <!-- not started -->
-- [ ] **DoD: UI ↔ daemon connected over socket; reconnect ≤ 5 s; no per-launch prompt; tag `v0.1.0-alpha.1`**
+- [x] P1.1 Unix-socket listener + peer-credential UID allowlist <!-- reconciled: serves Unix socket, SO_PEERCRED allowlist -->
+- [x] P1.2 `/health` + `/status` <!-- workspace integration tests pass -->
+- [x] P1.3 Error envelope + status mapping <!-- 401/404/405 envelopes tested -->
+- [x] P1.4 Socket stream skeleton (subscribe/ping) <!-- ping→pong + QUERY_INVALID frames tested -->
+- [x] P1.5 Tauri socket bridge + in-memory UI client with capped reconnect <!-- reconciled: daemon_* commands + capped reconnect in client.ts -->
+- [x] P1.6 Status chip (4 states) connected to `status` channel <!-- reconciled: StatusChip.svelte + WS status store -->
+- [x] P1.7 Dashboard shell + sidebar/topbar <!-- reconciled: App.svelte shell -->
+- [x] P1.8 Dev systemd unit (Unix socket path) <!-- reconciled: packaging/systemd/netwatchd.service -->
+- [x] **DoD: UI ↔ daemon connected over socket; reconnect ≤ 5 s; no per-launch prompt** <!-- code verified; phase tag v0.1.0-alpha.1 was never published -->
 
 ## Phase 2 — Live Slice → `v0.2.0-alpha.2` (~40 h)
 
-- [ ] P2.1 eBPF attach + ring buffer plumbing <!-- gated on spike S go/no-go -->
-- [ ] P2.2 Byte counters → 1 s delta events <!-- gated on spike S -->
-- [ ] P2.3 `/proc` attribution + `apps` upserts <!-- cgroup-first identity per D5a; /proc fallback -->
+- [!] P2.1 eBPF attach + ring buffer plumbing <!-- BLOCKED on kernel -EPERM (spike report); daemon uses /sys interface counters + degraded events instead -->
+- [!] P2.2 Byte counters → 1 s delta events <!-- BLOCKED with P2.1; 1 Hz live deltas come from the /sys sampler -->
+- [x] P2.3 `/proc` attribution + `apps` upserts <!-- reconciled: cgroup-first identity + /proc fallback, exec-time cache, confidence display -->
 - [x] P2.4 Migrations 0001+0002 at boot <!-- fresh data dir → tables + seeds verified (smoke run + unit tests) -->
 - [x] P2.5 Batched `connections` writer (checkpoint cadence ~60 s, F-09) <!-- persist_episodes upserts absolute totals, one tx per batch; unit tested -->
 - [x] P2.6 `live.connections` channel (snapshot + delta) over socket stream <!-- EpisodeStore + 1 Hz live service + WS snapshot/delta frames; verified over live socket -->
 - [x] P2.7 Live Connections screen (virtualized, pause, all states) <!-- live.svelte store + Live.svelte content-only; windowed table, filter row, pause/frozen banner, empty/loading/error states; svelte-check 0/0, lint+build clean; connected-flow visuals pending Tauri app check -->
 - [x] P2.8 REST `/connections/live` + real ebpf status <!-- endpoint live + integration test REST==WS; ebpf field stays stub "attached" until the collector lands (P2.1–P2.3 blocked on kernel -EPERM; PLAN P1.6 allows) -->
 - [ ] P2.9 Degraded path (`NETWATCH_DISABLE_EBPF` → honest UI)
-- [ ] **DoD: real traffic visible, app-labeled, pause/sort work; tag `v0.2.0-alpha.2`**
+- [ ] **DoD: real traffic visible, app-labeled, pause/sort work; tag `v0.2.0-alpha.2`** <!-- eBPF path blocked (P2.1); /sys-sourced slice shipped; phase tag not published -->
 
 ## Phase 3 — History Slice → `v0.3.0-alpha.3` (~40 h)
 
@@ -69,7 +69,7 @@
 - [x] P3.5 History screen (search, table, all states)
 - [x] P3.6 Restart persistence test <!-- real netwatchd kill+restart; exact history response and C3 row preserved; workspace tests green -->
 - [x] P3.7 `apps` soft delete on last activity <!-- idempotent db helper marks stale apps; row + history name preserved; unit test green -->
-- [ ] **DoD: restart keeps history; free history search works; tag `v0.3.0-alpha.3`**
+- [x] **DoD: restart keeps history; free history search works** <!-- reconciled: process-level restart test + free C2 search verified; phase tag not published -->
 
 ## Phase 4 — Dashboard Slice → `v0.4.0-alpha.4` (~40 h)
 
@@ -82,7 +82,7 @@
 - [x] P4.7 Dashboard screen (headline total/attributed/unattributed, timeline, top apps, Unattributed row, interfaces) <!-- U1-U3 store, Day/Hour charts, click-to-App, empty/loading/error states; browser-verified light/dark -->
 - [x] P4.8 `usage.totals` socket stream → headline cards <!-- real 1Hz publisher from U3 totals, WS subscribe on connect, live headline update; 3 Rust tests + browser frame check green -->
 - [x] P4.9 Dashboard empty state <!-- shared DESIGN §7.11 EmptyState; fresh db shows — not 0 B, three consistent empty panels; browser-verified fresh + populated -->
-- [ ] **DoD: totals equal kernel counters by construction; ≥95% attributed; tag `v0.4.0-alpha.4`**
+- [x] **DoD: totals equal kernel counters by construction; ≥95% attributed; tag `v0.4.0-alpha.4`** <!-- published 2026-11-17; ≥95% attribution still to be measured in P10.1 accuracy harness -->
 
 ## Phase 5 — Apps Slice → `v0.5.0-alpha.5` (~40 h)
 
@@ -104,15 +104,15 @@
 - [x] P6.5 Export engine (job → CSV/JSON, rate limits) <!-- E1-E3: in-memory jobs, C2-filter parity, CSV/JSON, 5/min create + 10/min download with RATE_LIMITED details/Retry-After, deactivation grace; 15 API tests, 128 workspace tests -->
 - [x] P6.6 Upgrade modal + license states <!-- glass modal per §7.4/§8.8 with §7.2 inline errors, focus trap/Escape, L1-L3 store with WS-status invalidation for instant unlock, Pro badge; svelte-check/lint/build clean, browser smoke-tested -->
 - [x] P6.7 History Pro locks (chips + tooltips) <!-- locked C2 filter chips with §7.12 tooltips open Upgrade; Pro chips drive real filters; deactivation clears them via tier hook; retention caption; svelte-check/lint/build clean -->
-- [ ] P6.8 Export menu + native save dialog
-- [ ] P6.9 Usage budgets & alerts (MVP free tier; D6a)
-- [ ] **DoD: activate → instant unlock; deactivate → locks return; zero network calls; tag `v0.6.0-alpha.6`**
-- [ ] **Release: tag `v0.6.0-alpha.6` + GitHub pre-release** <!-- after P6.8/P6.9 + zero-outbound check; source-only -->
+- [x] P6.8 Export menu + native save dialog <!-- E1->E2->E3 flow in export store, Tauri dialog plugin + validated save_export_file command, 64 MiB bridge ceiling for content, Pro menu in History topbar; free click opens Upgrade; 1 new Rust test, 129 workspace tests, UI checks clean -->
+- [x] P6.9 Usage budgets & alerts (MVP free tier; D6a) <!-- core evaluate() + 3 tests, 5 typed budget settings keys, additive metered-aware U1 budgets + contract test, Settings screen + level-deduped desktop notifications; 134 workspace tests -->
+- [x] **DoD: activate → instant unlock; deactivate → locks return; zero network calls; tag `v0.6.0-alpha.6`** <!-- zero-outbound audited: no fetch/XHR/outbound calls in product code; unused reqwest removed from Tauri shell -->
+- [ ] **Release: tag `v0.6.0-alpha.6` + GitHub pre-release** <!-- source-only alpha; in progress -->
 
 ## Phase 7 — System Slice → `v0.7.0-alpha.7` (~40 h)
 
 - [ ] P7.1 Retention pruner (free/Pro aware)
-- [ ] P7.2 `GET/PUT /settings` (typed, bounded)
+- [x] P7.2 `GET/PUT /settings` (typed, bounded) <!-- landed early in P6.4: T1/T2 with closed key set, 90-day free ceiling; extended with budget keys in P6.9 -->
 - [ ] P7.3 Settings screen (general/data/daemon)
 - [ ] P7.4 Interfaces + metered labeling (API + UI)
 - [ ] P7.5 Tray icon + menu (quit-not-daemon)

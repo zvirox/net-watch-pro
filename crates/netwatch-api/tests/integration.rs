@@ -99,7 +99,10 @@ pub(crate) async fn seed_history_schema(pool: &sqlx::SqlitePool) {
             ('retention_days', '90'), ('start_on_boot', '1'),
             ('theme_default', 'system'), ('metered_policy', 'ask'),
             ('raw_window_days', '7'), ('timezone', 'UTC'),
-            ('billing_cycle_day', '1')",
+            ('billing_cycle_day', '1'),
+            ('budget_total_daily_mb', '0'), ('budget_total_monthly_mb', '0'),
+            ('budget_per_app_daily_mb', '0'), ('budget_per_app_monthly_mb', '0'),
+            ('budget_warn_pct', '80')",
     )
     .execute(pool)
     .await
@@ -165,6 +168,16 @@ async fn seed_usage_schema(pool: &sqlx::SqlitePool) {
             bytes_up INTEGER NOT NULL DEFAULT 0, bytes_down INTEGER NOT NULL DEFAULT 0,
             connection_count INTEGER NOT NULL DEFAULT 0, interfaces_mask TEXT,
             PRIMARY KEY (app_id, bucket_start))",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "CREATE TABLE interfaces (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+            kind TEXT NOT NULL DEFAULT 'ethernet',
+            is_metered INTEGER NOT NULL DEFAULT 0,
+            is_excluded INTEGER NOT NULL DEFAULT 0)",
     )
     .execute(pool)
     .await
@@ -1034,6 +1047,68 @@ async fn usage_summary_empty_db_is_collecting() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn usage_summary_reports_metered_budget_state() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    set_timezone(&db, "UTC").await;
+    sqlx::query("UPDATE settings SET value = '1' WHERE key = 'budget_total_daily_mb'")
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO interfaces (id, name, kind, is_metered, is_excluded) VALUES
+            (2, 'wlan0', 'wifi', 1, 0), (3, 'eth0', 'ethernet', 0, 0)",
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let now = i64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    )
+    .unwrap();
+    let bucket = now / 900 * 900;
+    sqlx::query(
+        "INSERT INTO usage_interface_15m (interface_id, bucket_start, rx_bytes, tx_bytes) VALUES
+            (2, ?1, 1500000, 500000), (3, ?1, 90000000, 90000000)",
+    )
+    .bind(bucket)
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO apps (id, name) VALUES (1, 'Firefox')")
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO usage_rollup_15m (app_id, bucket_start, bytes_up, bytes_down, connection_count)
+         VALUES (1, ?1, 100, 200, 1)",
+    )
+    .bind(bucket)
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let (sock, _tx) = spawn_server_with(db).await;
+    let (status, body) = http_get(&sock, "/api/v1/usage/summary").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    let daily = &v["budgets"]["total_daily"];
+    assert_eq!(
+        daily["used_bytes"], 2_000_000,
+        "unmetered traffic counted: {body}"
+    );
+    assert_eq!(daily["limit_bytes"], 1_048_576);
+    assert_eq!(daily["level"], "breach");
+    assert_eq!(v["budgets"]["total_monthly"]["used_bytes"], 2_000_000);
+    assert_eq!(v["budgets"]["per_app_daily"][0]["app_id"], 1);
+    assert_eq!(v["budgets"]["per_app_daily"][0]["level"], "ok");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn usage_summary_rejects_invalid_top_limit() {
     let db = test_db().await;
     seed_history_schema(&db).await;
@@ -1227,16 +1302,6 @@ async fn usage_timeline_rejects_invalid_queries() {
 }
 
 async fn seed_interfaces(pool: &sqlx::SqlitePool) {
-    sqlx::query(
-        "CREATE TABLE interfaces (
-            id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
-            kind TEXT NOT NULL DEFAULT 'ethernet',
-            is_metered INTEGER NOT NULL DEFAULT 0,
-            is_excluded INTEGER NOT NULL DEFAULT 0)",
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     sqlx::query(
         "INSERT INTO interfaces (id, name, kind, is_metered, is_excluded) VALUES
             (1, 'lo', 'loopback', 0, 1),
@@ -1752,7 +1817,7 @@ async fn settings_list_and_free_retention_ceiling() {
     assert_eq!(status, 200, "body: {body}");
     let rows: Value = serde_json::from_str(&body).unwrap();
     let rows = rows.as_array().unwrap();
-    assert_eq!(rows.len(), 7);
+    assert_eq!(rows.len(), 12);
     let retention = rows
         .iter()
         .find(|row| row["key"] == "retention_days")

@@ -77,6 +77,19 @@ export class DaemonApiClient {
   }
 
   async request(method: string, path: string, body?: unknown): Promise<unknown> {
+    const response = await this.#checkedRequest(method, path, body);
+    const parsed = parseJson(response.body);
+    if (parsed === undefined) throw new Error('Daemon returned invalid JSON');
+    return parsed;
+  }
+
+  /** Fetch a non-JSON response body (export CSV/JSON files) verbatim. */
+  async requestText(method: string, path: string): Promise<string> {
+    const response = await this.#checkedRequest(method, path);
+    return response.body;
+  }
+
+  async #checkedRequest(method: string, path: string, body?: unknown): Promise<DaemonHttpResponse> {
     let response: DaemonHttpResponse;
     try {
       response = await requestDaemon(method, path, body);
@@ -96,9 +109,7 @@ export class DaemonApiClient {
         : `Daemon request failed (HTTP ${String(response.status)})`;
       throw new Error(message);
     }
-    const parsed = parseJson(response.body);
-    if (parsed === undefined) throw new Error('Daemon returned invalid JSON');
-    return parsed;
+    return response;
   }
 
   async send(frame: unknown): Promise<void> {

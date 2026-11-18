@@ -75,6 +75,10 @@ export const daemonStore = {
   request(method: string, path: string, body?: unknown): Promise<unknown> {
     return client.request(method, path, body);
   },
+  /** Raw response body for non-JSON content (export downloads). */
+  requestText(method: string, path: string): Promise<string> {
+    return client.requestText(method, path);
+  },
   send(frame: unknown): Promise<void> {
     return client.send(frame);
   },

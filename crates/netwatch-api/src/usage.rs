@@ -44,6 +44,8 @@ pub struct UsageSummary {
     pub month: Totals,
     /// Ranked talkers within the billing cycle.
     pub top_apps: Vec<TopApp>,
+    /// Budget states for the same periods (D6a; additive within v1).
+    pub budgets: crate::budgets::Budgets,
     /// `"collecting"` until the first counter/rollup sample exists (D3a).
     pub state: &'static str,
 }
@@ -71,6 +73,7 @@ pub async fn summary(
     let (today_total, today_attributed) = period_totals(pool, today).await?;
     let (month_total, month_attributed) = period_totals(pool, month).await?;
     let top_apps = top_apps(pool, month, top_limit).await?;
+    let budgets = crate::budgets::compute(pool, today, month, today_total, month_total).await?;
     let has_data = today_total > 0
         || today_attributed > 0
         || month_total > 0
@@ -81,6 +84,7 @@ pub async fn summary(
         today: totals(today_total, today_attributed),
         month: totals(month_total, month_attributed),
         top_apps,
+        budgets,
         state: if has_data { "ok" } else { "collecting" },
     })
 }

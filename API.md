@@ -227,6 +227,8 @@ Errors: 400, 401, 404, 429.
   "top_apps": [ {"id":1,"name":"Firefox","bytes_total":986432000} ] }
 ```
 **`total`** comes from `usage_interface_15m` (interface kernel counters — ISP-billed bytes). **`attributed`** is the sum of per-app rollups; **`unattributed`** = total − attributed (headers, ACKs, retransmits, kernel-handled/VPN traffic — shown as the "Unattributed / system" row in DESIGN.md §8.3). Soft-deleted apps are excluded from `top_apps` so the ranking matches `GET /apps`.
+
+The additive `budgets` field reports D6a budget state (free tier): `total_daily` / `total_monthly` each carry `{used_bytes, limit_bytes, level}` with `level` in `ok|warning|breach`; `per_app_daily` / `per_app_monthly` carry the same plus `app_id` and `name` (top 10 by usage). A zero limit means disabled. When any interface is marked metered, `used_bytes` for total budgets counts only metered, non-excluded interfaces; otherwise the full total is used. The UI turns a level change into a desktop notification.
 Errors: 401, 429, 500, 503 (no data yet → 200 with zeroed totals + `"state":"collecting"`, DESIGN.md §8.3 empty state).
 
 **U2 `GET /usage/timeline`** — dashboard chart series. Query: `?granularity=hour|day&since=&until=&interface_id=`. Shape identical to A3 minus `app_id` (system-wide). Errors: 400, 401, 429, 500.
@@ -266,7 +268,7 @@ Success 200: full updated row. Errors: 400 (`QUERY_INVALID` — no other fields 
   { "key": "start_on_boot", "value": true, "type": "bool" },
   { "key": "theme_default", "value": "system", "type": "enum", "values": ["system","light","dark"] } ]
 ```
-Note `max` vs `pro_max` — the server reports the tier ceiling; the pruner enforces it (DATABASE.md §6). Errors: 401, 429.
+Budget keys (free tier, whole MB, `0` = off): `budget_total_daily_mb`, `budget_total_monthly_mb`, `budget_per_app_daily_mb`, `budget_per_app_monthly_mb` (`int`, 0–1,000,000) and `budget_warn_pct` (`int`, 50–100, default 80). They feed the additive `budgets` data on U1 (§2.5) and are metered-aware (D6a). Note `max` vs `pro_max` — the server reports the tier ceiling; the pruner enforces it (DATABASE.md §6). Errors: 401, 429.
 
 **T2** — set one key. Request body: `{"value": 120}` (JSON-typed per `type`). Success 200: updated entry (T1 shape). Errors: 400 (wrong type / out of range / unknown key / **retention > 90 on free tier** → `403 EXPORT_PRO_REQUIRED`), 401, 429. Rejected writes never partially apply (single-row transaction).
 

@@ -35,6 +35,11 @@ export async function disconnectDaemonWebSocket(): Promise<void> {
   await invoke('daemon_ws_disconnect');
 }
 
+/** Persist a generated export at the path chosen in the native save dialog. */
+export async function saveExportFile(path: string, content: string): Promise<void> {
+  await invoke('save_export_file', { path, content });
+}
+
 export async function listenDaemonEvents(handlers: DaemonEvent): Promise<UnlistenFn[]> {
   const unlistenState = await listen<string>('daemon://state', (event) => {
     handlers.state(event.payload);

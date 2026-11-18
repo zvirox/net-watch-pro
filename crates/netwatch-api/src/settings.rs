@@ -18,7 +18,7 @@ const RETENTION_PRO_MAX: i64 = 365;
 /// Propagates SQLite failures (`DB_ERROR`).
 pub async fn list(pool: &SqlitePool) -> Result<Vec<Value>, ApiError> {
     let pro = crate::license::is_pro(pool).await?;
-    let mut rows = Vec::with_capacity(7);
+    let mut rows = Vec::with_capacity(SPECIFICATIONS.len());
     for spec in SPECIFICATIONS {
         let stored = read_setting(pool, spec.key).await?;
         rows.push(spec.to_json(stored.as_deref(), pro));
@@ -152,6 +152,57 @@ const SPECIFICATIONS: &[Spec] = &[
         pro_max: None,
         values: None,
         help: "Day of month that starts the billing cycle",
+    },
+    // D6a: budgets are a free-tier feature. Values are whole MB; 0 = off.
+    Spec {
+        key: "budget_total_daily_mb",
+        kind: "int",
+        default: "0",
+        min: Some(0),
+        max: Some(1_000_000),
+        pro_max: None,
+        values: None,
+        help: "Daily total budget in MB (0 = off)",
+    },
+    Spec {
+        key: "budget_total_monthly_mb",
+        kind: "int",
+        default: "0",
+        min: Some(0),
+        max: Some(1_000_000),
+        pro_max: None,
+        values: None,
+        help: "Monthly total budget in MB (0 = off)",
+    },
+    Spec {
+        key: "budget_per_app_daily_mb",
+        kind: "int",
+        default: "0",
+        min: Some(0),
+        max: Some(1_000_000),
+        pro_max: None,
+        values: None,
+        help: "Daily per-app budget in MB (0 = off)",
+    },
+    Spec {
+        key: "budget_per_app_monthly_mb",
+        kind: "int",
+        default: "0",
+        min: Some(0),
+        max: Some(1_000_000),
+        pro_max: None,
+        values: None,
+        help: "Monthly per-app budget in MB (0 = off)",
+    },
+    Spec {
+        key: "budget_warn_pct",
+        kind: "int",
+        default: "80",
+        min: Some(50),
+        max: Some(100),
+        pro_max: None,
+        values: None,
+        help: "Warn at this percentage of a budget",
     },
 ];
 
@@ -328,6 +379,8 @@ mod tests {
             ("start_on_boot", json!("yes")),
             ("theme_default", json!("neon")),
             ("billing_cycle_day", json!(32)),
+            ("budget_warn_pct", json!(120)),
+            ("budget_total_daily_mb", json!(-1)),
             ("timezone", json!("Mars/Olympus")),
         ] {
             assert_eq!(

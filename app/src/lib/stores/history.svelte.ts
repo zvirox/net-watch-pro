@@ -200,6 +200,10 @@ export const historyStore = {
   get connection(): string {
     return daemonStore.connection;
   },
+  /** Current app-name substring (also used as an export filter). */
+  get appSearch(): string {
+    return appSearch;
+  },
   /** Advanced filter values (only sent while Pro — API.md C2). */
   get proFilters(): ProFilters {
     return proFilters;

@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Least-privilege capability for the main window only; no remote content is permitted.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:allow-save", "notification:allow-notify"]
 }

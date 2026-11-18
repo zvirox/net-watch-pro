@@ -7,6 +7,8 @@
   import Dashboard from '$lib/screens/dashboard/Dashboard.svelte';
   import AppDetail from '$lib/screens/app-detail/AppDetail.svelte';
   import UpgradeModal from '$lib/screens/upgrade/UpgradeModal.svelte';
+  import ExportMenu from '$lib/screens/history/ExportMenu.svelte';
+  import Settings from '$lib/screens/settings/Settings.svelte';
   import { daemonStore } from '$lib/stores/daemon.svelte';
   import { appDetailStore } from '$lib/stores/app-detail.svelte';
   import { licenseStore } from '$lib/stores/license.svelte';
@@ -115,11 +117,14 @@
         <h1>{routeLabel}</h1>
       </div>
       <div class="topbar-actions">
+        {#if activeRoute === 'history'}
+          <ExportMenu />
+        {/if}
         <StatusChip /><span class="avatar" aria-label="Local user">L</span>
       </div>
     </header>
     <main class="content">
-      {#if activeRoute !== 'dashboard' && activeRoute !== 'live' && activeRoute !== 'history' && activeRoute !== 'app-detail'}
+      {#if activeRoute !== 'dashboard' && activeRoute !== 'live' && activeRoute !== 'history' && activeRoute !== 'app-detail' && activeRoute !== 'settings'}
         <section class="notice" role="status">
           <div>
             <strong>{routes.find((route) => route.key === activeRoute)?.label}</strong>
@@ -144,6 +149,9 @@
       {/if}
       {#if activeRoute === 'dashboard'}
         <Dashboard />
+      {/if}
+      {#if activeRoute === 'settings'}
+        <Settings />
       {/if}
       {#if activeRoute === 'app-detail' && selectedAppId !== null}
         <AppDetail appId={selectedAppId} />

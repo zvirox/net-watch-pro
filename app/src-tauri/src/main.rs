@@ -8,6 +8,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 #![deny(missing_docs)]
 
+use std::path::Component;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -24,6 +25,9 @@ const MAX_WS_FRAME: usize = 64 * 1024;
 /// Bounded response size for bridge HTTP requests (contract responses are
 /// small JSON envelopes; 1 MiB is a generous ceiling).
 const MAX_HTTP_RESPONSE: usize = 1024 * 1024;
+/// Export files are much larger than JSON envelopes; the bridge buffers them
+/// because the daemon's content endpoint has no range requests (API.md E3).
+const MAX_EXPORT_RESPONSE: usize = 64 * 1024 * 1024;
 
 #[derive(Default)]
 struct LinkState(Arc<Mutex<LinkConnection>>);
@@ -159,7 +163,12 @@ async fn daemon_http_request(
             break;
         }
         buf.extend_from_slice(&chunk[..n]);
-        if buf.len() > MAX_HTTP_RESPONSE {
+        let limit = if api_path.starts_with("/exports/") && api_path.ends_with("/content") {
+            MAX_EXPORT_RESPONSE
+        } else {
+            MAX_HTTP_RESPONSE
+        };
+        if buf.len() > limit {
             return Err("daemon HTTP response exceeds limit".to_string());
         }
     }
@@ -177,6 +186,51 @@ async fn daemon_http_request(
         status,
         body: resp_body,
     })
+}
+
+/// Save a generated export to the path chosen in the native dialog (P6.8).
+///
+/// The path comes from the OS picker, but is re-validated here: the command
+/// only accepts absolute `.csv`/`.json` paths with no traversal components.
+/// The write runs on a blocking task so the UI loop never stalls; no
+/// filesystem plugin is needed, keeping the dependency surface minimal.
+#[tauri::command]
+async fn save_export_file(
+    window: WebviewWindow,
+    path: String,
+    content: String,
+) -> Result<(), String> {
+    require_main_window(&window)?;
+    validate_export_path(&path)?;
+    if content.len() > MAX_EXPORT_RESPONSE {
+        return Err("export content exceeds size limit".to_string());
+    }
+    let bytes = content.into_bytes();
+    tokio::task::spawn_blocking(move || std::fs::write(path, bytes))
+        .await
+        .map_err(|_| "export save task failed".to_string())?
+        .map_err(|error| format!("cannot save export: {error}"))
+}
+
+/// Only absolute, non-traversing `.csv`/`.json` paths may be written.
+fn validate_export_path(path: &str) -> Result<&std::path::Path, String> {
+    let target = std::path::Path::new(path);
+    if !target.is_absolute()
+        || target
+            .components()
+            .any(|part| matches!(part, Component::CurDir | Component::ParentDir))
+    {
+        return Err("invalid save path".to_string());
+    }
+    let extension = target
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if extension != "csv" && extension != "json" {
+        return Err("export files must be .csv or .json".to_string());
+    }
+    Ok(target)
 }
 
 /// Send a WebSocket frame over the daemon connection.
@@ -251,12 +305,15 @@ fn validate_api_path(path: &str) -> Result<&str, String> {
 
 fn main() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(LinkState::default())
         .invoke_handler(tauri::generate_handler![
             daemon_connect,
             daemon_http_request,
             daemon_ws_send,
-            daemon_ws_disconnect
+            daemon_ws_disconnect,
+            save_export_file
         ])
         .run(tauri::generate_context!());
     if let Err(error) = app {
@@ -267,7 +324,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_api_path;
+    use super::{validate_api_path, validate_export_path};
 
     #[test]
     fn api_path_must_be_versioned_relative_path() {
@@ -281,6 +338,20 @@ mod tests {
             "//127.0.0.1/status",
         ] {
             assert!(validate_api_path(invalid).is_err(), "accepted {invalid}");
+        }
+    }
+
+    #[test]
+    fn export_save_path_is_absolute_and_extension_checked() {
+        assert!(validate_export_path("/tmp/report.csv").is_ok());
+        assert!(validate_export_path("/tmp/report.JSON").is_ok());
+        for invalid in [
+            "relative.csv",
+            "/tmp/../report.csv",
+            "/tmp/report.txt",
+            "/tmp/report",
+        ] {
+            assert!(validate_export_path(invalid).is_err(), "accepted {invalid}");
         }
     }
 }
