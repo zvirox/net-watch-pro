@@ -107,7 +107,7 @@
 - [x] P6.8 Export menu + native save dialog <!-- E1->E2->E3 flow in export store, Tauri dialog plugin + validated save_export_file command, 64 MiB bridge ceiling for content, Pro menu in History topbar; free click opens Upgrade; 1 new Rust test, 129 workspace tests, UI checks clean -->
 - [x] P6.9 Usage budgets & alerts (MVP free tier; D6a) <!-- core evaluate() + 3 tests, 5 typed budget settings keys, additive metered-aware U1 budgets + contract test, Settings screen + level-deduped desktop notifications; 134 workspace tests -->
 - [x] **DoD: activate → instant unlock; deactivate → locks return; zero network calls; tag `v0.6.0-alpha.6`** <!-- zero-outbound audited: no fetch/XHR/outbound calls in product code; unused reqwest removed from Tauri shell -->
-- [ ] **Release: tag `v0.6.0-alpha.6` + GitHub pre-release** <!-- source-only alpha; in progress -->
+- [x] **Release: tag `v0.6.0-alpha.6` + GitHub pre-release** <!-- source-only alpha; changelog + checklist in tagged commit b0aa0f1/documentation follow-up -->
 
 ## Phase 7 — System Slice → `v0.7.0-alpha.7` (~40 h)
 
