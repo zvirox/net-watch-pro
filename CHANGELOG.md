@@ -8,6 +8,49 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.7.0-alpha.7] — 2026-11-18
+
+Source-only alpha completing the Phase 7 system slice: retention, settings,
+interfaces, tray and persisted theming.
+
+### Added
+
+- **Retention pruner (P7.1):** core cutoff/tier math, an hourly daemon task with
+  a first pass at boot, deletion of expired `connections` and `usage_endpoint_day`
+  rows, soft-delete of stale apps, and preserved rollups. The configured value is
+  re-clamped to 90/365 days against the current license on every pass.
+- **Settings screen (P7.3):** keyboard-navigable §8.7 tabs for General, Data,
+  Budgets, Interfaces, Daemon, License and About, plus a token-only Switch
+  primitive (§7.13).
+- **Interfaces I1/I2 + UI (P7.4):** list all interfaces with U3 bytes and flags,
+  validated boolean PATCH with 404/400 handling, a status broadcast on exclusion
+  changes, and a Settings tab with Metered/Excluded switches that refresh the
+  dashboard.
+- **Tray (P7.5):** native menu with Open, Pause UI notifications and Quit (UI
+  only — the root daemon keeps running); today's usage pushed to the tooltip from
+  the existing `usage.totals` feed.
+- **Theme (P7.6):** persisted `theme_default` applied at app start, OS dark-mode
+  following in System mode, and ECharts re-theming via `data-theme` observation.
+- **Settings plumbing (P7.7):** `metered_policy` applied to newly discovered
+  interfaces (`label` marks metered; `ask`/`auto` leave manual labeling in MVP),
+  and `start_on_boot` synced by the root daemon to `systemctl enable/disable`
+  with change-only polling and degraded-event reporting.
+
+### Verification
+
+Workspace tests 141 passed, 0 failed; Clippy `-D warnings` clean; Tauri shell
+builds with tray, dialog and notification features/capabilities; UI
+`svelte-check`, ESLint/Prettier and `vite build` clean.
+
+### Known open items
+
+- eBPF attach remains blocked by kernel `-EPERM` (spike report); the daemon uses
+  `/sys` interface counters and degraded events.
+- Live-daemon checks (systemd sync, tray rendering, toggle → dashboard update)
+  were not run in this environment; verified by contract tests and compilation.
+
+---
+
 ## [v0.6.0-alpha.6] — 2026-11-18
 
 Source-only alpha completing the Phase 6 freemium slice. The full loop is now
@@ -219,7 +262,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.6.0-alpha.6...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.7.0-alpha.7...HEAD
+[v0.7.0-alpha.7]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.7.0-alpha.7
 [v0.6.0-alpha.6]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.6.0-alpha.6
 [v0.5.0-alpha.5]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.5.0-alpha.5
 [v0.4.0-alpha.4]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.4.0-alpha.4
