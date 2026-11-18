@@ -1,6 +1,8 @@
 // Dashboard usage store (ARCHITECTURE.md §6.1 tier 2, read-only): REST U1–U3
 // plus the `usage.totals` WS channel for the live headline (API.md §3).
 
+import { setTrayTooltip } from '$lib/api/transport';
+import { formatBytes } from '$lib/utils/format';
 import { daemonStore } from './daemon.svelte';
 
 export type Totals = {
@@ -50,6 +52,7 @@ function reset(): void {
   streamToday = null;
   loading = false;
   error = null;
+  void setTrayTooltip('Net Watch Pro — local only').catch(() => undefined);
 }
 
 function applyStreamTotals(): void {
@@ -72,6 +75,11 @@ function handleFrame(frame: unknown): void {
   if (typeof today.up !== 'number' || typeof today.down !== 'number') return;
   streamToday = { up: today.up, down: today.down };
   applyStreamTotals();
+  // P7.5: the tray is owned by the shell; feed it today's total, never a
+  // second data source. Ignore failures when running in the browser preview.
+  void setTrayTooltip(`Net Watch Pro — today ${formatBytes(today.up + today.down)}`).catch(
+    () => undefined,
+  );
 }
 
 async function load(): Promise<void> {

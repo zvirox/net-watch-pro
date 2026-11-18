@@ -11,3 +11,4 @@ pub mod episode;
 pub mod interfaces;
 pub mod license;
 pub mod retention;
+pub mod settings;

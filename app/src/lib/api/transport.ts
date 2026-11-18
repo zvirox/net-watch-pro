@@ -35,6 +35,14 @@ export async function disconnectDaemonWebSocket(): Promise<void> {
   await invoke('daemon_ws_disconnect');
 }
 
+/** Mirrors `tray::PAUSE_EVENT` in the Tauri shell (P7.5). */
+export const TRAY_PAUSE_EVENT = 'tray://pause-notifications';
+
+/** Paint today's usage on the tray tooltip (P7.5). */
+export async function setTrayTooltip(text: string): Promise<void> {
+  await invoke('set_tray_tooltip', { text });
+}
+
 /** Persist a generated export at the path chosen in the native save dialog. */
 export async function saveExportFile(path: string, content: string): Promise<void> {
   await invoke('save_export_file', { path, content });

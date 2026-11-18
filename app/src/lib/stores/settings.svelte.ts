@@ -18,12 +18,24 @@ let entries = $state<SettingEntry[]>([]);
 let loading = $state(false);
 let error = $state<string | null>(null);
 
+type ChangeListener = () => void;
+// Callback registry, not rendered state (same pattern as daemonStore).
+// eslint-disable-next-line svelte/prefer-svelte-reactivity
+const changeListeners = new Set<ChangeListener>();
+
+function notifyChange(): void {
+  changeListeners.forEach((listener) => {
+    listener();
+  });
+}
+
 async function load(): Promise<void> {
   if (daemonStore.connection !== 'connected') return;
   loading = true;
   error = null;
   try {
     entries = (await daemonStore.request('GET', '/api/v1/settings')) as SettingEntry[];
+    notifyChange();
   } catch (err) {
     error = err instanceof Error ? err.message : 'Could not read settings';
   } finally {
@@ -39,6 +51,7 @@ async function setValue(key: string, value: string | number | boolean): Promise<
     })) as SettingEntry;
     const index = entries.findIndex((entry) => entry.key === key);
     if (index >= 0) entries[index] = updated;
+    notifyChange();
   } catch (err) {
     error = err instanceof Error ? err.message : 'Could not save setting';
     throw err;
@@ -68,4 +81,11 @@ export const settingsStore = {
   },
   load,
   setValue,
+  onChange(listener: ChangeListener): () => void {
+    changeListeners.add(listener);
+    listener();
+    return () => {
+      changeListeners.delete(listener);
+    };
+  },
 };

@@ -8,6 +8,8 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 #![deny(missing_docs)]
 
+mod tray;
+
 use std::path::Component;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -188,6 +190,17 @@ async fn daemon_http_request(
     })
 }
 
+/// Update the tray tooltip with today's usage (P7.5). The UI owns the feed;
+/// the shell only paints the text it is given.
+#[tauri::command]
+async fn set_tray_tooltip(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    let icon = app
+        .tray_by_id(tray::TRAY_ID)
+        .ok_or_else(|| "tray icon unavailable".to_string())?;
+    icon.set_tooltip(Some(text))
+        .map_err(|error| error.to_string())
+}
+
 /// Save a generated export to the path chosen in the native dialog (P6.8).
 ///
 /// The path comes from the OS picker, but is re-validated here: the command
@@ -308,12 +321,20 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .manage(LinkState::default())
+        .setup(|app| {
+            // Tray failure is degraded, not fatal: the window still works.
+            if let Err(error) = tray::setup(app.handle()) {
+                eprintln!("netwatch-app: tray unavailable: {error}");
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             daemon_connect,
             daemon_http_request,
             daemon_ws_send,
             daemon_ws_disconnect,
-            save_export_file
+            save_export_file,
+            set_tray_tooltip
         ])
         .run(tauri::generate_context!());
     if let Err(error) = app {

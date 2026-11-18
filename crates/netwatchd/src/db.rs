@@ -171,9 +171,6 @@ pub async fn persist_episodes(
 /// # Errors
 ///
 /// Propagates SQLite failures (API.md S2 `DB_ERROR` class).
-// P7.1's pruner will call this on its schedule; until then only the P3.7
-// test exercises it.
-#[cfg_attr(not(test), allow(dead_code))]
 pub async fn soft_delete_stale_apps(
     pool: &SqlitePool,
     stale_before: i64,
@@ -189,6 +186,69 @@ pub async fn soft_delete_stale_apps(
     .execute(pool)
     .await?;
     Ok(result.rows_affected())
+}
+
+/// Result of one retention pass (DATABASE.md §6).
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct PruneReport {
+    /// Raw episodes older than the effective retention window.
+    pub connections_deleted: u64,
+    /// Endpoint-day aggregates older than the window.
+    pub endpoint_days_deleted: u64,
+    /// Apps whose last activity predates the window (soft-deleted, not removed).
+    pub apps_soft_deleted: u64,
+    /// Tier-clamped retention actually applied.
+    pub retention_days: i64,
+}
+
+/// Delete expired raw episodes and endpoint-day aggregates, then soft-delete
+/// apps with no remaining activity. Rollups survive: they are derived data
+/// (DATABASE.md §2.5) and are the only long-term record of usage.
+///
+/// The configured `retention_days` is re-clamped against the current license
+/// tier, so deactivation immediately restores the 90-day ceiling even when a
+/// Pro value is still stored (DATABASE.md §6).
+///
+/// # Errors
+///
+/// Propagates SQLite failures (degraded state, never a daemon crash, §7.1).
+pub async fn prune_expired(pool: &SqlitePool, now: i64) -> Result<PruneReport, DbError> {
+    let configured: i64 =
+        sqlx::query_scalar("SELECT value FROM settings WHERE key = 'retention_days'")
+            .fetch_optional(pool)
+            .await?
+            .and_then(|value: String| value.parse().ok())
+            .unwrap_or(netwatch_core::retention::FREE_MAX_DAYS);
+    let tier: Option<String> = sqlx::query_scalar("SELECT tier FROM license WHERE id = 1")
+        .fetch_optional(pool)
+        .await?;
+    let retention_days = netwatch_core::retention::effective_retention_days(
+        configured,
+        tier.as_deref() == Some("pro"),
+    );
+    let cutoff = netwatch_core::retention::retention_cutoff(now, retention_days);
+
+    let mut tx = pool.begin().await?;
+    let connections_deleted = sqlx::query("DELETE FROM connections WHERE last_seen_at < ?1")
+        .bind(cutoff)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    let endpoint_days_deleted =
+        sqlx::query("DELETE FROM usage_endpoint_day WHERE bucket_start < ?1")
+            .bind(cutoff)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+    tx.commit().await?;
+    let apps_soft_deleted = soft_delete_stale_apps(pool, cutoff, now).await?;
+
+    Ok(PruneReport {
+        connections_deleted,
+        endpoint_days_deleted,
+        apps_soft_deleted,
+        retention_days,
+    })
 }
 
 /// Result of one compaction pass (DATABASE.md §2.5/§2.5a).
@@ -352,6 +412,19 @@ pub async fn compact_old_connections(
         rollup_rows: rollups.len(),
         endpoint_rows: endpoints.len(),
     })
+}
+
+/// Read one settings row by key (DATABASE.md §2.6).
+///
+/// # Errors
+///
+/// Propagates SQLite failures (degraded state, never a daemon crash).
+pub async fn setting(pool: &SqlitePool, key: &str) -> Result<Option<String>, DbError> {
+    sqlx::query_scalar("SELECT value FROM settings WHERE key = ?1")
+        .bind(key)
+        .fetch_optional(pool)
+        .await
+        .map_err(DbError::from)
 }
 
 async fn raw_window_cutoff(pool: &SqlitePool, now: i64) -> Result<i64, DbError> {
@@ -544,6 +617,7 @@ pub async fn excluded_interface_names(pool: &SqlitePool) -> Result<HashSet<Strin
 pub async fn persist_interface_samples(
     pool: &SqlitePool,
     samples: &[netwatch_core::interfaces::InterfaceSample],
+    default_metered: bool,
 ) -> Result<(), DbError> {
     if samples.is_empty() {
         return Ok(());
@@ -552,11 +626,12 @@ pub async fn persist_interface_samples(
     for sample in samples {
         let kind = netwatch_core::interfaces::interface_kind(&sample.name);
         sqlx::query(
-            "INSERT INTO interfaces (name, kind) VALUES (?1, ?2)
+            "INSERT INTO interfaces (name, kind, is_metered) VALUES (?1, ?2, ?3)
              ON CONFLICT(name) DO NOTHING",
         )
         .bind(&sample.name)
         .bind(kind)
+        .bind(i64::from(default_metered))
         .execute(&mut *tx)
         .await?;
         let interface_id: i64 = sqlx::query_scalar("SELECT id FROM interfaces WHERE name = ?1")
@@ -827,6 +902,119 @@ mod tests {
             names.contains(&"Current App"),
             "history lost the active app: {names:?}"
         );
+    }
+
+    /// P7.1: retention prunes episodes + endpoint days, keeps rollups, and
+    /// re-applies the free-tier ceiling even when a Pro value is stored.
+    #[tokio::test]
+    async fn prune_expired_is_tier_aware_and_preserves_rollups() {
+        use netwatch_core::retention::{DAY_S, FREE_MAX_DAYS};
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(SqliteConnectOptions::new().in_memory(true))
+            .await
+            .unwrap();
+        migrate(&pool).await.unwrap();
+        let now = 2_000_000_000_i64;
+        let old = now - 100 * DAY_S;
+        let recent = now - DAY_S;
+
+        // A Pro-sized value remains stored while the tier is free.
+        sqlx::query("UPDATE settings SET value = '120' WHERE key = 'retention_days'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        for (id, name, last_seen) in [(1, "Old App", old), (2, "Current App", recent)] {
+            sqlx::query(
+                "INSERT INTO apps (id, name, app_key, exe_path, first_seen_at, last_seen_at)
+                 VALUES (?1, ?2, ?3, '/usr/bin/test', ?4, ?4)",
+            )
+            .bind(id)
+            .bind(name)
+            .bind(format!("exe:{name}"))
+            .bind(last_seen)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        for (id, last_seen) in [(1, old), (2, recent)] {
+            sqlx::query(
+                "INSERT INTO connections (
+                    id, app_id, pid, protocol, local_ip, local_port,
+                    remote_ip, remote_port, first_seen_at, last_seen_at)
+                 VALUES (?1, ?1, 42, 'tcp', '10.0.0.2', 51000,
+                    '151.101.1.1', 443, ?2, ?2)",
+            )
+            .bind(id)
+            .bind(last_seen)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        for bucket in [old, recent] {
+            sqlx::query(
+                "INSERT INTO usage_endpoint_day (
+                    app_id, bucket_start, remote_ip, remote_port, protocol,
+                    first_seen_at, last_seen_at)
+                 VALUES (2, ?1, '151.101.1.1', 443, 'tcp', ?1, ?1)",
+            )
+            .bind(bucket)
+            .execute(&pool)
+            .await
+            .unwrap();
+            sqlx::query("INSERT INTO usage_rollup_15m (app_id, bucket_start) VALUES (2, ?1)")
+                .bind(bucket)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+
+        let report = prune_expired(&pool, now).await.unwrap();
+        assert_eq!(report.retention_days, FREE_MAX_DAYS);
+        assert_eq!(report.connections_deleted, 1);
+        assert_eq!(report.endpoint_days_deleted, 1);
+        assert_eq!(report.apps_soft_deleted, 1);
+
+        let connections: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM connections")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let endpoints: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM usage_endpoint_day")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let rollups: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM usage_rollup_15m")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!((connections, endpoints, rollups), (1, 1, 2));
+
+        // Second pass is a no-op.
+        let second = prune_expired(&pool, now).await.unwrap();
+        assert_eq!(second.connections_deleted, 0);
+        assert_eq!(second.endpoint_days_deleted, 0);
+        assert_eq!(second.apps_soft_deleted, 0);
+
+        // Pro keeps the 100-day-old episode under a 120-day window.
+        sqlx::query("UPDATE license SET tier = 'pro'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO connections (
+                id, app_id, pid, protocol, local_ip, local_port,
+                remote_ip, remote_port, first_seen_at, last_seen_at)
+             VALUES (3, 2, 42, 'tcp', '10.0.0.2', 51000,
+                '151.101.1.1', 443, ?1, ?1)",
+        )
+        .bind(old)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let pro = prune_expired(&pool, now).await.unwrap();
+        assert_eq!(pro.retention_days, 120);
+        assert_eq!(pro.connections_deleted, 0);
     }
 
     /// Seed 60 expired episodes across distinct endpoints and 15m buckets.

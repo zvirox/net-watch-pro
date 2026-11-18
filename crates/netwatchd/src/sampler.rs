@@ -60,6 +60,12 @@ async fn sample_once(
     now: i64,
 ) -> Result<usize, DbError> {
     let excluded = db::excluded_interface_names(pool).await?;
+    // P7.7: the policy decides how a *newly seen* interface is labeled.
+    // Existing rows keep their user-set flags (persist uses DO NOTHING).
+    let policy = db::setting(pool, "metered_policy")
+        .await?
+        .unwrap_or_else(|| "ask".to_string());
+    let default_metered = netwatch_core::settings::metered_default(&policy);
     let entries = match fs::read_dir(root) {
         Ok(entries) => entries,
         Err(e) => {
@@ -83,7 +89,7 @@ async fn sample_once(
             Err(e) => warn!(interface = %name, error = %e, "cannot read interface counters"),
         }
     }
-    db::persist_interface_samples(pool, &samples).await?;
+    db::persist_interface_samples(pool, &samples, default_metered).await?;
     Ok(samples.len())
 }
 
@@ -217,5 +223,59 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    /// P7.7: `label` marks newly discovered interfaces as metered; later
+    /// policy changes never overwrite a user's existing label.
+    #[tokio::test]
+    async fn metered_policy_applies_to_new_interfaces_only() {
+        let pool = test_db().await;
+        let fixture = SysfsFixture::new();
+        let mut state = InterfaceSampler::new();
+        sqlx::query("UPDATE settings SET value = 'label' WHERE key = 'metered_policy'")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        std::fs::create_dir_all(fixture.root.join("wwan0").join("statistics")).unwrap();
+        write_counters(&fixture.root, "wwan0", 100, 50);
+        assert_eq!(
+            sample_once(&pool, &fixture.root, &mut state, 0)
+                .await
+                .unwrap(),
+            0
+        );
+        write_counters(&fixture.root, "wwan0", 200, 100);
+        assert_eq!(
+            sample_once(&pool, &fixture.root, &mut state, 901)
+                .await
+                .unwrap(),
+            1
+        );
+
+        let metered: i64 =
+            sqlx::query_scalar("SELECT is_metered FROM interfaces WHERE name = 'wwan0'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(metered, 1);
+
+        sqlx::query("UPDATE settings SET value = 'ask' WHERE key = 'metered_policy'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        write_counters(&fixture.root, "wwan0", 300, 150);
+        assert_eq!(
+            sample_once(&pool, &fixture.root, &mut state, 1_801)
+                .await
+                .unwrap(),
+            1
+        );
+        let still_metered: i64 =
+            sqlx::query_scalar("SELECT is_metered FROM interfaces WHERE name = 'wwan0'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(still_metered, 1);
     }
 }

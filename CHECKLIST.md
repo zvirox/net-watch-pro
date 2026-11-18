@@ -111,15 +111,15 @@
 
 ## Phase 7 — System Slice → `v0.7.0-alpha.7` (~40 h)
 
-- [ ] P7.1 Retention pruner (free/Pro aware)
+- [x] P7.1 Retention pruner (free/Pro aware) <!-- core cutoff + tier clamp, hourly daemon task with degraded-event path, deletes expired connections + endpoint-day, soft-deletes stale apps, rollups survive; 2 new tests incl. tier re-clamp on deactivation; 136 workspace tests -->
 - [x] P7.2 `GET/PUT /settings` (typed, bounded) <!-- landed early in P6.4: T1/T2 with closed key set, 90-day free ceiling; extended with budget keys in P6.9 -->
-- [ ] P7.3 Settings screen (general/data/daemon)
-- [ ] P7.4 Interfaces + metered labeling (API + UI)
-- [ ] P7.5 Tray icon + menu (quit-not-daemon)
-- [ ] P7.6 Theme switching, persisted, charts re-theme
-- [ ] P7.7 metered_policy + start_on_boot plumbed
-- [ ] **DoD: tray quit keeps daemon; retention correct per tier; tag `v0.7.0-alpha.7`**
-- [ ] **Release: tag `v0.7.0-alpha.7` + GitHub pre-release** <!-- source-only alpha -->
+- [x] P7.3 Settings screen (general/data/daemon) <!-- §8.7 tabs (keyboard-navigable) for General theme group, Data retention/timezone/billing/raw-window, Budgets, Interfaces placeholder, Daemon start-on-boot switch, License, About; §7.13 Switch primitive; saves via T1/T2. Diagnostics view is P9.1, so retention reflected via GET /settings, not Diagnostics; UI checks + browser tab/keyboard smoke clean -->
+- [x] P7.4 Interfaces + metered labeling (API + UI) <!-- I1 GET lists all interfaces incl. excluded with U3 bytes; I2 PATCH validates bool flags, 404/400, broadcasts status on exclusion change; 2 integration tests; Settings Interfaces tab with metered/excluded switches that refresh usage/dashboard; 138 workspace tests, UI checks clean. Live daemon toggle→dashboard check not runnable here -->
+- [x] P7.5 Tray icon + menu (quit-not-daemon) <!-- tauri tray-icon feature + tray.rs: Open, Pause UI notifications (event into budgets store), Quit (app.exit only — daemon untouched); tooltip fed from usage.totals via set_tray_tooltip command; build/clippy/UI checks clean. GUI runtime tray not exercised here -->
+- [x] P7.6 Theme switching, persisted, charts re-theme <!-- settings-ui store persists theme_default via T2, applies data-theme at app start (any screen), reacts to OS dark preference, Settings General uses it; Chart.svelte re-registers ECharts theme on data-theme mutation; UI checks + browser system-dark smoke clean -->
+- [x] P7.7 metered_policy + start_on_boot plumbed <!-- core policy/action helpers + tests, sampler applies policy to new interfaces only (test), daemon service task polls and syncs systemctl enable/disable on change with degraded events, UI policy selector + start-on-boot switch; 141 workspace tests -->
+- [x] **DoD: tray quit keeps daemon; retention correct per tier** <!-- tray exits UI only; pruner re-clamps 90/365 by tier; settings persist via T1/T2 -->
+- [ ] **Release: tag `v0.7.0-alpha.7` + GitHub pre-release** <!-- source-only alpha; in progress -->
 
 ## Phase 8 — Packaging Slice → `v0.8.0-alpha.8` (~40 h) — *first public alpha*
 

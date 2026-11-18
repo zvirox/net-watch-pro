@@ -177,7 +177,9 @@ async fn seed_usage_schema(pool: &sqlx::SqlitePool) {
             id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
             kind TEXT NOT NULL DEFAULT 'ethernet',
             is_metered INTEGER NOT NULL DEFAULT 0,
-            is_excluded INTEGER NOT NULL DEFAULT 0)",
+            is_excluded INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0)",
     )
     .execute(pool)
     .await
@@ -1299,6 +1301,75 @@ async fn usage_timeline_rejects_invalid_queries() {
         let v: Value = serde_json::from_str(&body).unwrap();
         assert_eq!(v["error"]["code"], "QUERY_INVALID");
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn interfaces_list_and_patch_flags() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    seed_interfaces(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/interfaces").await;
+    assert_eq!(status, 200, "body: {body}");
+    let rows: Value = serde_json::from_str(&body).unwrap();
+    let rows = rows.as_array().unwrap();
+    assert_eq!(rows.len(), 3, "I1 includes excluded interfaces: {body}");
+    let loopback = rows.iter().find(|row| row["name"] == "lo").unwrap();
+    assert_eq!(loopback["is_excluded"], true);
+    let wireless = rows.iter().find(|row| row["name"] == "wlan0").unwrap();
+    assert_eq!(wireless["is_metered"], true);
+    assert!(wireless["bytes"]["up"].is_number());
+
+    let (status, body) = http_request_at(
+        &sock,
+        "PATCH",
+        "/api/v1/interfaces/3",
+        Some(r#"{"is_metered":true,"is_excluded":true}"#),
+    )
+    .await;
+    assert_eq!(status, 200, "body: {body}");
+    let updated: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(updated["id"], 3);
+    assert_eq!(updated["name"], "eth0");
+    assert_eq!(updated["is_metered"], true);
+    assert_eq!(updated["is_excluded"], true);
+
+    for (path, body_text) in [
+        ("/api/v1/interfaces/3", r#"{"bogus":true}"#),
+        ("/api/v1/interfaces/3", r#"{"is_metered":"yes"}"#),
+        ("/api/v1/interfaces/3", r"{}"),
+        ("/api/v1/interfaces/999", r#"{"is_metered":true}"#),
+    ] {
+        let (status, body) = http_request_at(&sock, "PATCH", path, Some(body_text)).await;
+        let expected = if path.ends_with("999") { 404 } else { 400 };
+        assert_eq!(status, expected, "body {body_text}: {body}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn exclusion_patch_broadcasts_status() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    seed_interfaces(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let mut ws = ws_connect(&sock).await;
+    ws_send(&mut ws, json!({ "op": "subscribe", "channel": "status" })).await;
+    let _initial = ws_next(&mut ws).await;
+
+    let (status, body) = http_request_at(
+        &sock,
+        "PATCH",
+        "/api/v1/interfaces/2",
+        Some(r#"{"is_excluded":true}"#),
+    )
+    .await;
+    assert_eq!(status, 200, "body: {body}");
+    let frame = ws_next(&mut ws).await;
+    assert_eq!(frame["channel"], "status");
 }
 
 async fn seed_interfaces(pool: &sqlx::SqlitePool) {

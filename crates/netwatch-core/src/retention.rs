@@ -25,6 +25,34 @@ pub fn bucket_day(epoch_seconds: i64) -> i64 {
     epoch_seconds.div_euclid(DAY_S) * DAY_S
 }
 
+/// Free-tier retention ceiling in days (PRD §6.1 #5).
+pub const FREE_MAX_DAYS: i64 = 90;
+/// Pro retention ceiling in days (API.md L1 `retention_max_days`).
+pub const PRO_MAX_DAYS: i64 = 365;
+/// Minimum retention, even if a bad setting value is stored.
+pub const MIN_RETENTION_DAYS: i64 = 7;
+
+/// Clamp a configured retention value to the caller's tier (DATABASE.md §6).
+///
+/// The API validates `retention_days` on write, but a license can be
+/// deactivated afterwards while a larger value remains stored — so the
+/// pruner re-applies the ceiling rather than trusting the setting alone.
+#[must_use]
+pub fn effective_retention_days(configured: i64, is_pro: bool) -> i64 {
+    let ceiling = if is_pro { PRO_MAX_DAYS } else { FREE_MAX_DAYS };
+    configured.clamp(MIN_RETENTION_DAYS, ceiling)
+}
+
+/// First epoch second outside the retention window. Rows older than this are
+/// eligible for pruning; rollups are never pruned (DATABASE.md §2.5).
+#[must_use]
+pub fn retention_cutoff(now: i64, days: i64) -> i64 {
+    now.saturating_sub(
+        days.clamp(MIN_RETENTION_DAYS, PRO_MAX_DAYS)
+            .saturating_mul(DAY_S),
+    )
+}
+
 /// First epoch second outside the raw window. Rows with `last_seen_at` below
 /// this cutoff are eligible for compaction (API.md C2).
 ///
@@ -56,5 +84,17 @@ mod tests {
         let now = 2_000_000_000;
         assert_eq!(raw_cutoff(now, 7), now - 7 * DAY_S);
         assert_eq!(raw_cutoff(now, 0), now - DAY_S);
+    }
+
+    #[test]
+    fn tier_ceiling_is_reapplied_at_prune_time() {
+        assert_eq!(effective_retention_days(120, false), FREE_MAX_DAYS);
+        assert_eq!(effective_retention_days(120, true), 120);
+        assert_eq!(effective_retention_days(400, true), PRO_MAX_DAYS);
+        assert_eq!(effective_retention_days(0, false), MIN_RETENTION_DAYS);
+        assert_eq!(
+            retention_cutoff(2_000_000_000, FREE_MAX_DAYS),
+            2_000_000_000 - 90 * DAY_S
+        );
     }
 }

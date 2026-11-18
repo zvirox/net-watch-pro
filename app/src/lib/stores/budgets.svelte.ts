@@ -4,12 +4,14 @@
 // app itself makes no network calls (PRD non-goal).
 
 import { isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { SvelteMap } from 'svelte/reactivity';
 import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
 } from '@tauri-apps/plugin-notification';
+import { TRAY_PAUSE_EVENT } from '$lib/api/transport';
 import { daemonStore } from './daemon.svelte';
 
 export type BudgetLevel = 'ok' | 'warning' | 'breach';
@@ -31,6 +33,7 @@ export type BudgetsData = {
 
 const REFRESH_MS = 60_000;
 let data = $state<BudgetsData | null>(null);
+let paused = $state(false);
 const lastLevels = new SvelteMap<string, BudgetLevel>();
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -40,7 +43,7 @@ function percent(state: BudgetState): number {
 }
 
 async function notify(): Promise<void> {
-  if (!isTauri()) return;
+  if (paused || !isTauri()) return;
   let granted = await isPermissionGranted();
   if (!granted) granted = (await requestPermission()) === 'granted';
   if (!granted || data === null) return;
@@ -95,6 +98,12 @@ function stop(): void {
   timer = null;
 }
 
+if (isTauri()) {
+  void listen<boolean>(TRAY_PAUSE_EVENT, (event) => {
+    paused = event.payload;
+  }).catch(() => undefined);
+}
+
 daemonStore.onConnection((state) => {
   if (state === 'connected') void refresh();
   else {
@@ -106,6 +115,9 @@ daemonStore.onConnection((state) => {
 export const budgetsStore = {
   get data(): BudgetsData | null {
     return data;
+  },
+  get paused(): boolean {
+    return paused;
   },
   percent,
   start,

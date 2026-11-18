@@ -12,6 +12,8 @@
   import { daemonStore } from '$lib/stores/daemon.svelte';
   import { appDetailStore } from '$lib/stores/app-detail.svelte';
   import { licenseStore } from '$lib/stores/license.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
+  import '$lib/stores/settings-ui.svelte';
 
   let connected = $state(daemonStore.connection === 'connected');
   const routes = [
@@ -52,6 +54,9 @@
     window.addEventListener('hashchange', updateRoute);
     updateRoute();
     void daemonStore.start();
+    // Load persisted settings at app start so the saved theme applies on any
+    // screen, not only when Settings is opened.
+    void settingsStore.load();
     return () => {
       window.removeEventListener('hashchange', updateRoute);
       unlisten();

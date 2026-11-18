@@ -18,6 +18,7 @@ pub mod calendar;
 pub mod error;
 pub mod exports;
 pub mod history;
+pub mod interfaces;
 pub mod interfaces_usage;
 pub mod license;
 pub mod ratelimit;

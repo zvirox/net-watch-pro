@@ -4,6 +4,7 @@ export type { ButtonVariant, ButtonSize } from './button/Button.svelte';
 export { default as StatusChip } from '../status-chip/StatusChip.svelte';
 export { default as EmptyState } from '../empty-state/EmptyState.svelte';
 export { default as Input } from './input/Input.svelte';
+export { default as Switch } from './switch/Switch.svelte';
 export { default as Table } from './table/Table.svelte';
 export { default as TableHeader } from './table/TableHeader.svelte';
 export { default as TableBody } from './table/TableBody.svelte';

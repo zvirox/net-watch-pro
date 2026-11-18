@@ -101,7 +101,7 @@ const SPECIFICATIONS: &[Spec] = &[
         max: None,
         pro_max: None,
         values: None,
-        help: "Start the daemon with the desktop session",
+        help: "Enable the systemd service at boot (synced by the daemon)",
     },
     Spec {
         key: "theme_default",
@@ -121,7 +121,7 @@ const SPECIFICATIONS: &[Spec] = &[
         max: None,
         pro_max: None,
         values: Some(&["ask", "label", "auto"]),
-        help: "How new metered interfaces are labeled",
+        help: "New interface labeling: ask (manual), label (metered), auto (falls back to ask in MVP)",
     },
     Spec {
         key: "raw_window_days",

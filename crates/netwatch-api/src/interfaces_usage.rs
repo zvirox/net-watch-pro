@@ -82,7 +82,7 @@ pub async fn interfaces_usage(
         .collect()
 }
 
-async fn parse_range(
+pub(crate) async fn parse_range(
     pool: &SqlitePool,
     now: i64,
     raw_query: Option<&str>,

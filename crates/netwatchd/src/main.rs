@@ -15,7 +15,9 @@
 mod config;
 mod db;
 mod live;
+mod pruner;
 mod sampler;
+mod service;
 mod usage;
 
 use netwatch_common::{DaemonEvent, DaemonState, EbpfState, EventLevel, StatusSnapshot};
@@ -50,7 +52,8 @@ pub(crate) async fn record_degraded_event(
     }
 }
 
-fn epoch_now() -> i64 {
+/// Current epoch seconds, shared with scheduled tasks.
+pub(crate) fn epoch_now() -> i64 {
     i64::try_from(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -143,6 +146,10 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     // establishes the cumulative-counter baseline.
     let sampler_abort = sampler::spawn(pool.clone());
     let (totals_tx, totals_abort) = usage::spawn(pool.clone());
+    // P7.1: recurring tier-aware retention pruning, with a first pass at boot.
+    let pruner_abort = pruner::spawn(pool.clone());
+    // P7.7: keep systemd's startup enablement in sync with the setting.
+    let service_abort = service::spawn(pool.clone());
 
     // P2.5/P2.6 wiring: live service owns the episode store; the writer
     // task persists flush batches (≤ 1 tx/s); the API serves snapshot +
@@ -217,5 +224,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     .map_err(|e| StartupError::Server(format!("api server: {e}")));
     sampler_abort.abort();
     totals_abort.abort();
+    pruner_abort.abort();
+    service_abort.abort();
     result
 }

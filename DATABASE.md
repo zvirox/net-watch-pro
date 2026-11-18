@@ -158,9 +158,9 @@ Daemon-side settings mirror (PRD §6.1 #8; UI edits via API `settings.set`).
 
 **Settings keys (closed list — governed by ARCHITECTURE.md §8.3):**
 - `retention_days`: int, default `90`, free-tier max `90`, Pro max `365`
-- `start_on_boot`: bool, default `1`
+- `start_on_boot`: bool, default `1`; the root daemon syncs it to `systemctl enable/disable netwatchd.service` (polled, change-only). Disabling affects the next boot, not the running process.
 - `theme_default`: enum (`system|light|dark`), default `system`
-- `metered_policy`: enum (`ask|label|auto`), default `ask`
+- `metered_policy`: enum (`ask|label|auto`), default `ask`; applied only when a *new* interface is first seen — `label` sets `is_metered = 1`, `ask` leaves it for manual I2 labeling, and `auto` falls back to `ask` in MVP (NetworkManager detection is not implemented).
 - `raw_window_days`: int, default `7`
 - `timezone`: IANA tz string, default system local; day/week/month boundaries computed at query time in this tz (D4a)
 - `billing_cycle_day`: int 1–31, default `1`; "this month" = current billing cycle at query time (D4a)
@@ -363,7 +363,7 @@ Each index names the PRD/DESIGN query it serves. Indexes live in the same migrat
 | Filesystem | DB + WAL/SHM live in `/var/lib/netwatch-pro` (root:root, mode `0750`; DB file `0640`). Only root (`netwatchd`) can open the database. The systemd unit's sandboxing (PRD §5) protects the directory. |
 | UI | **Never opens the database.** All reads/writes go through the loopback token-authenticated API (ARCHITECTURE.md §5.3). A compromised UI can only do what the API permits. |
 | API | Writes are endpoint-scoped: `settings.set` (validated keys only), `license.activate`, `export.request` (server-side Pro check against `license.tier` — gating is never UI-only, PRD R7). Read endpoints are unprivileged within the local trust boundary. |
-| Row-level rules (application-enforced) | `connections`/rollups beyond the free tier's raw window are not withheld at row level; retention *tiering* is enforced at compaction (free = 90-day raw window prune + endpoint-day aggregates to 90 days; Pro = longer raw window + endpoint-day aggregates to 1 year). The pruner is the enforcer, not a view. |
+| Row-level rules (application-enforced) | `connections`/rollups beyond the free tier's raw window are not withheld at row level; retention *tiering* is enforced at compaction (free = 90-day raw window prune + endpoint-day aggregates to 90 days; Pro = longer raw window + endpoint-day aggregates to 1 year). The pruner is the enforcer, not a view: it deletes expired `connections` and `usage_endpoint_day` rows and soft-deletes stale `apps`; it never deletes `usage_rollup_15m` or `usage_interface_15m` (derived, rebuildable). The stored `retention_days` is re-clamped to the current license tier on every pass, so deactivation immediately restores the 90-day ceiling. |
 | Backups | `VACUUM INTO` via CLI verb, root-only; no other copy of the file is ever made by the app. |
 
 ---

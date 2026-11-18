@@ -203,6 +203,49 @@ pub async fn usage_summary(
     }
 }
 
+/// `GET /interfaces` — I1: all interfaces with metered/excluded flags.
+pub async fn interfaces_list(
+    State(state): State<Arc<AppState>>,
+    axum::extract::RawQuery(_raw): axum::extract::RawQuery,
+) -> Response {
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    match crate::interfaces::list(&state.db, now).await {
+        Ok(rows) => Json(rows).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `PATCH /interfaces/{id}` — I2: update metered/excluded flags.
+pub async fn interface_update(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    request: axum::extract::Request,
+) -> Response {
+    use axum::body::to_bytes;
+
+    let Ok(id) = id.parse::<i64>() else {
+        return ApiError::not_found().into_response();
+    };
+    let (_, body) = request.into_parts();
+    let Ok(bytes) = to_bytes(body, 16 * 1024).await else {
+        return ApiError::query_invalid("Request body is too large").into_response();
+    };
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return ApiError::query_invalid("Request body must be JSON").into_response();
+    };
+    let now = i64::try_from(epoch_now()).unwrap_or_default();
+    match crate::interfaces::update(&state.db, now, id, &value).await {
+        Ok((row, exclusion_changed)) => {
+            // API.md I2: exclusion changes totals semantics — wake WS clients.
+            if exclusion_changed {
+                state.status_tx.send_modify(|_| {});
+            }
+            Json(row).into_response()
+        }
+        Err(err) => err.into_response(),
+    }
+}
+
 /// `GET /license` — L1: current tier and server-side entitlements.
 pub async fn license_state(State(state): State<Arc<AppState>>) -> Response {
     match crate::license::current(&state.db).await {
@@ -399,6 +442,11 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
         .route(
             "/api/v1/license/activate",
             axum::routing::post(license_activate),
+        )
+        .route("/api/v1/interfaces", axum::routing::get(interfaces_list))
+        .route(
+            "/api/v1/interfaces/{id}",
+            axum::routing::patch(interface_update),
         )
         .route("/api/v1/settings", axum::routing::get(settings_list))
         .route(
