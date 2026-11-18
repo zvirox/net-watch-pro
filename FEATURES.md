@@ -428,6 +428,8 @@ AUR package, .deb + apt repo, .rpm + dnf repo; signed updates; clean uninstall w
 Covers: *"As a user, I want to install once with a package manager and never think about permissions again"* (PRD §7).
 **Design note:** updates flow through package managers (repos), not an in-app updater — this preserves the zero-outbound promise (deliberate contrast to the REAPM.md reference app's in-app updater).
 
+**Packaging decision (2026-11-18, PRD 1.2):** AUR remains the Arch/CachyOS path; Flatpak is deferred until after Phase 11 because it cannot ship the root systemd daemon (UI-only wrapper + separate host install would break one-command install).
+
 ### Screens & components
 - **Onboarding** (§8.2) reuse for post-update first-run notes; **About section** (F8): version (mono), licenses, no-telemetry statement.
 - No other screens; `schema_migrations` visible only via Diagnostics version line (API.md flag F4).

@@ -183,4 +183,4 @@ box above → commit (`docs(release): …`) → annotated tag from PLAN.md → p
 omit `--prerelease` for `v1.0.0`). Only an undefined tag, failed credentials, or
 a publish error warrants stopping to report. See AGENTS.md §6 and PLAN.md §15.
 
-**Flatpak:** not on the roadmap — flagged in PLAN.md §1 (beyond PRD scope; needs PRD update + user go-ahead). No checkbox until approved.
+**Flatpak:** deferred until after Phase 11 by owner decision 2026-11-18 (PRD 1.2 / PLAN.md §1): it cannot bundle the root systemd daemon, so it would break the one-command install contract. AUR stays in Phase 8 and at GA; no Flatpak checkbox until a new PRD/PLAN update.

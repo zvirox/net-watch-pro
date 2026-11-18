@@ -42,7 +42,7 @@
 
 **Packaging deferral (F-10):** self-hosted apt/dnf repos and signing keys are deferred until after beta. Alpha/beta ship GitHub Releases artifacts + AUR `-git`; prefer hosted build services (COPR, PPA, openSUSE Build Service) over running repo infrastructure alone. External security review before 1.0, not in the first-alpha path.
 
-**Flatpak:** ⚠ flagged — not in PRD §6.1 #10 (AUR/deb/rpm only). A Flatpak build conflicts with the root-daemon model (sandboxed Flatpak can't host a root systemd service); it would be UI-only in a wrapper + separate daemon install. Per AGENTS.md §3 this needs a PRD update and your explicit go-ahead before any Flatpak work — recorded as post-1.0 optional.
+**Flatpak:** decision (owner, 2026-11-18; PRD 1.2) — **deferred until after Phase 11 (v1.0.0)**. A sandboxed Flatpak cannot host the root systemd daemon; it would be a UI-only wrapper plus a separate host install, breaking the one-command install promise. **AUR stays the Arch/CachyOS install path at Phase 8** (`net-watch-pro-git`, then `-`/`-bin` at GA). Any Flatpak work needs a new PRD/PLAN update and owner go-ahead.
 
 ---
 

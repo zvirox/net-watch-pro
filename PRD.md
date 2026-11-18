@@ -1,12 +1,12 @@
 # Net Watch Pro — Product Requirements Document
 
-**Version:** 1.1 (MVP scope)  
-**Date:** 2026-11-15  
+**Version:** 1.2 (MVP scope)
+**Date:** 2026-11-18
 **Status:** Draft for build  
 **Owner:** Product  
 **Related docs:** `REAPM.md` (competitive/technical teardown of the reference application firewall), `docs/decisions.md` (owner decisions D1–D7 from the plan-fix effort)
 
-**Version history:** 1.1 (2026-11-15): apply plan-fix findings F-01–F-11 — Unix-socket + peer-credential transport (D1a), daily endpoint rollups for long-term history (D2a), interface-counter headline totals with Unattributed row (D3a), 15-minute rollup grain + timezone/billing-cycle (D4a), cgroup-first app identity (D5a), metered-connection positioning with budgets/alerts in MVP (D6a), 40+ h/week timeline assumption (D7).
+**Version history:** 1.1 (2026-11-15): apply plan-fix findings F-01–F-11 — Unix-socket + peer-credential transport (D1a), daily endpoint rollups for long-term history (D2a), interface-counter headline totals with Unattributed row (D3a), 15-minute rollup grain + timezone/billing-cycle (D4a), cgroup-first app identity (D5a), metered-connection positioning with budgets/alerts in MVP (D6a), 40+ h/week timeline assumption (D7). 1.2 (2026-11-18): packaging decision — AUR stays the Arch/CachyOS install path; Flatpak deferred until after Phase 11 because a sandboxed Flatpak cannot host the root systemd daemon (UI-only wrapper + separate daemon install would break the one-command install promise).
 
 ---
 
@@ -101,7 +101,7 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 | Backend | **Rust + Tokio** | Daemon core; async pipeline; HTTP/WS local API for the UI |
 | Monitoring | **Aya eBPF** | Kernel-side traffic observation (cgroup/socket hooks), no packet rewriting |
 | Database | **SQLite** | Local history/usage store; WAL mode; automatic pruning |
-| Platforms | **Arch / CachyOS; deb & rpm distros** | AUR PKGBUILD + native package + apt repo + dnf repo |
+| Platforms | **Arch / CachyOS; deb & rpm distros** | AUR PKGBUILD + native package + apt repo + dnf repo; Flatpak deferred post-GA (cannot ship the root daemon) |
 
 **Architecture shape (no code, contract only):**
 - `netwatchd` (root systemd service, Rust): loads Aya eBPF programs, attributes traffic to processes via cgroup identity + `/proc` enrichment (fallback), writes usage records to SQLite, serves a Unix-socket JSON API to the UI, exposes a healthy-status endpoint. Hardened unit (like the reference app: `ProtectSystem`, `PrivateTmp`, `RestrictAddressFamilies`, capability bounding to `CAP_BPF`/`CAP_PERFMON`/`CAP_NET_ADMIN` where supported).
@@ -124,7 +124,7 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 7. **Tray integration** — tray icon with today's total usage tooltip; menu: open dashboard, pause UI notifications, quit UI (does not stop daemon — mirrors the reference app's safe pattern).
 8. **Settings (lean)** — retention length, theme, start-minimized, tray behavior, metered-interface labeling, daemon start on boot.
 9. **Freemium mechanics** — free tier as above; Pro license key unlocks: advanced history search (multi-filter: app, date range, remote host/IP, port, protocol), CSV/JSON export, retention beyond 90 days (up to 1 year). Pro features clearly gated in-UI with upgrade prompt.
-10. **Updates & packaging** — AUR package, .deb + apt repo, .rpm + dnf repo; signed updates; uninstall cleanly removes daemon + data (with opt-in data retention).
+10. **Updates & packaging** — AUR package, .deb + apt repo, .rpm + dnf repo; signed updates; uninstall cleanly removes daemon + data (with opt-in data retention). Flatpak is explicitly deferred until after Phase 11 (v1.0.0): it cannot bundle the root systemd daemon, so it would ship a UI-only wrapper plus a separate host install, breaking the one-command install contract.
 
 ### 6.2 V2 — Should-have (next release train)
 
