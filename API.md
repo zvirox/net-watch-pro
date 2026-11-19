@@ -1,9 +1,9 @@
 # Net Watch Pro — API.md (Local API Reference)
 
-**Version:** 1.4 · **Date:** 2026-11-19
+**Version:** 1.5 · **Date:** 2026-11-19
 **Source of truth:** `PRD.md` (features, freemium gating) · `ARCHITECTURE.md` §5.3 (transport contract) · `DATABASE.md` (tables) · `docs/decisions.md` (owner decisions D1a–D5a)
 
-**Version history:** 1.3.1 (2026-11-17): reference the offline license key wire format in `AUTH_SECURITY.md` §2.4. 1.3.0 (2026-11-17): document the A2 icon resource endpoint and the `deleted_at` field on app details for soft-deleted history views. 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a). 1.4 (2026-11-19): add the `net.rates` 1 Hz stream, the `speed_unit` setting and the honest `no_collector` status value (`docs/LIVE-THROUGHPUT-PLAN.md` Phase A).
+**Version history:** 1.3.1 (2026-11-17): reference the offline license key wire format in `AUTH_SECURITY.md` §2.4. 1.3.0 (2026-11-17): document the A2 icon resource endpoint and the `deleted_at` field on app details for soft-deleted history views. 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a). 1.4 (2026-11-19): add the `net.rates` 1 Hz stream, the `speed_unit` setting and the honest `no_collector` status value (`docs/LIVE-THROUGHPUT-PLAN.md` Phase A). 1.5 (2026-11-19): add the in-memory 1-minute rate history endpoint and optional Wi-Fi signal/link fields on U3 (owner decisions L-OQ1/L-OQ4).
 
 > **Binding:** every endpoint below maps to a PRD feature and a DATABASE.md table (§10 traceability matrix). Anything flagged as not doing so is explicitly justified there. Implementation of this file lives in `docs/api-contract.md` (ARCHITECTURE.md §4) and must not drift.
 
@@ -219,6 +219,7 @@ Errors: 400, 401, 404, 429.
 | U1 | `GET /api/v1/usage/summary` | yes | §6.1 #3 dashboard headline + top apps | `usage_interface_15m`, `usage_rollup_15m`, `apps` |
 | U2 | `GET /api/v1/usage/timeline` | yes | §6.1 #3 usage timeline (Day/Hour toggle) | `usage_rollup_15m`, `connections` |
 | U3 | `GET /api/v1/usage/interfaces` | yes | §6.1 #3 per-interface breakdown | `usage_interface_15m`, `interfaces` |
+| U4 | `GET /api/v1/usage/rate-history` | yes | §6.1 #11 last-hour live-rate view | in-memory ring (flagged §10) |
 
 **U1 `GET /usage/summary`** — totals + top-talker list. Query: `?top_limit=` (default 5, max 10). Success 200:
 ```json
@@ -236,9 +237,22 @@ Errors: 401, 429, 500, 503 (no data yet → 200 with zeroed totals + `"state":"c
 **U3 `GET /usage/interfaces`** — per-interface totals for the dashboard card; excludes `is_excluded=1` interfaces. Query: `?since=&until=`. Success 200:
 ```json
 [ { "id": 2, "name": "wlan0", "kind": "wifi", "is_metered": true,
-    "bytes": {"up": 41943040, "down": 734003200} } ]
+    "bytes": {"up": 41943040, "down": 734003200},
+    "signal_dbm": -57, "link_mbps": 866 } ]
 ```
-Errors: 401, 429, 500.
+`signal_dbm` and `link_mbps` are optional and **derived from local sysfs** at
+request time (`wireless/link`, `speed`); a `null` value means the interface does
+not expose it or the read failed. No network call is made. Display as "—", not
+as zero. Errors: 401, 429, 500.
+
+**U4 `GET /usage/rate-history`** — the last 60 one-second rate samples for the
+PC total, oldest first. Success 200:
+```json
+{ "samples": [ {"ts":1763548800,"down_bps":10000000,"up_bps":1000000} ], "in_memory": true }
+```
+This buffer lives only in the daemon process and is **lost on restart**;
+`in_memory:true` tells the UI to label it as such instead of implying
+persistent history. Longer ranges use the 15-minute rollups (U2). Errors: 401, 429, 500.
 
 ### 2.6 Interfaces
 

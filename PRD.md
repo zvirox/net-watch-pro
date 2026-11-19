@@ -1,12 +1,12 @@
 # Net Watch Pro — Product Requirements Document
 
-**Version:** 1.3 (MVP scope)
+**Version:** 1.4 (MVP scope)
 **Date:** 2026-11-19
 **Status:** Draft for build  
 **Owner:** Product  
 **Related docs:** `REAPM.md` (competitive/technical teardown of the reference application firewall), `docs/decisions.md` (owner decisions D1–D7 from the plan-fix effort)
 
-**Version history:** 1.1 (2026-11-15): apply plan-fix findings F-01–F-11 — Unix-socket + peer-credential transport (D1a), daily endpoint rollups for long-term history (D2a), interface-counter headline totals with Unattributed row (D3a), 15-minute rollup grain + timezone/billing-cycle (D4a), cgroup-first app identity (D5a), metered-connection positioning with budgets/alerts in MVP (D6a), 40+ h/week timeline assumption (D7). 1.2 (2026-11-18): packaging decision — AUR stays the Arch/CachyOS install path; Flatpak deferred until after Phase 11 because a sandboxed Flatpak cannot host the root systemd daemon (UI-only wrapper + separate daemon install would break the one-command install promise). 1.3 (2026-11-19): live network throughput is an MVP feature — 1 Hz PC speed (`net.rates`) with a 60-second sparkline and a `speed_unit` setting; per-app live speeds (`live.apps`) are the second half of the same delivery and remain gated on the accepted eBPF spike (`docs/LIVE-THROUGHPUT-PLAN.md`).
+**Version history:** 1.1 (2026-11-15): apply plan-fix findings F-01–F-11 — Unix-socket + peer-credential transport (D1a), daily endpoint rollups for long-term history (D2a), interface-counter headline totals with Unattributed row (D3a), 15-minute rollup grain + timezone/billing-cycle (D4a), cgroup-first app identity (D5a), metered-connection positioning with budgets/alerts in MVP (D6a), 40+ h/week timeline assumption (D7). 1.2 (2026-11-18): packaging decision — AUR stays the Arch/CachyOS install path; Flatpak deferred until after Phase 11 because a sandboxed Flatpak cannot host the root systemd daemon (UI-only wrapper + separate daemon install would break the one-command install promise). 1.3 (2026-11-19): live network throughput is an MVP feature — 1 Hz PC speed (`net.rates`) with a 60-second sparkline and a `speed_unit` setting; per-app live speeds (`live.apps`) are the second half of the same delivery and remain gated on the accepted eBPF spike (`docs/LIVE-THROUGHPUT-PLAN.md`). 1.4 (2026-11-19): owner decisions — 1-minute in-memory last-hour history, Mbps default, "TCP only" label if the spike limits attribution, and Wi-Fi signal/link speed after Phase A.
 
 ---
 
@@ -125,7 +125,8 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 8. **Settings (lean)** — retention length, theme, start-minimized, tray behavior, metered-interface labeling, daemon start on boot.
 9. **Freemium mechanics** — free tier as above; Pro license key unlocks: advanced history search (multi-filter: app, date range, remote host/IP, port, protocol), CSV/JSON export, retention beyond 90 days (up to 1 year). Pro features clearly gated in-UI with upgrade prompt.
 10. **Updates & packaging** — AUR package, .deb + apt repo, .rpm + dnf repo; signed updates; uninstall cleanly removes daemon + data (with opt-in data retention). Flatpak is explicitly deferred until after Phase 11 (v1.0.0): it cannot bundle the root systemd daemon, so it would ship a UI-only wrapper plus a separate host install, breaking the one-command install contract.
-11. **Live throughput** — current download/upload speed in Mbps (MB/s selectable via `speed_unit`), refreshed every second with a 60-second sparkline for the whole PC, plus per-app live speeds grouped by app identity (for example "Motrix", not "aria2c"). The PC total uses interface counters and works without eBPF; per-app speeds need the accepted collector spike. No internet speed test and no outbound traffic (`docs/LIVE-THROUGHPUT-PLAN.md`).
+11. **Live throughput** — current download/upload speed in Mbps (MB/s selectable via `speed_unit`), refreshed every second with a 60-second sparkline for the whole PC, plus per-app live speeds grouped by app identity (for example "Motrix", not "aria2c"). The PC total uses interface counters and works without eBPF; per-app speeds need the accepted collector spike. No internet speed test and no outbound traffic (`docs/LIVE-THROUGHPUT-PLAN.md`). The last-hour view uses a 60-sample in-memory rate history (lost on restart, labelled honestly); longer ranges use persisted rollups.
+12. **Wi-Fi link information** — show signal strength and negotiated link speed per wireless interface, read from local sysfs. Missing values render as "—"; this is not an internet speed test and makes no outbound connection.
 
 ### 6.2 V2 — Should-have (next release train)
 
@@ -301,7 +302,7 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 6. Pro license validation works offline; free/Pro gating verified.
 7. Uninstall removes service; data removal tested.
 8. Zero known P1/P2 bugs; crash-free rate ≥ 99.5% in beta.
-9. Live PC speed matches a known `curl`/`iperf3` rate within ~10% after warm-up; the UI shows stale/no-collector states honestly and never claims monitoring without a collector. Per-app live speeds are accepted only after the eBPF spike report is signed off.
+9. Live PC speed matches a known `curl`/`iperf3` rate within ~10% after warm-up; the UI shows stale/no-collector states honestly and never claims monitoring without a collector. Per-app live speeds are accepted only after the eBPF spike report is signed off. Wi-Fi signal/link values are local-sysfs derived and missing values render as "—".
 
 ---
 

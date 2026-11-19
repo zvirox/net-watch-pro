@@ -77,3 +77,37 @@ cannot be enabled. A small local fixture set satisfies that promise without a
 mock socket server or sample-data files on disk, preserving the zero-outbound
 contract. A separate "Run without monitoring" full-mock backend was considered
 and cut as unnecessary scope.
+
+---
+
+## L-OQ1 — Last-hour history resolution (decided 2026-11-19)
+
+**Chosen:** keep a small **1-minute in-memory history** in the daemon for the
+last-hour view; the 15-minute rollups remain the persistent source for longer
+ranges. The in-memory buffer is lost on daemon restart and the UI must say so
+instead of pretending continuity.
+
+**Rationale:** four 15-minute points are too coarse for "how fast was I
+downloading an hour ago"; a 60-point buffer matches the `net.rates` cadence.
+
+## L-OQ2 — Live speed unit default (decided 2026-11-19)
+
+**Chosen:** keep **`mbps`** as the default for `speed_unit`; `mbytes` remains
+selectable. No change to the plan.
+
+## L-OQ3 — Partial attribution label (decided 2026-11-19)
+
+**Chosen:** if the accepted spike shows only TCP can be attributed reliably,
+ship per-app live speeds with an explicit **"TCP only"** label and a visible
+Unattributed remainder rather than waiting for full UDP coverage.
+
+**Rationale:** an honest partial number with a confidence label is more useful
+than no per-app speed, provided the sum check still includes the remainder.
+
+## L-OQ4 — Wi-Fi signal and link speed (decided 2026-11-19)
+
+**Chosen:** schedule Wi-Fi signal strength and negotiated link speed
+**immediately after Phase A** (before the eBPF spike). They were previously
+dropped from this plan; this decision overrides that. Values come from local
+sysfs (`/sys/class/net/<iface>/wireless/link`, `/sys/class/net/<iface>/speed`),
+never from a network call. Missing values are shown as "—", never invented.

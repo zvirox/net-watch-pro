@@ -1,9 +1,9 @@
 # Net Watch Pro — DESIGN.md (UI Design System)
 
-**Version:** 1.2 · **Date:** 2026-11-19
+**Version:** 1.3 · **Date:** 2026-11-19
 **Source of truth:** `PRD.md` (scope, screens, flows) · `REAPM.md` (reference teardown) · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a). 1.2 (2026-11-19): add the "Network now" live-rate card with 60-second sparkline, Apps live-speed columns, `speed_unit` selector, and stale/no-collector states (live throughput plan, Phase A).
+**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a). 1.2 (2026-11-19): add the "Network now" live-rate card with 60-second sparkline, Apps live-speed columns, `speed_unit` selector, and stale/no-collector states (live throughput plan, Phase A). 1.3 (2026-11-19): interfaces card shows Wi-Fi signal/link from local sysfs with "—" for missing values; last-hour rate history is labelled in-memory.
 **Stack context:** Tauri 2 shell · Svelte 5 · shadcn-svelte components · ECharts · localhost WS data
 
 > **STRICT RULES — every UI built later must follow this file.**
@@ -449,8 +449,8 @@ Failure state: card below button swaps to error-soft banner with reason + "View 
 │ └─────────────────────────────────────────┘ │
 │ ┌ Top apps (ECharts bars) ┐ ┌ Interfaces ┐  │
 │ │ app ▇▇▇▇▇ 4.2 GiB →click │ │ wlan0 9.1  │  │
-│ │ app ▇▇▇ 2.0   →detail   │ │ eth0  3.3  │  │
-│ │ Unattributed / system ▇▇│ │           │  │  (tooltip: gap vs interface counters)
+│ │ app ▇▇▇ 2.0   →detail   │ │ -57 dBm · 866 Mbps │ (wifi sysfs)
+│ │ Unattributed / system ▇▇│ │ eth0  3.3  │  │  (tooltip: gap vs interface counters)
 │ └─────────────────────────┘ └────────────┘  │
 └─────────────────────────────────────────────┘
 ```

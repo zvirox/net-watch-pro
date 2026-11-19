@@ -176,7 +176,9 @@
 - [x] L-A6 `speed_unit` setting + migration 0005 <!-- mbps default, mbytes option, live unit switch -->
 - [x] L-A7 Honest `/status` + chip (`no_collector` not green) <!-- EbpfState::NoCollector, daemonStore.chipState, warning chip + tooltip -->
 - [x] L-A8 Correct stale CHECKLIST/PLAN claims (P2.3 unticked, 1 Hz note) <!-- P2.2 note now says no 1 Hz live-delta collector; P2.3 unticked because no collector feeds attribution -->
-- [ ] **Stop for owner approval after Phase A**
+- [x] **Stop for owner approval after Phase A** <!-- owner answered L-OQ1..L-OQ4 on 2026-11-19 -->
+- [ ] L-OQ1 60-sample in-memory rate history + `GET /usage/rate-history` (`in_memory:true`, lost-on-restart label)
+- [ ] L-OQ4 Wi-Fi signal/link on U3 from local sysfs + Dashboard display ("—" when missing)
 - [ ] L-B1 Owner-run Aya eBPF spike with Motrix; accept `docs/spike-ebpf-report.md`
 - [ ] L-C1–C9 Collector, identity, display names, `live.apps`, per-app speeds, sum check
 - [ ] L-D1–D5 Range presets 1 h/24 h/7 d/30 d/billing cycle

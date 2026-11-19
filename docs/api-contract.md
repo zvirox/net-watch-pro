@@ -47,3 +47,5 @@ Rate limits: 600/min reads · 5/min export create · 10/min writes & downloads �
 - Rates are decimal bits per second; total is the sum over non-excluded interfaces with the tunnel dedup rule. Frames older than 3 s are stale on the client.
 - `GET /status` `ebpf` may be `no_collector` (no collector attached); the UI must not show a green chip for that state.
 - Settings key `speed_unit`: enum `mbps` (default) | `mbytes`; forward-only migration 0005.
+- `GET /usage/rate-history` → `{ "samples": [{ts, down_bps, up_bps}], "in_memory": true }`; 60 samples, lost on restart (owner L-OQ1).
+- U3 rows may carry optional `signal_dbm` / `link_mbps` from local sysfs (`wireless/link`, `speed`); `null` means unavailable — render "—" (owner L-OQ4).

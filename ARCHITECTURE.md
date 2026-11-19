@@ -1,9 +1,9 @@
 # Net Watch Pro — ARCHITECTURE.md (Technical Architecture)
 
-**Version:** 1.4 · **Date:** 2026-11-19
+**Version:** 1.5 · **Date:** 2026-11-19
 **Source of truth:** `PRD.md` (scope, contracts, non-goals) · `DESIGN.md` (UI system) · `REAPM.md` (reference teardown) · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.3 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential transport (F-06/D1a), cgroup-first app identity (F-05/D5a), interface-counter sampler + Unattributed row (F-03/D3a), 15-minute rollup grain + timezone/cycle (F-04/D4a), daily endpoint rollups (F-02/D2a), in-memory episode state + checkpoint cadence (F-09), VM-based kernel matrix not containers (F-08), separate netwatch-ebpf build (F-01/F-11), [HYPOTHESIS] tags on unmeasured kernel claims. 1.4 (2026-11-19): Phase A of `docs/LIVE-THROUGHPUT-PLAN.md` — 1 Hz rate engine and `net.rates` stream beside the existing 15 s history sampler, `speed_unit` setting, and honest `no_collector` status.
+**Version history:** 1.3 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential transport (F-06/D1a), cgroup-first app identity (F-05/D5a), interface-counter sampler + Unattributed row (F-03/D3a), 15-minute rollup grain + timezone/cycle (F-04/D4a), daily endpoint rollups (F-02/D2a), in-memory episode state + checkpoint cadence (F-09), VM-based kernel matrix not containers (F-08), separate netwatch-ebpf build (F-01/F-11), [HYPOTHESIS] tags on unmeasured kernel claims. 1.4 (2026-11-19): Phase A of `docs/LIVE-THROUGHPUT-PLAN.md` — 1 Hz rate engine and `net.rates` stream beside the existing 15 s history sampler, `speed_unit` setting, and honest `no_collector` status. 1.5 (2026-11-19): 60-sample in-memory rate history for the last-hour view (lost on restart, `in_memory:true`) and optional Wi-Fi signal/link fields on U3 from local sysfs (owner L-OQ1/L-OQ4).
 **Rule:** This file defines structure and contracts only. **No application code is written as part of this document.**
 
 > **Strict rules:** Every implementation decision must trace to this file. Stack, folder layout, data flow, naming, and env vars below are binding. Deviations require updating this file first (version bump), like DESIGN.md §11.
@@ -188,6 +188,21 @@ The eBPF collection mechanism is **not yet finalized**; it will be fixed by the 
 - `[HYPOTHESIS]` cgroup-attached programs require cgroup v2 on all target distros (Appendix B, item 3)
 
 See `docs/spike-ebpf-report.md` for the measurement tables, chosen design, and rejected designs.
+
+### 5.1b Live rate history & Wi-Fi link fields (owner L-OQ1/L-OQ4)
+
+- **In-memory rate history:** the 1 Hz rate task (§5.1 item 4) also appends each
+  total-rate sample to a bounded 60-entry ring (`VecDeque`, oldest dropped). It
+  is process memory only — never written to SQLite — and is served by
+  `GET /usage/rate-history` with `in_memory:true` so the UI labels the
+  last-hour view as lost-on-restart. Authenticated reads only; no new table or
+  migration. Longer ranges keep using `usage_rollup_15m`.
+- **Wi-Fi link fields:** U3 enriches each wireless interface row at request time
+  by reading local sysfs only — `/sys/class/net/<iface>/wireless/link`
+  (signal, dBm) and `/sys/class/net/<iface>/speed` (negotiated Mbps). The UI
+  never touches sysfs (AGENTS.md §5). Reads are injectable-root for tests;
+  missing/invalid values serialize as `null` and render as "—", never zero.
+  No network call is made.
 
 
 **None at runtime.** The app's own traffic is visible in its own Live view (PRD "dogfooding zero-outbound" metric). At build/install time only: package repos fetch artifacts; the offline license verifier uses an embedded public key — no server roundtrip in MVP.
