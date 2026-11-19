@@ -62,6 +62,7 @@ pub struct LiveFeed {
 /// allowed-UID list. One admin prompt at onboarding, none per launch (D1a).
 pub async fn serve_unix(
     socket_path: &Path,
+    api_gid: Option<u32>,
     status_tx: watch::Sender<StatusSnapshot>,
     live: LiveFeed,
     db: sqlx::SqlitePool,
@@ -77,6 +78,8 @@ pub async fn serve_unix(
             format!("cannot bind Unix socket {}: {e}", socket_path.display()),
         )
     })?;
+
+    configure_socket_access(socket_path, api_gid)?;
 
     let status_rx = status_tx.subscribe();
     let state = Arc::new(AppState::new(status_tx, status_rx, live, db));
@@ -94,4 +97,31 @@ pub async fn serve_unix(
         })?;
 
     Ok(())
+}
+
+/// Restrict the API socket to root + the configured desktop group.
+///
+/// A Unix socket requires *write* permission to connect, so the default
+/// `0755` from `bind()` is unusable by the unprivileged UI. `0660` with the
+/// caller's primary group closes that gap until the peer-credential UID
+/// allowlist (D1a) is implemented in full.
+fn configure_socket_access(path: &Path, gid: Option<u32>) -> Result<(), crate::error::ApiError> {
+    use std::os::unix::fs::PermissionsExt;
+
+    if let Some(gid) = gid {
+        std::os::unix::fs::chown(path, None, Some(gid)).map_err(|error| {
+            crate::error::ApiError::new(
+                netwatch_common::ErrorCode::PermissionDenied,
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("cannot set socket group: {error}"),
+            )
+        })?;
+    }
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o660)).map_err(|error| {
+        crate::error::ApiError::new(
+            netwatch_common::ErrorCode::PermissionDenied,
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("cannot set socket permissions: {error}"),
+        )
+    })
 }

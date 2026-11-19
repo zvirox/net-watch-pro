@@ -227,10 +227,11 @@ async fn spawn_server_with_feed(
     let sock_for_serve = sock.clone();
     let serve_tx = tx.clone();
     let handle = tokio::spawn(async move {
-        if let Err(e) = netwatch_api::serve_unix(&sock_for_serve, serve_tx, feed, db, async move {
-            let _ = shutdown_rx.await;
-        })
-        .await
+        if let Err(e) =
+            netwatch_api::serve_unix(&sock_for_serve, None, serve_tx, feed, db, async move {
+                let _ = shutdown_rx.await;
+            })
+            .await
         {
             eprintln!("serve task failed: {e}");
         }
@@ -353,7 +354,7 @@ async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
     let serve_sock = sock.clone();
     let handle = tokio::spawn(async move {
         let db = test_db().await;
-        let _ = netwatch_api::serve_unix(&serve_sock, status_tx, live, db, async move {
+        let _ = netwatch_api::serve_unix(&serve_sock, None, status_tx, live, db, async move {
             let _ = shutdown_rx.await;
         })
         .await;
@@ -454,7 +455,7 @@ async fn connections_live_rest_matches_ws_snapshot() {
     let serve_sock = sock.clone();
     let handle = tokio::spawn(async move {
         let db = test_db().await;
-        let _ = netwatch_api::serve_unix(&serve_sock, status_tx, live, db, async move {
+        let _ = netwatch_api::serve_unix(&serve_sock, None, status_tx, live, db, async move {
             let _ = shutdown_rx.await;
         })
         .await;
@@ -820,7 +821,7 @@ async fn stale_socket_file_is_removed_before_bind() {
     let serve_sock = sock.clone();
     let handle = tokio::spawn(async move {
         let db = test_db().await;
-        let _ = netwatch_api::serve_unix(&serve_sock, stale_tx, feed, db, async move {
+        let _ = netwatch_api::serve_unix(&serve_sock, None, stale_tx, feed, db, async move {
             let _ = shutdown_rx.await;
         })
         .await;

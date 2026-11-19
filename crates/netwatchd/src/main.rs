@@ -211,6 +211,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     tracing::info!("serving API on {}", cfg.socket_path.display());
     let result = netwatch_api::serve_unix(
         &cfg.socket_path,
+        cfg.api_gid,
         status_tx,
         netwatch_api::LiveFeed {
             snapshot: snapshot_rx,

@@ -11,6 +11,9 @@ pub struct Config {
     pub data_dir: PathBuf,
     /// Unix domain socket path for the API (`NETWATCH_API_SOCKET`).
     pub socket_path: PathBuf,
+    /// Group allowed to connect to the socket (`NETWATCH_API_GID`, then
+    /// `SUDO_GID`). `None` leaves the socket group as root.
+    pub api_gid: Option<u32>,
 }
 
 impl Config {
@@ -32,9 +35,21 @@ impl Config {
             Err(_) => PathBuf::from("/run/netwatch-pro/api.sock"),
         };
 
+        // `SUDO_GID` is supplied by sudo when a developer starts the daemon
+        // from their own session; packages set `NETWATCH_API_GID` explicitly.
+        let api_gid = std::env::var("NETWATCH_API_GID")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .or_else(|| {
+                std::env::var("SUDO_GID")
+                    .ok()
+                    .and_then(|value| value.parse().ok())
+            });
+
         Ok(Self {
             data_dir,
             socket_path,
+            api_gid,
         })
     }
 }
