@@ -5,6 +5,10 @@ app/node_modules/
 app/dist/
 dist/
 app/src-tauri/gen/
+# makepkg working directories
+packaging/arch/src/
+packaging/arch/pkg/
+packaging/arch/net-watch-pro/
 
 # Dev-only env files (ARCHITECTURE.md §8.3: .env is dev-only, never committed)
 .env

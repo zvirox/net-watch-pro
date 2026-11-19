@@ -28,6 +28,6 @@ pkgbase = net-watch-pro-git
 	source = net-watch-pro::git+https://github.com/zvirox/net-watch-pro.git#branch=main
 	source = net-watch-pro-git.install
 	sha256sums = SKIP
-	sha256sums = a834f304d575e72a260ed1134faeca979978d7e812dadee3c1e597554ec29dc9
+	sha256sums = 5f434ab97b7e335cb25464faa0569d75bf32c197c9ba922439382a079c5025fb
 
 pkgname = net-watch-pro-git

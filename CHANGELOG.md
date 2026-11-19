@@ -8,6 +8,18 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.8.2-alpha.8] — 2026-11-19
+
+Patch release: fixes the AUR source bundle checksum.
+
+### Fixed
+
+- Regenerated `PKGBUILD`/`.SRCINFO` sha256 for `net-watch-pro-git.install`
+  after the P8.7 uninstall changes, so `makepkg` source validation passes.
+- `makepkg --nobuild --nodeps` now validates all sources successfully.
+
+---
+
 ## [v0.8.1-alpha.8] — 2026-11-19
 
 Patch release: onboarding now makes the API socket accessible immediately.
@@ -319,7 +331,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.1-alpha.8...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.2-alpha.8...HEAD
+[v0.8.2-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.2-alpha.8
 [v0.8.1-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.1-alpha.8
 [v0.8.0-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.0-alpha.8
 [v0.7.0-alpha.7]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.7.0-alpha.7
