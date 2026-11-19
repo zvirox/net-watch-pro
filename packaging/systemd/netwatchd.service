@@ -43,7 +43,8 @@ ProtectControlGroups=yes
 ProtectHostname=yes
 ProtectSystem=strict
 PrivateTmp=yes
-PrivateNetwork=yes
+# PrivateNetwork would isolate the daemon in an empty netns; it must see host
+# interfaces to sample /sys/class/net counters.
 RemoveIPC=yes
 RestrictNamespaces=yes
 RestrictRealtime=yes

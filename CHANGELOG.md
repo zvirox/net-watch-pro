@@ -8,6 +8,19 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.8.10-alpha.8] — 2026-11-19
+
+Patch release: the daemon can see host network interfaces again.
+
+### Fixed
+
+- Removed `PrivateNetwork=yes` from the hardened unit. It placed the monitor
+  in an empty network namespace, so `/sys/class/net` had no host interfaces and
+  the sampler recorded nothing — Dashboard stayed empty even while the UI was
+  connected and the status chip said "Monitoring".
+
+---
+
 ## [v0.8.9-alpha.8] — 2026-11-19
 
 Patch release: fixes the WebSocket link between the UI and daemon.
@@ -421,7 +434,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.9-alpha.8...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.10-alpha.8...HEAD
+[v0.8.10-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.10-alpha.8
 [v0.8.9-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.9-alpha.8
 [v0.8.8-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.8-alpha.8
 [v0.8.7-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.7-alpha.8
