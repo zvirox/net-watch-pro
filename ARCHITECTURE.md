@@ -191,9 +191,11 @@ See `docs/spike-ebpf-report.md` for the measurement tables, chosen design, and r
 
 ### 5.1b Live rate history & Wi-Fi link fields (owner L-OQ1/L-OQ4)
 
-- **In-memory rate history:** the 1 Hz rate task (§5.1 item 4) also appends each
-  total-rate sample to a bounded 60-entry ring (`VecDeque`, oldest dropped). It
-  is process memory only — never written to SQLite — and is served by
+- **In-memory rate history:** the 1 Hz rate task (§5.1 item 4) also feeds a
+  bounded 60-entry ring (`VecDeque`, oldest dropped) at **one-minute**
+  resolution: a newer sample in the current minute replaces the previous point,
+  so 60 points cover the last hour. It is process memory only — never written
+  to SQLite — and is served by
   `GET /usage/rate-history` with `in_memory:true` so the UI labels the
   last-hour view as lost-on-restart. Authenticated reads only; no new table or
   migration. Longer ranges keep using `usage_rollup_15m`.

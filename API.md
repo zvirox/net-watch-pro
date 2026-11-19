@@ -245,8 +245,10 @@ request time (`wireless/link`, `speed`); a `null` value means the interface does
 not expose it or the read failed. No network call is made. Display as "—", not
 as zero. Errors: 401, 429, 500.
 
-**U4 `GET /usage/rate-history`** — the last 60 one-second rate samples for the
-PC total, oldest first. Success 200:
+**U4 `GET /usage/rate-history`** — the last 60 **one-minute** rate samples for
+the PC total (covering the last hour), oldest first. The 1 Hz sampler feeds the
+ring but only one point per minute is retained; a newer sample in the current
+minute replaces the previous point so the last minute stays fresh. Success 200:
 ```json
 { "samples": [ {"ts":1763548800,"down_bps":10000000,"up_bps":1000000} ], "in_memory": true }
 ```

@@ -88,7 +88,9 @@ ranges. The in-memory buffer is lost on daemon restart and the UI must say so
 instead of pretending continuity.
 
 **Rationale:** four 15-minute points are too coarse for "how fast was I
-downloading an hour ago"; a 60-point buffer matches the `net.rates` cadence.
+downloading an hour ago"; a 60-point buffer at one-minute resolution covers
+the whole last hour (a newer 1 Hz sample in the current minute replaces the
+previous point so the view stays fresh).
 
 ## L-OQ2 — Live speed unit default (decided 2026-11-19)
 

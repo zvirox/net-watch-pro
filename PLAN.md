@@ -314,7 +314,7 @@
 | L-A6 | `speed_unit` setting + migration 0005 | `DATABASE.md`, migration, `settings.rs`, settings screen | toggle applies without restart | L-A1 |
 | L-A7 | Honest `/status` + chip | `netwatchd/src/main.rs`, `netwatch-common`, `StatusChip.svelte` | no collector → not green; chip explains why | L-A1 |
 | L-A8 | Correct stale tracker claims | `CHECKLIST.md`, `PLAN.md` | P2.3 unticked, 1 Hz note fixed | L-A3 |
-| L-OQ1 | 60-sample in-memory rate history + U4 endpoint | `netwatchd/src/rates.rs`, `netwatch-api` | 60 samples, `in_memory:true`, lost-on-restart label | L-A3 |
+| L-OQ1 | 60-sample one-minute in-memory history + U4 endpoint | `netwatchd/src/rates.rs`, `netwatch-api` | 60 one-minute samples (last hour), `in_memory:true`, lost-on-restart label | L-A3 |
 | L-OQ4 | Wi-Fi signal/link from local sysfs on U3 | `netwatch-api/src/interfaces_usage.rs`, Dashboard, TS types | injectable-root tests; "—" when missing | L-A1 |
 | L-B1 | eBPF spike in Aya, Motrix workloads | `spikes/`, `docs/spike-ebpf-report.md` | owner-run with real root; `[VERIFIED]`/`[REFUTED]` claims | L-A |
 | L-C1–C9 | Collector, identity, display names, `live.apps`, per-app speeds, sum check | `netwatch-ebpf/`, daemon, Apps/Live screens | accepted spike report | L-B1 |

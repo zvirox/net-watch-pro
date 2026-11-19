@@ -2213,11 +2213,12 @@ async fn rate_history_is_bounded_in_memory_and_ordered() {
     let db = test_db().await;
     let mut feed = live_feed().0;
     let history = Arc::new(netwatch_common::RateHistory::default());
-    for ts in 10..15 {
+    let base = 1_700_000_000;
+    for minute in 0..5 {
         history.push(netwatch_common::RateSample {
-            ts,
-            down_bps: ts * 1_000,
-            up_bps: ts,
+            ts: base + minute * 60,
+            down_bps: minute * 1_000,
+            up_bps: minute,
         });
     }
     feed.rate_history = history;
@@ -2227,10 +2228,10 @@ async fn rate_history_is_bounded_in_memory_and_ordered() {
     let v: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(v["in_memory"], true);
     let samples = v["samples"].as_array().unwrap();
-    assert_eq!(samples.len(), 5);
-    assert_eq!(samples[0]["ts"], 10, "oldest first");
-    assert_eq!(samples[4]["ts"], 14);
-    assert_eq!(samples[0]["down_bps"], 10_000);
+    assert_eq!(samples.len(), 5, "one point per minute");
+    assert_eq!(samples[0]["ts"], base, "oldest first");
+    assert_eq!(samples[4]["ts"], base + 4 * 60);
+    assert_eq!(samples[0]["down_bps"], 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]

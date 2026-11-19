@@ -152,21 +152,26 @@ impl From<&RateSnapshot> for RateSample {
     }
 }
 
-/// Capacity of the in-memory last-hour rate ring (60 × 1 s = 1 minute).
+/// Capacity of the in-memory last-hour rate ring (60 × 1 min = 1 hour).
 pub const RATE_HISTORY_CAPACITY: usize = 60;
 
 /// Bounded, thread-safe ring of the most recent total-rate samples.
 ///
-/// Process memory only — lost on restart by design (owner L-OQ1). The daemon
-/// appends on each 1 Hz sample; the API serves a snapshot of it on U4. No new
-/// dependency: a plain `std::sync::Mutex` guards a small `VecDeque`.
+/// One point per minute (a newer sample in the current minute replaces the
+/// previous one), so 60 points cover the last hour at a resolution smoother
+/// than the four 15-minute rollups (owner L-OQ1, `docs/LIVE-THROUGHPUT-PLAN.md`
+/// §9). Process memory only — lost on restart by design. The 1 Hz rate task
+/// feeds it; the API serves a snapshot on U4. No new dependency: a plain
+/// `std::sync::Mutex` guards a small `VecDeque`.
 #[derive(Debug, Default)]
 pub struct RateHistory {
     inner: std::sync::Mutex<std::collections::VecDeque<RateSample>>,
 }
 
 impl RateHistory {
-    /// Append a sample, dropping the oldest when full.
+    /// Append a sample at one-minute resolution, dropping the oldest when
+    /// full. A newer sample in the same minute replaces the previous point so
+    /// the current minute stays fresh without growing the buffer.
     pub fn push(&self, sample: RateSample) {
         // Poisoning here cannot corrupt state — recover the guard rather than
         // panic in a daemon path (ARCHITECTURE.md §7.1).
@@ -174,6 +179,12 @@ impl RateHistory {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(last) = ring.back_mut()
+            && last.ts / 60 == sample.ts / 60
+        {
+            *last = sample;
+            return;
+        }
         if ring.len() == RATE_HISTORY_CAPACITY {
             ring.pop_front();
         }
@@ -421,20 +432,46 @@ mod tests {
     fn rate_history_is_bounded_and_oldest_first() {
         let history = RateHistory::default();
         assert!(history.is_empty());
-        for ts in 0..(RATE_HISTORY_CAPACITY as u64 + 5) {
+        let base = 1_700_000_000;
+        for minute in 0..(RATE_HISTORY_CAPACITY as u64 + 5) {
             history.push(RateSample {
-                ts,
-                down_bps: ts,
+                ts: base + minute * 60,
+                down_bps: minute,
                 up_bps: 0,
             });
         }
         let samples = history.samples();
-        assert_eq!(samples.len(), RATE_HISTORY_CAPACITY);
-        assert_eq!(samples[0].ts, 5, "oldest samples dropped");
+        assert_eq!(samples.len(), RATE_HISTORY_CAPACITY, "one point per minute");
+        assert_eq!(samples[0].ts, base + 5 * 60, "oldest minutes dropped");
         assert_eq!(
             samples[RATE_HISTORY_CAPACITY - 1].ts,
-            RATE_HISTORY_CAPACITY as u64 + 4
+            base + (RATE_HISTORY_CAPACITY as u64 + 4) * 60
         );
+    }
+
+    #[test]
+    fn rate_history_keeps_one_point_per_minute() {
+        let history = RateHistory::default();
+        history.push(RateSample {
+            ts: 1_700_000_000,
+            down_bps: 10,
+            up_bps: 0,
+        });
+        // Same minute, one second later: replace rather than append.
+        history.push(RateSample {
+            ts: 1_700_000_001,
+            down_bps: 20,
+            up_bps: 0,
+        });
+        assert_eq!(history.len(), 1);
+        assert_eq!(history.samples()[0].down_bps, 20);
+        // Next minute: a new point.
+        history.push(RateSample {
+            ts: 1_700_000_060,
+            down_bps: 30,
+            up_bps: 0,
+        });
+        assert_eq!(history.len(), 2);
     }
 
     #[test]

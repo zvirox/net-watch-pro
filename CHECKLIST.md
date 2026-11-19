@@ -177,7 +177,7 @@
 - [x] L-A7 Honest `/status` + chip (`no_collector` not green) <!-- EbpfState::NoCollector, daemonStore.chipState, warning chip + tooltip -->
 - [x] L-A8 Correct stale CHECKLIST/PLAN claims (P2.3 unticked, 1 Hz note) <!-- P2.2 note now says no 1 Hz live-delta collector; P2.3 unticked because no collector feeds attribution -->
 - [x] **Stop for owner approval after Phase A** <!-- owner answered L-OQ1..L-OQ4 on 2026-11-19 -->
-- [x] L-OQ1 60-sample in-memory rate history + `GET /usage/rate-history` (`in_memory:true`, lost-on-restart label) <!-- bounded VecDeque in netwatch-common, filled by the 1 Hz task, 3 unit + 2 contract tests -->
+- [x] L-OQ1 60-sample one-minute in-memory history + `GET /usage/rate-history` (`in_memory:true`, lost-on-restart label) <!-- bounded VecDeque in netwatch-common, one point per minute fed by the 1 Hz task, 3 unit + 2 contract tests -->
 - [x] L-OQ4 Wi-Fi signal/link on U3 from local sysfs + Dashboard display ("—" when missing) <!-- injectable-root sysfs reader, wifi-only, 3 unit tests; TS types + demo fixture updated -->
 - [ ] L-B1 Owner-run Aya eBPF spike with Motrix; accept `docs/spike-ebpf-report.md`
 - [ ] L-C1–C9 Collector, identity, display names, `live.apps`, per-app speeds, sum check
