@@ -38,7 +38,7 @@ Out of scope (no surface): remote attackers, credential stuffing, session fixati
 No login screen exists; the equivalent is the daemon link, per ARCHITECTURE.md §5.3:
 
 1. Daemon boots (systemd) → creates Unix socket `/run/netwatch-pro/api.sock` (mode `0660`, dir `0750`, root-owned).
-2. Onboarding (one time, pkexec) → admin adds the current user's UID to the root-owned allowed-UID list at `/etc/netwatch-pro/allowed-uids` (one numeric UID per line, mode `0644`) and enables the systemd unit.
+2. Onboarding (one time, pkexec) → admin adds the current user's UID to the root-owned allowed-UID list at `/etc/netwatch-pro/allowed-uids` (one numeric UID per line, mode `0644`), points `NETWATCH_API_GID` at the user's primary group so the `0660` socket is immediately accessible without a re-login, and enables the systemd unit.
 3. UI process launches (user context) → connects to the Unix socket → daemon checks the peer's UID via `SO_PEERCRED` against the allowed-UID list → authorized or refused.
 4. UI presents no token on requests — authorization is the socket peer-credential itself (API.md §1.1).
 5. Failure at any step (UID not in list, socket missing, permissions) → connection refused → honest "Stopped/Connecting" UI state (DESIGN.md §7.5), never a silent retry storm.

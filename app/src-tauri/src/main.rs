@@ -208,9 +208,29 @@ async fn enable_monitoring(window: WebviewWindow) -> Result<(), String> {
         .trim()
         .parse()
         .map_err(|_| "could not parse current UID".to_string())?;
+    let user_output = Command::new("id")
+        .arg("-un")
+        .output()
+        .map_err(|error| format!("cannot determine current user: {error}"))?;
+    let user = String::from_utf8(user_output.stdout)
+        .map_err(|error| format!("invalid user output: {error}"))?
+        .trim()
+        .to_string();
+    // Allow only ordinary Unix account names in the privileged shell snippet.
+    if user.is_empty()
+        || user.len() > 32
+        || !user
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+    {
+        return Err("could not parse current username".to_string());
+    }
 
+    // The socket must be group-owned by a group the UI already belongs to;
+    // the user's primary group satisfies that without requiring a re-login.
+    // The allowlist remains the peer-credential authorization boundary.
     let script = format!(
-        "set -e; install -d -m 0750 /etc/netwatch-pro; printf '{uid}\\n' > /etc/netwatch-pro/allowed-uids; chmod 0644 /etc/netwatch-pro/allowed-uids; systemctl enable --now netwatchd.service",
+        "set -e; install -d -m 0755 /etc/netwatch-pro; printf '{uid}\\n' > /etc/netwatch-pro/allowed-uids; chmod 0644 /etc/netwatch-pro/allowed-uids; usergid=$(id -g '{user}'); mkdir -p /etc/systemd/system/netwatchd.service.d; printf '[Service]\\nEnvironment=NETWATCH_API_GID=%s\\n' \"$usergid\" > /etc/systemd/system/netwatchd.service.d/10-socket-group.conf; getent group netwatch >/dev/null 2>&1 && usermod -aG netwatch '{user}' || true; systemctl daemon-reload; systemctl enable --now netwatchd.service; systemctl restart netwatchd.service",
     );
     let output = Command::new("pkexec")
         .arg("sh")

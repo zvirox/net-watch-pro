@@ -8,6 +8,20 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.8.1-alpha.8] — 2026-11-19
+
+Patch release: onboarding now makes the API socket accessible immediately.
+
+### Fixed
+
+- The one-time pkexec step now sets `NETWATCH_API_GID` to the desktop user's
+  primary group (and adds the user to the `netwatch` group), so the `0660`
+  socket can be reached without logging out and back in. The allowed-UID list
+  remains the peer-credential authorization boundary.
+- No other behavior changed; packages and signatures are rebuilt from this tag.
+
+---
+
 ## [v0.8.0-alpha.8] — 2026-11-19
 
 First installable alpha: `.deb`, `.rpm` and AUR `net-watch-pro-git` sources are
@@ -305,7 +319,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.0-alpha.8...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.1-alpha.8...HEAD
+[v0.8.1-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.1-alpha.8
 [v0.8.0-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.0-alpha.8
 [v0.7.0-alpha.7]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.7.0-alpha.7
 [v0.6.0-alpha.6]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.6.0-alpha.6
