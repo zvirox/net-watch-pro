@@ -8,6 +8,18 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.8.6-alpha.8] — 2026-11-19
+
+Patch release: daemon can set its socket group under the hardened unit.
+
+### Fixed
+
+- Added `CAP_CHOWN` to the unit's capability bounding set. Without it the
+  daemon failed at startup with `cannot set socket group: Operation not
+  permitted` and exited with status 5, so onboarding never became healthy.
+
+---
+
 ## [v0.8.5-alpha.8] — 2026-11-19
 
 Patch release: production binaries now embed the UI correctly.
@@ -368,7 +380,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.5-alpha.8...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.6-alpha.8...HEAD
+[v0.8.6-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.6-alpha.8
 [v0.8.5-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.5-alpha.8
 [v0.8.4-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.4-alpha.8
 [v0.8.3-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.3-alpha.8

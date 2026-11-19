@@ -64,7 +64,8 @@ IPAddressDeny=any
 # Observability needs no ambient privileges today; if eBPF is available the
 # loader may request these from the bounding set. All other capabilities are
 # dropped, including CAP_SYS_ADMIN and CAP_DAC_OVERRIDE.
-CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_NET_ADMIN
+# CAP_CHOWN is required to set the API socket's group at bind time.
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_NET_ADMIN CAP_CHOWN
 AmbientCapabilities=
 
 [Install]
