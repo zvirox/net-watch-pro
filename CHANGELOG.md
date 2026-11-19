@@ -8,6 +8,19 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.8.5-alpha.8] — 2026-11-19
+
+Patch release: production binaries now embed the UI correctly.
+
+### Fixed
+
+- Release builds enable Tauri's `custom-protocol` feature. Without it, plain
+  `cargo build --release` produced a dev-mode binary that tried to load the
+  Vite dev URL (`127.0.0.1:5173`) and showed "Connection refused" even after a
+  successful install. Applied to both the AUR PKGBUILD and release workflow.
+
+---
+
 ## [v0.8.4-alpha.8] — 2026-11-19
 
 Patch release: AUR builds now clear all makepkg toolchain flags for Rust.
@@ -355,7 +368,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.4-alpha.8...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.5-alpha.8...HEAD
+[v0.8.5-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.5-alpha.8
 [v0.8.4-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.4-alpha.8
 [v0.8.3-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.3-alpha.8
 [v0.8.2-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.2-alpha.8

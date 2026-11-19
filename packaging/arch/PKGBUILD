@@ -35,7 +35,10 @@ build() {
   export LDFLAGS=""
   # Tauri release builds embed frontendDist (app/dist), so build the UI first.
   (cd app && npm ci && npm run build)
-  cargo build --release -p netwatchd -p netwatch-app
+  # Plain cargo builds leave Tauri in dev mode (loads devUrl http://127.0.0.1:5173).
+  # custom-protocol makes the release binary serve the embedded frontendDist.
+  cargo build --release -p netwatchd
+  cargo build --release -p netwatch-app --features tauri/custom-protocol
 }
 
 package() {

@@ -63,7 +63,11 @@ jobs:
           npm run build
 
       - name: Build release binaries
-        run: cargo build --release -p netwatchd -p netwatch-app
+        run: |
+          cargo build --release -p netwatchd
+          # custom-protocol embeds frontendDist; without it Tauri stays in dev
+          # mode and tries to load the Vite dev URL at runtime.
+          cargo build --release -p netwatch-app --features tauri/custom-protocol
 
       - name: Build packages
         env:
