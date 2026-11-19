@@ -171,8 +171,13 @@ jobs:
           dpkg -L net-watch-pro | grep -q '/lib/systemd/system/netwatchd.service'
           getent group netwatch
           test -f /usr/share/applications/net-watch-pro.desktop
-          # Package leaves the unit disabled for onboarding.
-          test "$(systemctl is-enabled netwatchd.service 2>/dev/null || echo disabled)" = "disabled"
+          # Package leaves the unit disabled for onboarding. GitHub runners
+          # have no systemd as PID 1, so accept unknown/static here too.
+          enabled="$(systemctl is-enabled netwatchd.service 2>/dev/null || true)"
+          case "$enabled" in
+            disabled|unknown|static|'') ;;
+            *) echo "unexpected unit enablement: $enabled" >&2; exit 1 ;;
+          esac
       - name: Uninstall is complete and data is not kept by default
         run: |
           set -euo pipefail
