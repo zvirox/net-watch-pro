@@ -8,6 +8,21 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.8.9-alpha.8] — 2026-11-19
+
+Patch release: fixes the WebSocket link between the UI and daemon.
+
+### Fixed
+
+- The Tauri bridge built a manual WebSocket upgrade request without
+  `Sec-WebSocket-Key`, so tungstenite 0.30 rejected every handshake. The app
+  stayed on "Connecting…" with no live data or settings. Required upgrade
+  headers are now supplied; verified `ws_clients: 1` on the running daemon.
+- The client also sets `connected` immediately after the connect invoke, so a
+  missed state event can no longer trap it in a reconnect loop.
+
+---
+
 ## [v0.8.8-alpha.8] — 2026-11-19
 
 Patch release: fixes the UI stuck in "Connecting…" after onboarding.
@@ -406,7 +421,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.8-alpha.8...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.9-alpha.8...HEAD
+[v0.8.9-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.9-alpha.8
 [v0.8.8-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.8-alpha.8
 [v0.8.7-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.7-alpha.8
 [v0.8.6-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.6-alpha.8

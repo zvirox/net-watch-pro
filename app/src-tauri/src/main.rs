@@ -22,6 +22,8 @@ use tauri::{Emitter, Manager, State, WebviewWindow};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::handshake::client::generate_key;
+use tokio_tungstenite::tungstenite::http::header;
 
 const DAEMON_SOCKET: &str = "/run/netwatch-pro/api.sock";
 const MAX_WS_FRAME: usize = 64 * 1024;
@@ -72,16 +74,23 @@ async fn daemon_connect(window: WebviewWindow, state: State<'_, LinkState>) -> R
         .await
         .map_err(|_| "daemon WebSocket connection failed".to_string())?;
 
-    let (socket, _) = tokio_tungstenite::client_async(
+    // tungstenite does not add Sec-WebSocket-Key to a manually built request.
+    let handshake = tokio_tungstenite::client_async(
         tokio_tungstenite::tungstenite::http::Request::builder()
             .method("GET")
             .uri("ws://localhost/api/v1/stream")
+            .header(header::HOST, "localhost")
+            .header(header::UPGRADE, "websocket")
+            .header(header::CONNECTION, "Upgrade")
+            .header(header::SEC_WEBSOCKET_KEY, generate_key())
+            .header(header::SEC_WEBSOCKET_VERSION, "13")
             .body(())
             .map_err(|_| "cannot construct daemon WebSocket request".to_string())?,
         socket,
     )
     .await
     .map_err(|_| "daemon WebSocket connection failed".to_string())?;
+    let (socket, _) = handshake;
 
     let (outgoing_tx, mut outgoing_rx) = mpsc::channel::<String>(64);
     let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();

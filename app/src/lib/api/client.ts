@@ -152,6 +152,10 @@ export class DaemonApiClient {
     try {
       await connectDaemonWebSocket();
       if (!this.#isCurrent(generation)) return;
+      // Set state here as well as via the `daemon://state` event: that event
+      // can arrive before the webview listener is attached, which otherwise
+      // leaves the UI stuck in a reconnect loop despite a live socket.
+      this.#setState('connected');
       await sendDaemonFrame({ op: 'subscribe', channel: 'status' });
       this.#retryDelayMs = 1_000;
       this.#clearRetry();
