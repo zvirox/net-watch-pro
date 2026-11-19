@@ -131,6 +131,82 @@ pub struct RateSnapshot {
     pub interfaces: Vec<InterfaceRate>,
 }
 
+/// One total-rate sample in the last-hour history (API.md U4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RateSample {
+    /// Sample timestamp (epoch seconds).
+    pub ts: u64,
+    /// Total download bits per second.
+    pub down_bps: u64,
+    /// Total upload bits per second.
+    pub up_bps: u64,
+}
+
+impl From<&RateSnapshot> for RateSample {
+    fn from(snapshot: &RateSnapshot) -> Self {
+        Self {
+            ts: snapshot.ts,
+            down_bps: snapshot.down_bps,
+            up_bps: snapshot.up_bps,
+        }
+    }
+}
+
+/// Capacity of the in-memory last-hour rate ring (60 × 1 s = 1 minute).
+pub const RATE_HISTORY_CAPACITY: usize = 60;
+
+/// Bounded, thread-safe ring of the most recent total-rate samples.
+///
+/// Process memory only — lost on restart by design (owner L-OQ1). The daemon
+/// appends on each 1 Hz sample; the API serves a snapshot of it on U4. No new
+/// dependency: a plain `std::sync::Mutex` guards a small `VecDeque`.
+#[derive(Debug, Default)]
+pub struct RateHistory {
+    inner: std::sync::Mutex<std::collections::VecDeque<RateSample>>,
+}
+
+impl RateHistory {
+    /// Append a sample, dropping the oldest when full.
+    pub fn push(&self, sample: RateSample) {
+        // Poisoning here cannot corrupt state — recover the guard rather than
+        // panic in a daemon path (ARCHITECTURE.md §7.1).
+        let mut ring = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if ring.len() == RATE_HISTORY_CAPACITY {
+            ring.pop_front();
+        }
+        ring.push_back(sample);
+    }
+
+    /// Copy the retained samples, oldest first.
+    #[must_use]
+    pub fn samples(&self) -> Vec<RateSample> {
+        let ring = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        ring.iter().copied().collect()
+    }
+
+    /// Number of retained samples (0–60).
+    #[must_use]
+    pub fn len(&self) -> usize {
+        let ring = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        ring.len()
+    }
+
+    /// True while no sample has been recorded yet.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
 /// WS channel names (API.md §3, dot-namespaced kebab-case).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Channel {
@@ -339,6 +415,26 @@ mod tests {
     fn no_collector_status_serializes_to_contract_string() {
         let value = serde_json::to_string(&EbpfState::NoCollector).unwrap();
         assert_eq!(value, "\"no_collector\"");
+    }
+
+    #[test]
+    fn rate_history_is_bounded_and_oldest_first() {
+        let history = RateHistory::default();
+        assert!(history.is_empty());
+        for ts in 0..(RATE_HISTORY_CAPACITY as u64 + 5) {
+            history.push(RateSample {
+                ts,
+                down_bps: ts,
+                up_bps: 0,
+            });
+        }
+        let samples = history.samples();
+        assert_eq!(samples.len(), RATE_HISTORY_CAPACITY);
+        assert_eq!(samples[0].ts, 5, "oldest samples dropped");
+        assert_eq!(
+            samples[RATE_HISTORY_CAPACITY - 1].ts,
+            RATE_HISTORY_CAPACITY as u64 + 4
+        );
     }
 
     #[test]

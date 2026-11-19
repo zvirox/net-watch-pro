@@ -32,6 +32,8 @@ export const DEMO_INTERFACES: InterfaceUsage[] = [
     kind: 'wifi',
     is_metered: true,
     bytes: { up: 240_000_000, down: 1_000_000_000 },
+    signal_dbm: -57,
+    link_mbps: 866,
   },
   {
     id: 3,
@@ -39,6 +41,8 @@ export const DEMO_INTERFACES: InterfaceUsage[] = [
     kind: 'ethernet',
     is_metered: false,
     bytes: { up: 2_000_000, down: 8_000_000 },
+    signal_dbm: null,
+    link_mbps: null,
   },
 ];
 

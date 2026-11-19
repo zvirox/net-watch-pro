@@ -54,6 +54,7 @@ fn live_feed_with_totals() -> (
             deltas: delta_tx.clone(),
             totals: totals_rx,
             rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
+            rate_history: Arc::new(netwatch_common::RateHistory::default()),
         },
         delta_tx,
         totals_tx,
@@ -350,6 +351,7 @@ async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
         deltas: delta_tx.clone(),
         totals: totals_rx,
         rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
+        rate_history: Arc::new(netwatch_common::RateHistory::default()),
     };
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
@@ -452,6 +454,7 @@ async fn connections_live_rest_matches_ws_snapshot() {
         deltas: delta_tx.clone(),
         totals: totals_rx,
         rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
+        rate_history: Arc::new(netwatch_common::RateHistory::default()),
     };
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
@@ -2201,4 +2204,42 @@ async fn subscribe_net_rates_delivers_snapshot() {
         json!({ "op": "unsubscribe", "channel": "net.rates" }),
     )
     .await;
+}
+
+// ------------------------------------------------ §2.5 U4 rate history (L-OQ1)
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rate_history_is_bounded_in_memory_and_ordered() {
+    let db = test_db().await;
+    let mut feed = live_feed().0;
+    let history = Arc::new(netwatch_common::RateHistory::default());
+    for ts in 10..15 {
+        history.push(netwatch_common::RateSample {
+            ts,
+            down_bps: ts * 1_000,
+            up_bps: ts,
+        });
+    }
+    feed.rate_history = history;
+    let (sock, _tx) = spawn_server_with_feed(db, feed).await;
+    let (status, body) = http_get(&sock, "/api/v1/usage/rate-history").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["in_memory"], true);
+    let samples = v["samples"].as_array().unwrap();
+    assert_eq!(samples.len(), 5);
+    assert_eq!(samples[0]["ts"], 10, "oldest first");
+    assert_eq!(samples[4]["ts"], 14);
+    assert_eq!(samples[0]["down_bps"], 10_000);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rate_history_empty_before_first_sample() {
+    let db = test_db().await;
+    let (sock, _tx) = spawn_server_with(db).await;
+    let (status, body) = http_get(&sock, "/api/v1/usage/rate-history").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["in_memory"], true);
+    assert_eq!(v["samples"].as_array().unwrap().len(), 0);
 }

@@ -6,7 +6,7 @@
   import { Button, EmptyState } from '$lib/components/ui';
   import { daemonStore } from '$lib/stores/daemon.svelte';
   import { ratesStore } from '$lib/stores/rates.svelte';
-  import { usageStore, type Granularity } from '$lib/stores/usage.svelte';
+  import { usageStore, type Granularity, type InterfaceUsage } from '$lib/stores/usage.svelte';
   import { formatBytes } from '$lib/utils/format';
 
   const rates = $derived(ratesStore.snapshot);
@@ -30,6 +30,14 @@
   onDestroy(() => {
     ratesStore.stop();
   });
+
+  // Owner L-OQ4: Wi-Fi signal/link from local sysfs; "—" when unavailable.
+  function wifiDetail(iface: InterfaceUsage): string | null {
+    if (iface.kind !== 'wifi') return null;
+    const signal = iface.signal_dbm === null ? '—' : `${String(iface.signal_dbm)} dBm`;
+    const link = iface.link_mbps === null ? '—' : `${String(iface.link_mbps)} Mbps link`;
+    return `${signal} · ${link}`;
+  }
 
   function labelFor(bucket: number, granularity: Granularity): string {
     const date = new Date(bucket * 1000);
@@ -295,10 +303,16 @@
       {#if interfaces.length > 0}
         <ul>
           {#each interfaces as iface (iface.id)}
+            {@const detail = wifiDetail(iface)}
             <li>
-              <div class="iface-name">
-                <span>{iface.name}</span>
-                {#if iface.is_metered}<span class="metered">METERED</span>{/if}
+              <div>
+                <div class="iface-name">
+                  <span>{iface.name}</span>
+                  {#if iface.is_metered}<span class="metered">METERED</span>{/if}
+                </div>
+                {#if detail !== null}
+                  <div class="iface-detail">{detail}</div>
+                {/if}
               </div>
               <div class="iface-bytes">
                 <span>↓ {formatBytes(iface.bytes.down)}</span>
@@ -538,6 +552,13 @@
     display: flex;
     align-items: center;
     gap: var(--nwp-space-2);
+  }
+  .iface-detail {
+    margin-top: var(--nwp-space-1);
+    color: var(--nwp-text-secondary);
+    font-family: var(--nwp-font-mono);
+    font-size: var(--nwp-size-caption);
+    font-variant-numeric: tabular-nums;
   }
   .metered {
     border-radius: var(--nwp-radius-full);

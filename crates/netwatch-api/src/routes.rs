@@ -177,6 +177,18 @@ pub async fn usage_interfaces(
     }
 }
 
+/// `GET /usage/rate-history` — U4: bounded last-hour rate samples (API.md §2.5).
+///
+/// The ring lives in process memory only; `in_memory:true` tells the UI to
+/// label it as lost-on-restart (owner L-OQ1).
+pub async fn usage_rate_history(State(state): State<Arc<AppState>>) -> Response {
+    Json(json!({
+        "samples": state.live.rate_history.samples(),
+        "in_memory": true,
+    }))
+    .into_response()
+}
+
 /// `GET /usage/timeline` — U2: local-hour/local-day usage series (API.md §2.5).
 pub async fn usage_timeline(
     State(state): State<Arc<AppState>>,
@@ -464,6 +476,10 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
         .route(
             "/api/v1/usage/interfaces",
             axum::routing::get(usage_interfaces),
+        )
+        .route(
+            "/api/v1/usage/rate-history",
+            axum::routing::get(usage_rate_history),
         )
         .route("/api/v1/stream", axum::routing::get(stream_upgrade))
         .fallback(not_found)

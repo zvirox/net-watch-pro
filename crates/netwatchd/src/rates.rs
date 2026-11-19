@@ -12,7 +12,7 @@ use sqlx::SqlitePool;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
-use netwatch_common::RateSnapshot;
+use netwatch_common::{RateHistory, RateSample, RateSnapshot};
 use netwatch_core::rates::RateMeter;
 
 /// Live cadence — one frame per second while a client is subscribed.
@@ -21,7 +21,11 @@ const SYSFS_ROOT: &str = "/sys/class/net";
 
 /// Spawn the rate task; the caller owns the receiver and abort handle.
 #[must_use]
-pub fn spawn(pool: SqlitePool, rates_tx: watch::Sender<Arc<RateSnapshot>>) -> JoinHandle<()> {
+pub fn spawn(
+    pool: SqlitePool,
+    rates_tx: watch::Sender<Arc<RateSnapshot>>,
+    history: Arc<RateHistory>,
+) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut meter = RateMeter::default();
         let mut interval = tokio::time::interval(SAMPLE_INTERVAL);
@@ -41,6 +45,9 @@ pub fn spawn(pool: SqlitePool, rates_tx: watch::Sender<Arc<RateSnapshot>>) -> Jo
             .await
             {
                 Ok(snapshot) => {
+                    // Same sample feeds both consumers: the 1 Hz stream and
+                    // the bounded last-hour ring (owner L-OQ1).
+                    history.push(RateSample::from(&snapshot));
                     let _ = rates_tx.send(Arc::new(snapshot));
                 }
                 Err(error) => {

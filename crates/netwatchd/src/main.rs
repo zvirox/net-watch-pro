@@ -145,9 +145,11 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     // establishes the cumulative-counter baseline.
     let sampler_abort = sampler::spawn(pool.clone());
     let (totals_tx, totals_abort) = usage::spawn(pool.clone());
-    // A3: 1 Hz rate task for live PC speed (net.rates).
+    // A3: 1 Hz rate task for live PC speed (net.rates). The same task also
+    // fills the bounded last-hour ring served by U4 (owner L-OQ1).
     let (rates_tx, rates_rx) = watch::channel(Arc::new(netwatch_common::RateSnapshot::default()));
-    let rates_abort = rates::spawn(pool.clone(), rates_tx);
+    let rate_history = Arc::new(netwatch_common::RateHistory::default());
+    let rates_abort = rates::spawn(pool.clone(), rates_tx, Arc::clone(&rate_history));
     // P7.1: recurring tier-aware retention pruning, with a first pass at boot.
     let pruner_abort = pruner::spawn(pool.clone());
     // P7.7: keep systemd's startup enablement in sync with the setting.
@@ -222,6 +224,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
             deltas: delta_tx,
             totals: totals_tx.subscribe(),
             rates: rates_rx,
+            rate_history,
         },
         pool,
         shutdown,

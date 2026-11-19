@@ -32,6 +32,10 @@ export type InterfaceUsage = {
   kind: string;
   is_metered: boolean;
   bytes: { up: number; down: number };
+  /** Wi-Fi signal in dBm; null when sysfs does not expose it (owner L-OQ4). */
+  signal_dbm: number | null;
+  /** Negotiated link speed in Mbps; null when unavailable. */
+  link_mbps: number | null;
 };
 
 export type Granularity = 'hour' | 'day';
