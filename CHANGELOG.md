@@ -8,6 +8,19 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.8.8-alpha.8] — 2026-11-19
+
+Patch release: fixes the UI stuck in "Connecting…" after onboarding.
+
+### Fixed
+
+- `daemon_connect` is now idempotent. Onboarding calls `authorize()` after the
+  app already connected; previously that returned "already connected" and every
+  subsequent reconnect failed, leaving the status chip on "Connecting…" and
+  preventing settings/history from loading.
+
+---
+
 ## [v0.8.7-alpha.8] — 2026-11-19
 
 Patch release: fixes all UI→daemon REST calls from the installed app.
@@ -393,7 +406,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.7-alpha.8...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.8-alpha.8...HEAD
+[v0.8.8-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.8-alpha.8
 [v0.8.7-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.7-alpha.8
 [v0.8.6-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.6-alpha.8
 [v0.8.5-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.5-alpha.8

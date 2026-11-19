@@ -61,7 +61,10 @@ async fn daemon_connect(window: WebviewWindow, state: State<'_, LinkState>) -> R
             .lock()
             .map_err(|_| "daemon link unavailable".to_string())?;
         if connection.sender.is_some() {
-            return Err("daemon WebSocket is already connected".to_string());
+            // Idempotent: onboarding calls authorize() after start() already
+            // connected. Returning an error here traps the UI in reconnect
+            // loops that can never succeed while the live socket is held.
+            return Ok(());
         }
     }
 
