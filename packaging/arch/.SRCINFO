@@ -1,6 +1,6 @@
 pkgbase = net-watch-pro-git
 	pkgdesc = Local network-traffic monitor and per-app usage tracker (dev channel)
-	pkgver = 0.8.0.alpha.8
+	pkgver = 0.8.1.alpha.8.r0.g4a33419
 	pkgrel = 1
 	url = https://github.com/zvirox/net-watch-pro
 	install = net-watch-pro-git.install

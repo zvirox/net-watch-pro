@@ -8,6 +8,18 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.8.3-alpha.8] — 2026-11-19
+
+Patch release: fixes AUR builds on CachyOS/Arch.
+
+### Fixed
+
+- AUR `PKGBUILD` now clears makepkg's `LDFLAGS` for the Rust build;
+  `-Wl,--as-needed` was dropping bundled SQLite symbols from `sqlx_macros`
+  and caused `undefined symbol: sqlite3_free`.
+
+---
+
 ## [v0.8.2-alpha.8] — 2026-11-19
 
 Patch release: fixes the AUR source bundle checksum.
@@ -331,7 +343,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.2-alpha.8...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.3-alpha.8...HEAD
+[v0.8.3-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.3-alpha.8
 [v0.8.2-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.2-alpha.8
 [v0.8.1-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.1-alpha.8
 [v0.8.0-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.0-alpha.8

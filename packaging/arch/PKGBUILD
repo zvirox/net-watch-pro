@@ -27,6 +27,10 @@ pkgver() {
 
 build() {
   cd "$srcdir/$_pkgname"
+  # makepkg's LDFLAGS contain -Wl,--as-needed, which drops bundled SQLite
+  # symbols from sqlx's proc-macro and breaks `cargo build` with
+  # "undefined symbol: sqlite3_free". Clear it for the Rust toolchain.
+  export LDFLAGS=""
   # Tauri release builds embed frontendDist (app/dist), so build the UI first.
   (cd app && npm ci && npm run build)
   cargo build --release -p netwatchd -p netwatch-app
