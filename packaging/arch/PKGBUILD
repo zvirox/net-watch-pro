@@ -27,9 +27,11 @@ pkgver() {
 
 build() {
   cd "$srcdir/$_pkgname"
-  # makepkg's LDFLAGS contain -Wl,--as-needed, which drops bundled SQLite
-  # symbols from sqlx's proc-macro and breaks `cargo build` with
-  # "undefined symbol: sqlite3_free". Clear it for the Rust toolchain.
+  # makepkg's CFLAGS/LDFLAGS (-fno-plt, --as-needed, ...) break the bundled
+  # SQLite C code compiled for sqlx's proc-macros: cargo then fails with
+  # "undefined symbol: sqlite3_free". Use the Rust toolchain defaults instead.
+  export CFLAGS=""
+  export CXXFLAGS=""
   export LDFLAGS=""
   # Tauri release builds embed frontendDist (app/dist), so build the UI first.
   (cd app && npm ci && npm run build)

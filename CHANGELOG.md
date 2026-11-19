@@ -8,6 +8,18 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.8.4-alpha.8] — 2026-11-19
+
+Patch release: AUR builds now clear all makepkg toolchain flags for Rust.
+
+### Fixed
+
+- AUR `PKGBUILD` clears `CFLAGS`/`CXXFLAGS`/`LDFLAGS` in `build()`, not just
+  `LDFLAGS`. makepkg's `-fno-plt`/`--as-needed` flags were breaking bundled
+  SQLite in `sqlx_macros` (`undefined symbol: sqlite3_free` on CachyOS).
+
+---
+
 ## [v0.8.3-alpha.8] — 2026-11-19
 
 Patch release: fixes AUR builds on CachyOS/Arch.
@@ -343,7 +355,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.3-alpha.8...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.4-alpha.8...HEAD
+[v0.8.4-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.4-alpha.8
 [v0.8.3-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.3-alpha.8
 [v0.8.2-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.2-alpha.8
 [v0.8.1-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.1-alpha.8
