@@ -113,7 +113,7 @@ Phase B decides how per-app bytes are counted, and it must run on a real machine
 **Go / no-go**
 
 - **Go** if, on the `curl` and `iperf3` runs, attributed bytes are within about 5% of the true traffic, attributed plus unattributed matches the interface counters within about 2%, and overhead stays within the daemon's CPU and memory budget.
-- **No-go or re-scope** if UDP or short-lived processes cannot be attributed reliably. Then the UI must show a confidence label per row instead of exact numbers.
+- **No-go or re-scope** if UDP or short-lived processes cannot be attributed reliably. Then the UI must show a confidence label per row instead of exact numbers. Per owner decision L-OQ3, this is **not** a reason to withhold per-app speeds: Phase C ships them with a visible **"TCP only"** label and an Unattributed remainder, provided the sum check still holds.
 - Write the result in `docs/spike-ebpf-report.md` and re-tag each claim `[VERIFIED]` or `[REFUTED]`. Do not start Phase C before the owner accepts the report.
 
 ## 6. Phase C: collector and per-app live speed
@@ -229,12 +229,12 @@ The feature is done when a Motrix download shows up live, at the right speed, in
 | Smoothed values lag the true speed | Numbers look slow to react | Keep the smoothing constant small and tune against a real download |
 | Hardened unit blocks something the collector needs | Attach fails on some distros | Test the bounded capability set early and document each addition |
 
-**Open questions for the owner**
+**Open questions for the owner — answered 2026-11-19 (see `docs/decisions.md` L-OQ1–L-OQ4)**
 
-1. Should the last-hour view use a small in-memory one-minute history (smoother, lost on restart) or only the 15-minute rollups?
-2. Should units default to Mbps or MB/s? This plan defaults to Mbps and offers MB/s in settings.
-3. If the spike shows only TCP can be counted reliably, ship per-app speeds with a visible "TCP only" label, or wait for full coverage?
-4. Wi-Fi signal strength and link speed were dropped from this plan. Do you want them scheduled after Phase A?
+1. Should the last-hour view use a small in-memory one-minute history (smoother, lost on restart) or only the 15-minute rollups? → **One-minute in-memory history** (60 points cover the last hour; labelled lost-on-restart).
+2. Should units default to Mbps or MB/s? This plan defaults to Mbps and offers MB/s in settings. → **Keep Mbps** as the default; MB/s stays selectable.
+3. If the spike shows only TCP can be counted reliably, ship per-app speeds with a visible "TCP only" label, or wait for full coverage? → **Ship with a "TCP only" label** and a visible Unattributed remainder; do not wait for UDP.
+4. Wi-Fi signal strength and link speed were dropped from this plan. Do you want them scheduled after Phase A? → **Yes, immediately after Phase A** (local sysfs only, "—" when missing).
 
 ## 10. Docs first, agent rules and ready-to-paste prompt
 
