@@ -8,6 +8,19 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.8.7-alpha.8] — 2026-11-19
+
+Patch release: fixes all UI→daemon REST calls from the installed app.
+
+### Fixed
+
+- The Tauri bridge was stripping `/api/v1` before sending requests, so every
+  REST call (including onboarding's health check) returned 404. The full
+  versioned path is now sent unchanged, and percent-encoded query strings are
+  preserved and validated.
+
+---
+
 ## [v0.8.6-alpha.8] — 2026-11-19
 
 Patch release: daemon can set its socket group under the hardened unit.
@@ -380,7 +393,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.6-alpha.8...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.7-alpha.8...HEAD
+[v0.8.7-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.7-alpha.8
 [v0.8.6-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.6-alpha.8
 [v0.8.5-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.5-alpha.8
 [v0.8.4-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.4-alpha.8

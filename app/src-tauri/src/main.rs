@@ -138,7 +138,8 @@ async fn daemon_http_request(
 ) -> Result<HttpResponse, String> {
     require_main_window(&window)?;
 
-    // Path allowlist: v1 API paths only, no query strings, no traversal.
+    // Path allowlist: v1 API paths only; the full versioned path (and any
+    // encoded query string) must be sent to the daemon unchanged.
     let api_path = validate_api_path(&path)?;
 
     let mut stream = tokio::net::UnixStream::connect(DAEMON_SOCKET)
@@ -356,24 +357,44 @@ fn require_main_window(window: &WebviewWindow) -> Result<(), String> {
     }
 }
 
+/// Validate a caller-supplied API path and return it unchanged for the HTTP
+/// request. Query strings are allowed (UI filters use encoded values) but
+/// traversal, fragment markers and malformed percent escapes are rejected.
 fn validate_api_path(path: &str) -> Result<&str, String> {
-    if !path.starts_with("/api/v1/")
-        || path.starts_with("//")
-        || path.contains(['?', '#', '\\', '%'])
-        || path
+    let (path_part, query) = match path.split_once('?') {
+        Some((head, tail)) => (head, Some(tail)),
+        None => (path, None),
+    };
+    if !path_part.starts_with("/api/v1/")
+        || path_part.starts_with("//")
+        || path_part.contains("//")
+        || path_part.contains(['#', '\\', '%'])
+        || path_part
             .to_ascii_lowercase()
             .split('/')
             .any(|part| part == "." || part == "..")
     {
         return Err("invalid API path".to_string());
     }
-    let suffix = path
-        .strip_prefix("/api/v1")
-        .ok_or_else(|| "invalid API path".to_string())?;
-    if suffix.contains("//") {
-        return Err("invalid API path".to_string());
+    if let Some(query) = query {
+        if query.is_empty() || query.contains(['#', '\\', '/', '?']) {
+            return Err("invalid API query".to_string());
+        }
+        let bytes = query.as_bytes();
+        let mut index = 0;
+        while index < bytes.len() {
+            if bytes[index] == b'%' {
+                let digits = bytes.get(index + 1..index + 3).ok_or("invalid API query")?;
+                if !digits.iter().all(u8::is_ascii_hexdigit) {
+                    return Err("invalid API query".to_string());
+                }
+                index += 3;
+            } else {
+                index += 1;
+            }
+        }
     }
-    Ok(suffix)
+    Ok(path)
 }
 
 fn main() {
@@ -409,14 +430,20 @@ mod tests {
     use super::{validate_api_path, validate_export_path};
 
     #[test]
-    fn api_path_must_be_versioned_relative_path() {
-        assert_eq!(validate_api_path("/api/v1/status"), Ok("/status"));
+    fn api_path_keeps_version_prefix_and_allows_encoded_queries() {
+        assert_eq!(validate_api_path("/api/v1/status"), Ok("/api/v1/status"));
+        assert_eq!(
+            validate_api_path("/api/v1/connections?limit=50&app_name=A%20B"),
+            Ok("/api/v1/connections?limit=50&app_name=A%20B")
+        );
         for invalid in [
             "/status",
             "/api/v1//status",
             "/api/v1/../status",
-            "/api/v1/status?x=1",
             "/api/v1/%2fstatus",
+            "/api/v1/status?",
+            "/api/v1/status?x=%zz",
+            "/api/v1/status#frag",
             "//127.0.0.1/status",
         ] {
             assert!(validate_api_path(invalid).is_err(), "accepted {invalid}");
