@@ -50,8 +50,8 @@
 ## Phase 2 — Live Slice → `v0.2.0-alpha.2` (~40 h)
 
 - [!] P2.1 eBPF attach + ring buffer plumbing <!-- BLOCKED on kernel -EPERM (spike report); daemon uses /sys interface counters + degraded events instead -->
-- [!] P2.2 Byte counters → 1 s delta events <!-- BLOCKED with P2.1; 1 Hz live deltas come from the /sys sampler -->
-- [x] P2.3 `/proc` attribution + `apps` upserts <!-- reconciled: cgroup-first identity + /proc fallback, exec-time cache, confidence display -->
+- [!] P2.2 Byte counters → 1 s delta events <!-- BLOCKED with P2.1 (eBPF); no 1 Hz live-delta collector exists. L-A3 adds a 1 Hz *rate* sampler for PC speed, not per-connection deltas -->
+- [ ] P2.3 `/proc` attribution + `apps` upserts <!-- UNTICKED (L-A8): cgroup-first identity helpers exist in netwatch-core but no collector feeds them, so no real per-app attribution runs; blocked on the L-B spike report -->
 - [x] P2.4 Migrations 0001+0002 at boot <!-- fresh data dir → tables + seeds verified (smoke run + unit tests) -->
 - [x] P2.5 Batched `connections` writer (checkpoint cadence ~60 s, F-09) <!-- persist_episodes upserts absolute totals, one tx per batch; unit tested -->
 - [x] P2.6 `live.connections` channel (snapshot + delta) over socket stream <!-- EpisodeStore + 1 Hz live service + WS snapshot/delta frames; verified over live socket -->
@@ -165,6 +165,21 @@
 - [ ] P11.4 Tag `v1.0.0` + release notes
 - [ ] **DoD: stable GA shipped; post-1.0 firewall roadmap opens**
 - [ ] **Release: tag `v1.0.0` + GitHub release (not pre-release)** <!-- stable repos live; release notes verify zero-outbound -->
+
+## Phase L — Live Throughput (F11; `docs/LIVE-THROUGHPUT-PLAN.md`)
+
+- [x] L-A1 Docs first, version bumps for PRD/API/ARCHITECTURE/api-contract/env-vars/DATABASE/DESIGN/FEATURES/TESTING/PLAN/CHECKLIST <!-- plan committed as docs/LIVE-THROUGHPUT-PLAN.md; net.rates/speed_unit/no_collector contracts recorded; stale token-auth wording fixed in AGENTS.md + SECURITY.md -->
+- [ ] L-A2 Pure rate math + tests (`netwatch-core/src/rates.rs`)
+- [ ] L-A3 1 Hz sysfs rate task + degraded event (`netwatchd/src/rates.rs`, wiring)
+- [ ] L-A4 `net.rates` stream + shared payload types
+- [ ] L-A5 Network now card + rates store (loading/idle/stale/error)
+- [ ] L-A6 `speed_unit` setting + migration 0005
+- [ ] L-A7 Honest `/status` + chip (`no_collector` not green)
+- [x] L-A8 Correct stale CHECKLIST/PLAN claims (P2.3 unticked, 1 Hz note) <!-- P2.2 note now says no 1 Hz live-delta collector; P2.3 unticked because no collector feeds attribution -->
+- [ ] **Stop for owner approval after Phase A**
+- [ ] L-B1 Owner-run Aya eBPF spike with Motrix; accept `docs/spike-ebpf-report.md`
+- [ ] L-C1–C9 Collector, identity, display names, `live.apps`, per-app speeds, sum check
+- [ ] L-D1–D5 Range presets 1 h/24 h/7 d/30 d/billing cycle
 
 ---
 

@@ -1,9 +1,9 @@
 # Net Watch Pro — DESIGN.md (UI Design System)
 
-**Version:** 1.1 · **Date:** 2026-11-15  
+**Version:** 1.2 · **Date:** 2026-11-19
 **Source of truth:** `PRD.md` (scope, screens, flows) · `REAPM.md` (reference teardown) · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a).  
+**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a). 1.2 (2026-11-19): add the "Network now" live-rate card with 60-second sparkline, Apps live-speed columns, `speed_unit` selector, and stale/no-collector states (live throughput plan, Phase A).
 **Stack context:** Tauri 2 shell · Svelte 5 · shadcn-svelte components · ECharts · localhost WS data
 
 > **STRICT RULES — every UI built later must follow this file.**
@@ -336,7 +336,7 @@ Layout details in §8.1; component specs here.
 | Stopped / disconnected | `error-soft` | `error` | "Stopped" |
 | Connecting (WS reconnect in progress) | `surface-2` | `text-disabled` (pulsing dot, reduced-motion-safe) | "Connecting…" |
 
-Chip is a button; click opens Diagnostics. Chip always pairs with a tooltip naming the exact state. Status is never conveyed by color alone (icon shape differs per state: check / alert triangle / x / loader).
+Chip is a button; click opens Diagnostics. Chip always pairs with a tooltip naming the exact state. Status is never conveyed by color alone (icon shape differs per state: check / alert triangle / x / loader). With no eBPF collector the daemon reports `ebpf:no_collector` and the chip uses **Degraded** (`warning-soft` + `!`), never the green Monitoring style; the tooltip says "No collector — PC live speed works, per-app rates unavailable".
 
 ### 7.6 Tables
 
@@ -440,6 +440,8 @@ Failure state: card below button swaps to error-soft banner with reason + "View 
 ```
 ┌ TOPBAR: Dashboard            ◈ Monitoring ● ┐
 ├─────────────────────────────────────────────┤
+│ NETWORK NOW  ↓ 10.0 Mbps  ↑ 1.0 Mbps  ▁▃▂▅  │  new live card + 60 s sparkline
+├─────────────────────────────────────────────┤
 │ TODAY 12.4 GiB ▂sparkline  │ MONTH 231 GiB │  data-lg mono headline cards
 ├─────────────────────────────────────────────┤
 │ ┌ Usage timeline (ECharts) [Day|Hour] ────┐ │
@@ -453,6 +455,8 @@ Failure state: card below button swaps to error-soft banner with reason + "View 
 └─────────────────────────────────────────────┘
 ```
 Loading: skeleton headline + chart placeholder. Empty (no data yet): empty state "Waiting for first data" + live hint. Error: chart-area error banner + retry.
+
+**Network now card (§6.1 #11):** two `font-mono` tabular numbers (down/up) with the unit label from `speed_unit` (`Mbps` default, `MB/s` selectable), plus a 60-second ECharts line sparkline in the theme's download/upload series (§3.3). States: loading (before first frame) → live → idle (`0`) → **stale** (no frame for 3 s; show the last value dimmed with a "Stale" text label, never a fresh-looking number) → daemon stopped (existing banner + stale card) → no collector (PC rate still valid; the chip and Apps view explain the missing per-app data). Sparkline uses existing `Chart.svelte` with `animation:false`; no new colours or primitives.
 **Unattributed row:** status-soft tint card with status-colored dot + text label (never color-only per §9.5); tooltip explains the gap = interface counter bytes − attributed per-app bytes (headers, ACKs, retransmits, kernel-handled/VPN traffic). Shown even when zero, with "—" until first sample.
 
 ### 8.4 Live Connections
@@ -503,7 +507,7 @@ Free tier: Pro filter chips render disabled with `lock` + tooltip; Export opens 
 
 ```
 ┌ TOPBAR: Settings ┐   Sections as tabs or grouped list:
-│ General     │ theme (Light/Dark/System switch group)
+│ General     │ theme (Light/Dark/System switch group), speed unit (Mbps/MB/s)
 │ Data        │ retention (number input + helper), clear-data destructive, timezone (IANA picker), billing-cycle day (1–31)
 │ Interfaces  │ metered labeling (switch list)
 │ Daemon      │ start-on-boot switch, Open diagnostics ghost

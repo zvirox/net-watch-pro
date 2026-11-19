@@ -1,9 +1,9 @@
 # TESTING.md — Test Plan
 
-**Version:** 1.1 · **Date:** 2026-11-15  
+**Version:** 1.2 · **Date:** 2026-11-19
 **Sources:** `PRD.md` §9/§11 (metrics, DoD) · `FEATURES.md` (per-feature behavior + acceptance criteria) · `API.md` §1–2 (contracts, error codes) · `ARCHITECTURE.md` §4/§9 (tests/ layout, budgets) · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.1 (2026-11-15): apply plan-fix findings — accuracy harness redefined (F-03/D3a), auth matrix → UID allowlist (F-06/D1a), timezone/billing-cycle cases (F-04/D4a), cgroup identity cases (F-05/D5a), kernel VM matrix not containers (F-08), write-rate test (F-09).
+**Version history:** 1.1 (2026-11-15): apply plan-fix findings — accuracy harness redefined (F-03/D3a), auth matrix → UID allowlist (F-06/D1a), timezone/billing-cycle cases (F-04/D4a), cgroup identity cases (F-05/D5a), kernel VM matrix not containers (F-08), write-rate test (F-09). 1.2 (2026-11-19): F11 live-throughput unit and acceptance cases from `docs/LIVE-THROUGHPUT-PLAN.md` §9.
 
 > **Working rule (binding):** tests are generated **for one feature at a time**, together with the feature code, and **must pass before the next feature starts** — same gate as FEATURES.md §11 (build → test green → update PLAN/CHECKLIST → user confirmation).
 
@@ -184,6 +184,21 @@
 | Signature check | tampered artifact | Package manager rejects (CI verifies) |
 | Migration failure | corrupted db at boot | Distinct exit code → degraded UX, no partial schema |
 | Uninstall opt-in | remove with "keep data" | Service gone; data dir intact; without → gone |
+
+### F11 — Live throughput (Phase A)
+
+| Scenario | Input | Expected |
+|---|---|---|
+| Known rate | `curl`/`iperf3` download, 3 s warm-up | PC card within ~10% of tool rate |
+| Idle | no traffic for 5 s | ~0 bps, no negative or flickering values |
+| Counter reset/decrease | synthetic rate unit test | no negative rate; new value used as baseline |
+| Interface churn | interface added/removed in unit test | per-interface list updates; total stays non-negative |
+| Late tick | simulated delayed read | rate uses measured elapsed time, not nominal 1 s |
+| Stale frame | no `net.rates` frame for 3 s | stale label, last value dimmed, no fresh-looking number |
+| Daemon restart | kill/restart daemon | card recovers within 5 s, loading then live |
+| No collector | `ebpf:no_collector` | chip is Degraded (not green), PC card still works |
+| Units | toggle `speed_unit` | Mbps ↔ MB/s without restart |
+| Zero outbound | Live/Dashboard open, socket capture | no outbound connection from the app |
 
 ---
 

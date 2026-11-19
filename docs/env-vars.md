@@ -1,6 +1,6 @@
 # env-vars.md — Environment Variables Mirror
 
-**Binding source:** `../ARCHITECTURE.md` §8.3. This list is **closed** — adding a variable requires updating ARCHITECTURE.md §8.3 first (AGENTS.md §5). **Version:** 1.1 (2026-11-15).
+**Binding source:** `../ARCHITECTURE.md` §8.3. This list is **closed** — adding a variable requires updating ARCHITECTURE.md §8.3 first (AGENTS.md §5). **Version:** 1.2 (2026-11-19). Phase A (live throughput) adds no environment variables: the 1 Hz rate task uses the existing interface exclusion list and the `speed_unit` setting.
 
 | Var | Consumer | Default | Purpose |
 |---|---|---|---|

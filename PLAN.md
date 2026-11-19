@@ -1,11 +1,11 @@
 # PLAN.md — Implementation Roadmap
 
-**Version:** 1.2 · **Date:** 2026-11-15  
+**Version:** 1.3 · **Date:** 2026-11-19
 **Sources:** `PRD.md` §6 (features), `ARCHITECTURE.md` §4 (structure), `DATABASE.md` §8 (migrations), `API.md` §2 (endpoints) · `docs/decisions.md` (owner decisions D1–D7)
 
 **Companion tracker:** `CHECKLIST.md` (same task IDs, ticked live)
 
-**Version history:** 1.2 (2026-11-15): apply plan-fix findings — insert Phase S (eBPF spike) and Phase D (doc fixes); reorder phases per Part 5; replace week targets with effort estimates (D7: 40+ h/week); rewrite P1.1–P1.5 for Unix-socket + peer-credential transport (D1a); defer self-hosted apt/dnf repos until after beta (F-10).
+**Version history:** 1.2 (2026-11-15): apply plan-fix findings — insert Phase S (eBPF spike) and Phase D (doc fixes); reorder phases per Part 5; replace week targets with effort estimates (D7: 40+ h/week); rewrite P1.1–P1.5 for Unix-socket + peer-credential transport (D1a); defer self-hosted apt/dnf repos until after beta (F-10). 1.3 (2026-11-19): add Phase L (Live Throughput, F11) with tasks A1–A8, owner-run spike B, collector C and range presets D; full detail in `docs/LIVE-THROUGHPUT-PLAN.md`.
 
 > **Ordering rules:** vertical slices only — every phase ends with a runnable app; never all-backend-then-all-frontend. Each task ≤ 2 hours. Dependencies use task IDs (e.g. `dep: P1.3`). A task may start when its deps are done.
 
@@ -300,7 +300,29 @@
 
 ---
 
-## 15. Global Rules
+## 15. Phase L — Live Throughput (F11)
+
+**Full contract:** `docs/LIVE-THROUGHPUT-PLAN.md` (owner-approved scope change). Phase A is agent work; stop for approval afterwards. Phase B is owner-run on real hardware; Phase C starts only after the accepted spike report; Phase D can run in parallel with B.
+
+| ID | Task | Files | Verify | Deps |
+|---|---|---|---|---|
+| L-A1 | Docs first, with version bumps | PRD, API, ARCHITECTURE, api-contract, env-vars, DATABASE, DESIGN, FEATURES, TESTING, PLAN, CHECKLIST | Contract docs merged before code | — |
+| L-A2 | Pure rate math + tests | `netwatch-core/src/rates.rs` | counter reset/decrease, churn, late tick, smoothing | L-A1 |
+| L-A3 | 1 Hz sysfs rate task + degraded path | `netwatchd/src/rates.rs`, `main.rs` | survives read errors, records degraded event | L-A2 |
+| L-A4 | `net.rates` stream + shared payload | `netwatch-common`, `netwatch-api/src/stream.rs` | snapshot on subscribe, 1 Hz, unsubscribed gets none | L-A3 |
+| L-A5 | Network now card + rates store | `app/src/lib/stores/`, `Dashboard.svelte` | loading/idle/stale/error states | L-A4 |
+| L-A6 | `speed_unit` setting + migration 0005 | `DATABASE.md`, migration, `settings.rs`, settings screen | toggle applies without restart | L-A1 |
+| L-A7 | Honest `/status` + chip | `netwatchd/src/main.rs`, `netwatch-common`, `StatusChip.svelte` | no collector → not green; chip explains why | L-A1 |
+| L-A8 | Correct stale tracker claims | `CHECKLIST.md`, `PLAN.md` | P2.3 unticked, 1 Hz note fixed | L-A3 |
+| L-B1 | eBPF spike in Aya, Motrix workloads | `spikes/`, `docs/spike-ebpf-report.md` | owner-run with real root; `[VERIFIED]`/`[REFUTED]` claims | L-A |
+| L-C1–C9 | Collector, identity, display names, `live.apps`, per-app speeds, sum check | `netwatch-ebpf/`, daemon, Apps/Live screens | accepted spike report | L-B1 |
+| L-D1–D5 | Range presets 1 h/24 h/7 d/30 d/cycle | usage APIs + Dashboard | timezone and cycle tests | L-A1 |
+
+**DoD (Phase A):** live PC speed matches a known rate within ~10%, idle ~0, stale/no-collector states honest, zero outbound, unit + contract tests green. **Stop for owner approval before L-B/L-C.**
+
+---
+
+## 16. Global Rules
 
 - **Runnable after every phase** — a phase that can't demo its slice isn't done.
 - **Released after every phase** (owner directive, 2026-11-18) — the tag named in §1 / the phase DoD is part of the DoD, not a follow-up. Code complete with no tag and no GitHub release means the phase is still open. Release procedure: AGENTS.md §6.

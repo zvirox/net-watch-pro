@@ -1,9 +1,9 @@
 # Net Watch Pro — ARCHITECTURE.md (Technical Architecture)
 
-**Version:** 1.3 · **Date:** 2026-11-15  
+**Version:** 1.4 · **Date:** 2026-11-19
 **Source of truth:** `PRD.md` (scope, contracts, non-goals) · `DESIGN.md` (UI system) · `REAPM.md` (reference teardown) · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.3 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential transport (F-06/D1a), cgroup-first app identity (F-05/D5a), interface-counter sampler + Unattributed row (F-03/D3a), 15-minute rollup grain + timezone/cycle (F-04/D4a), daily endpoint rollups (F-02/D2a), in-memory episode state + checkpoint cadence (F-09), VM-based kernel matrix not containers (F-08), separate netwatch-ebpf build (F-01/F-11), [HYPOTHESIS] tags on unmeasured kernel claims.  
+**Version history:** 1.3 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential transport (F-06/D1a), cgroup-first app identity (F-05/D5a), interface-counter sampler + Unattributed row (F-03/D3a), 15-minute rollup grain + timezone/cycle (F-04/D4a), daily endpoint rollups (F-02/D2a), in-memory episode state + checkpoint cadence (F-09), VM-based kernel matrix not containers (F-08), separate netwatch-ebpf build (F-01/F-11), [HYPOTHESIS] tags on unmeasured kernel claims. 1.4 (2026-11-19): Phase A of `docs/LIVE-THROUGHPUT-PLAN.md` — 1 Hz rate engine and `net.rates` stream beside the existing 15 s history sampler, `speed_unit` setting, and honest `no_collector` status.
 **Rule:** This file defines structure and contracts only. **No application code is written as part of this document.**
 
 > **Strict rules:** Every implementation decision must trace to this file. Stack, folder layout, data flow, naming, and env vars below are binding. Deviations require updating this file first (version bump), like DESIGN.md §11.
@@ -45,7 +45,7 @@ Explicitly **not** used (avoid over-engineering): Kubernetes/any server, GraphQL
 
 | Component | Runtime | Privilege | Responsibility |
 |---|---|---|---|
-| `netwatchd` | Rust/Tokio systemd service | root (bounded caps: `CAP_BPF`, `CAP_PERFMON`, `CAP_NET_ADMIN`) | Loads Aya programs, attributes traffic (cgroup-first identity, `/proc` fallback), writes SQLite, serves Unix-socket JSON API, interface-counter sampler, pruning, health endpoint |
+| `netwatchd` | Rust/Tokio systemd service | root (bounded caps: `CAP_BPF`, `CAP_PERFMON`, `CAP_NET_ADMIN`) | Loads Aya programs, attributes traffic (cgroup-first identity, `/proc` fallback), writes SQLite, serves Unix-socket JSON API, 15 s interface-counter sampler, 1 Hz rate sampler for live PC speed, pruning, health endpoint |
 | eBPF layer | kernel (CO-RE, BTF) | — | Per-socket/per-cgroup byte + packet counters, process identity metadata; pushed to daemon via ring buffer |
 | UI process | Tauri 2 + Svelte 5 | user | All screens per DESIGN.md §8; connects to daemon Unix socket; tray; no root ever |
 | SQLite DB | file (WAL) | root-owned | Connections history, usage rollups (hour/day/15m + endpoint-day), app registry, settings cache, schema migrations |
@@ -76,10 +76,10 @@ net-watch-pro/
 │   │   └── Cargo.toml
 │   ├── netwatch-core/               # daemon domain logic (no I/O deps): accounting, attribution, retention, rollups
 │   │   ├── src/lib.rs
-│   │   └── src/{accounting,attribution,retention}.rs
+│   │   └── src/{accounting,attribution,retention,rates,settings}.rs
 │   ├── netwatchd/                   # daemon binary: composition root
 │   │   ├── src/main.rs
-│   │   ├── src/{ebpf_loader,db,api,health,config}.rs
+│   │   ├── src/{ebpf_loader,db,api,health,config,rates,sampler,pruner,service}.rs
 │   │   ├── src/db/migrations/*.sql  # embedded by sqlx
 │   │   └── src/bin/                 # CLI verbs: --export-config, --recover-fw (future)
 │   ├── netwatch-api/                # API server: Unix-socket JSON routes, peer-cred auth, request/validation types
@@ -165,7 +165,7 @@ Rules: no shared code by copy — shared types live in `netwatch-common`. The Ta
 1. **Kernel → daemon:** eBPF maps accumulate per-socket bytes (up/down, packets); a ring buffer wakes the daemon; the daemon flushes aggregated deltas every ~1 s (PRD "sub-second refresh" satisfied at the UI refresh layer, not by flooding). **[HYPOTHESIS]** flush cadence and map sizes to be confirmed by spike Q1/Q8.
 2. **Enrichment:** new socket identities are captured **at exec/connect time in-kernel** (e.g. `sched_process_exec` tracepoint) and resolved via cgroupfs path → cgroup identity (`systemd app-*.scope`, Flatpak, Snap); `/proc/<pid>/exe` reads are a **fallback only**, not the primary source (D5a). **[HYPOTHESIS]** exec-time capture reliability unmeasured until spike Q4/Q5; reading other users' `/proc` may need capabilities beyond the bounded set (Appendix B, item 5).
 3. **Persist:** open-episode state is kept **in memory**; persisted on episode close and at a checkpoint interval (default ~60 s — crash-loss window ≤ one interval). Writer batches inserts into `connections` + updates rollup tables; retention pruner runs on schedule (90-day default, configurable). **[HYPOTHESIS]** per-second persistence of hundreds of open connections is materially more expensive than checkpoint cadence (Appendix B, item 10 — to be measured in spike Q10).
-4. **Interface-counter sampler:** a daemon task reads per-interface kernel counters (`/sys/class/net/*/statistics` or netlink stats) for the headline total; `lo` excluded; tunnel interfaces (VPN/WireGuard) handled to avoid double-counting (PRD R6). **[HYPOTHESIS]** header/ACK overhead is "a few percent" of payload (Appendix B, item 6).
+4. **Interface-counter sampler:** a daemon task reads per-interface kernel counters (`/sys/class/net/*/statistics` or netlink stats) for the headline total; `lo` excluded; tunnel interfaces (VPN/WireGuard) handled to avoid double-counting (PRD R6). A separate **1 Hz rate task** reads the same counters for `net.rates` live speed (Phase A); it uses measured elapsed time and EMA smoothing, and never writes SQLite. **[HYPOTHESIS]** header/ACK overhead is "a few percent" of payload (Appendix B, item 6).
 5. **Serve:** API server streams live snapshots/updates over the Unix socket; history queries are plain requests with pagination.
 6. **UI:** Svelte stores render per DESIGN.md; every screen subscribes only to what it shows.
 
@@ -196,7 +196,7 @@ See `docs/spike-ebpf-report.md` for the measurement tables, chosen design, and r
 
 - Base: **Unix domain socket** `/run/netwatch-pro/api.sock` by default (`NETWATCH_API_SOCKET` env var). Versioned JSON over the socket; HTTP GET for queries on the same socket.
 - Auth: **peer-credential (`SO_PEERCRED`)** check against a root-owned allowed-UID list; UI never requires root. Loopback TCP + bearer token removed (D1a). `NETWATCH_API_TOKEN_FILE` and the Polkit token helper are retired; the allowed-UID list is written during the one-time onboarding pkexec step.
-- Channels (socket-based stream): `live.connections` (snapshot + delta stream), `status` (daemon/eBPF/recording state → DESIGN.md chip), `usage.totals`. Commands: `subscribe`, `unsubscribe`, `history.query`, `export.request` (Pro-gated server-side), `settings.get/set`, `diagnostics.dump`.
+- Channels (socket-based stream): `live.connections` (snapshot + delta stream), `status` (daemon/eBPF/recording state → DESIGN.md chip), `usage.totals`, `net.rates` (1 Hz PC speed + per-interface rates, snapshot on subscribe). `live.apps` is reserved for the accepted-collector phase and is not emitted yet. Commands: `subscribe`, `unsubscribe`, `history.query`, `export.request` (Pro-gated server-side), `settings.get/set`, `diagnostics.dump`.
 - All payloads are versioned JSON; unknown fields ignored (forward compatible). Error payloads carry stable string codes (§8.2).
 
 ### 5.4 Database model (tables only — DDL lives in `docs/db-schema.md`)

@@ -1,9 +1,9 @@
 # FEATURES.md — MVP Feature Build Guides
 
-**Version:** 1.1 · **Date:** 2026-11-15  
+**Version:** 1.2 · **Date:** 2026-11-19
 **Sources:** `PRD.md` §6.1 (the 10 MVP features) · `PLAN.md`/`CHECKLIST.md` (task mapping) · `DESIGN.md` (UI) · `API.md`/`DATABASE.md` (contracts) · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.1 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential (F-06/D1a), endpoint-day aggregates (F-02/D2a), interface-counter totals + Unattributed row (F-03/D3a), 15m rollup grain + timezone/cycle (F-04/D4a), cgroup-first identity (F-05/D5a), budgets/alerts in MVP free tier (D6a).
+**Version history:** 1.1 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential (F-06/D1a), endpoint-day aggregates (F-02/D2a), interface-counter totals + Unattributed row (F-03/D3a), 15m rollup grain + timezone/cycle (F-04/D4a), cgroup-first identity (F-05/D5a), budgets/alerts in MVP free tier (D6a). 1.2 (2026-11-19): add F11 live throughput with Phase A tasks (PC speed, `net.rates`, `speed_unit`, honest status) from `docs/LIVE-THROUGHPUT-PLAN.md`.
 
 > **Working agreement (binding):**
 > 1. Build **one feature at a time**, top to bottom in the order below.
@@ -27,6 +27,7 @@
 | F8 | Settings (lean) | §6.1 #8 | Phase 7 | `GET/PUT /settings`, `PATCH /interfaces/{id}` | `settings`, `interfaces` | Settings (§8.7) |
 | F9 | Freemium mechanics | §6.1 #9 | Phase 6 | `/license*`, `POST /exports`, gating on C2/T2 | `license` | Upgrade modal (§8.8), History locks |
 | F10 | Updates & packaging | §6.1 #10 | Phase 8', 11 | `GET /health` (version) | `schema_migrations` | Onboarding, About |
+| F11 | Live throughput | §6.1 #11 | new Phase A–D (`docs/LIVE-THROUGHPUT-PLAN.md`) | `WS net.rates`, `WS live.apps` (Phase C), `speed_unit` | derived from `/sys/class/net` counters | Dashboard (Network now), Apps |
 
 Phase 1 status note: Phase S (eBPF spike) and Phase D (doc fixes) are in progress before Phase 1' code resumes. F6 remains not started pending socket + peer-credential implementation (D1a).
 
@@ -44,6 +45,7 @@ Status tracker (update after each confirmed feature):
 | F8 | Settings (lean) | ☐ not started |
 | F9 | Freemium mechanics | ☐ not started |
 | F10 | Updates & packaging | ☐ not started |
+| F11 | Live throughput | ☐ Phase A in progress (per `docs/LIVE-THROUGHPUT-PLAN.md`) |
 
 ---
 
@@ -461,6 +463,18 @@ N/A for UI beyond About/onboarding captions; failure states live in F6's paths.
 - [ ] Uninstall removes all service files; data opt-in honored
 - [ ] Repos + artifacts signed; CI matrix green on all 3
 - [ ] No in-app network fetch during updates (zero-outbound intact)
+
+---
+
+## 10a. F11 — Live Throughput (Phase A)
+
+**Goal:** the Dashboard shows the PC's current download/upload speed in Mbps (MB/s selectable), refreshed every second with a 60-second sparkline, and the status chip never claims a collector is running when it is not. Full requirement and acceptance checks: `docs/LIVE-THROUGHPUT-PLAN.md`.
+
+**Data contracts:** `WS net.rates` (snapshot on subscribe, then 1 Hz); settings key `speed_unit` (`mbps|mbytes`, migration 0005); `GET /status` `ebpf:no_collector`. No new endpoint for Phase A.
+
+**Build order (maps to PLAN A1–A8):** docs first → pure rate math with tests → 1 Hz daemon task → stream channel and payload → Dashboard card + rates store → `speed_unit` setting → honest status/chip → tracker corrections.
+
+**Acceptance:** known download matches within ~10% after 3 s warm-up; idle reads ~0 with no negative values; stale after 3 s without a frame; daemon restart recovers in ≤5 s; chip is not green with no collector; zero outbound traffic.
 
 ---
 

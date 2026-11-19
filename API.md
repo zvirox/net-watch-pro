@@ -1,9 +1,9 @@
 # Net Watch Pro — API.md (Local API Reference)
 
-**Version:** 1.3.1 · **Date:** 2026-11-17
+**Version:** 1.4 · **Date:** 2026-11-19
 **Source of truth:** `PRD.md` (features, freemium gating) · `ARCHITECTURE.md` §5.3 (transport contract) · `DATABASE.md` (tables) · `docs/decisions.md` (owner decisions D1a–D5a)
 
-**Version history:** 1.3.1 (2026-11-17): reference the offline license key wire format in `AUTH_SECURITY.md` §2.4. 1.3.0 (2026-11-17): document the A2 icon resource endpoint and the `deleted_at` field on app details for soft-deleted history views. 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a).
+**Version history:** 1.3.1 (2026-11-17): reference the offline license key wire format in `AUTH_SECURITY.md` §2.4. 1.3.0 (2026-11-17): document the A2 icon resource endpoint and the `deleted_at` field on app details for soft-deleted history views. 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a). 1.4 (2026-11-19): add the `net.rates` 1 Hz stream, the `speed_unit` setting and the honest `no_collector` status value (`docs/LIVE-THROUGHPUT-PLAN.md` Phase A).
 
 > **Binding:** every endpoint below maps to a PRD feature and a DATABASE.md table (§10 traceability matrix). Anything flagged as not doing so is explicitly justified there. Implementation of this file lives in `docs/api-contract.md` (ARCHITECTURE.md §4) and must not drift.
 
@@ -108,7 +108,7 @@ Single trusted local client over a Unix socket, so limits are minimal and exist 
 { "daemon": "monitoring", "ebpf": "attached", "recording": true,
   "ws_clients": 1, "uptime_s": 3600, "drops": { "ring_buffer_dropped": 0 } }
 ```
-`daemon`: `monitoring | degraded | stopped | starting` (maps 1:1 to DESIGN.md §7.5 chip states). Errors: 503 `EBPF_ATTACH_FAILED`/`EBPF_UNSUPPORTED_KERNEL` (degraded, body still returned with state), 401.
+`daemon`: `monitoring | degraded | stopped | starting` (maps 1:1 to DESIGN.md §7.5 chip states). `ebpf`: `attached | failed | unsupported | no_collector` — `no_collector` is the honest value while no eBPF collector is running; the PC rate sampler still works and the UI chip must not appear green for this state. Errors: 503 `EBPF_ATTACH_FAILED`/`EBPF_UNSUPPORTED_KERNEL` (degraded, body still returned with state), 401.
 
 **S3 `GET /diagnostics`** — one payload for the Diagnostics modal. Success 200:
 ```json
@@ -266,9 +266,10 @@ Success 200: full updated row. Errors: 400 (`QUERY_INVALID` — no other fields 
 [ { "key": "retention_days", "value": 90, "type": "int", "min": 7, "max": 90,
     "pro_max": 365, "help": "History kept before automatic pruning" },
   { "key": "start_on_boot", "value": true, "type": "bool" },
-  { "key": "theme_default", "value": "system", "type": "enum", "values": ["system","light","dark"] } ]
+  { "key": "theme_default", "value": "system", "type": "enum", "values": ["system","light","dark"] },
+   { "key": "speed_unit", "value": "mbps", "type": "enum", "values": ["mbps","mbytes"] } ]
 ```
-Budget keys (free tier, whole MB, `0` = off): `budget_total_daily_mb`, `budget_total_monthly_mb`, `budget_per_app_daily_mb`, `budget_per_app_monthly_mb` (`int`, 0–1,000,000) and `budget_warn_pct` (`int`, 50–100, default 80). They feed the additive `budgets` data on U1 (§2.5) and are metered-aware (D6a). Note `max` vs `pro_max` — the server reports the tier ceiling; the pruner enforces it (DATABASE.md §6). Errors: 401, 429.
+Budget keys (free tier, whole MB, `0` = off): `budget_total_daily_mb`, `budget_total_monthly_mb`, `budget_per_app_daily_mb`, `budget_per_app_monthly_mb` (`int`, 0–1,000,000) and `budget_warn_pct` (`int`, 50–100, default 80). They feed the additive `budgets` data on U1 (§2.5) and are metered-aware (D6a). `speed_unit` (`enum`, `mbps` default or `mbytes`) controls the live-rate display; changing it applies to the next `net.rates` frame without a restart. Note `max` vs `pro_max` — the server reports the tier ceiling; the pruner enforces it (DATABASE.md §6). Errors: 401, 429.
 
 **T2** — set one key. Request body: `{"value": 120}` (JSON-typed per `type`). Success 200: updated entry (T1 shape). Errors: 400 (wrong type / out of range / unknown key / **retention > 90 on free tier** → `403 EXPORT_PRO_REQUIRED`), 401, 429. Rejected writes never partially apply (single-row transaction).
 
@@ -311,6 +312,9 @@ Server → client:
   "data": { "daemon": "monitoring", "ebpf": "attached", "recording": true } }
 { "channel": "usage.totals", "kind": "update",
   "data": { "today": {"up": 52428800, "down": 934000000} } }
+{ "channel": "net.rates", "kind": "update",
+  "data": { "ts": 1763548800, "down_bps": 10000000, "up_bps": 1000000,
+            "interfaces": [ {"name":"wlan0","down_bps":10000000,"up_bps":1000000} ] } }
 { "op": "error", "error": { "code": "QUERY_INVALID", "message": "Unknown channel 'x'" } }
 ```
 
@@ -319,6 +323,9 @@ Server → client:
 | `live.connections` | `snapshot` on subscribe, then `delta` | ≤ 1 msg/s | §6.1 #1 Live view | `connections` + memory *(flagged §10)* |
 | `status` | `update` on change | on change | §6.1 #6 chip/banners | derived + `daemon_events` |
 | `usage.totals` | `update` | ≤ 1 msg/s | §6.1 #2/3 dashboard headline | `connections`/rollups |
+| `net.rates` | `update` (snapshot on subscribe) | 1 msg/s | §6.1 #11 live PC speed | derived from `/sys/class/net` counters |
+
+Rates are integer bits per second (decimal: 1 Mbps = 1,000,000 bps). The total sums non-excluded interfaces with the documented tunnel double-counting rule. Each frame carries `ts` (epoch seconds); a client that receives no frame for 3 s shows a stale state. `live.apps` is reserved for Phase C and is not emitted yet.
 
 Rules: deltas replace by row `id` (keyed, not positional); server pushes at most one message per channel per second (UI renders from its store, DESIGN.md §7.6 in-place updates); on reconnect the client re-subscribes and receives a fresh snapshot — no gap replay (honest-state UI shows "Connecting…" until it lands). Socket authorization failure (UID not in allowlist) → connection refused.
 ---

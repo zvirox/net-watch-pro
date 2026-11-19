@@ -49,10 +49,10 @@ legal action against good-faith research that respects user privacy.
 ## Hard Design Rules Reporters Should Know
 
 - The UI is **not** a security boundary; it never opens SQLite, never reads
-  root-owned files, and all data flows through the token-authenticated
-  loopback API (`DATABASE.md` §6, `ARCHITECTURE.md` §5).
-- The only secret is the per-boot API token (`0600`, root-owned); license
-  keys are verified offline and only stored as fingerprints
+  root-owned files or sysfs, and all data flows through the peer-credential
+  Unix-socket API (`DATABASE.md` §6, `ARCHITECTURE.md` §5).
+- There is no per-boot API token; authorization is the root-owned allowed-UID
+  list, and license keys are verified offline and stored only as fingerprints
   (`AUTH_SECURITY.md` §2.3/§8).
 - The daemon runs under a hardened systemd unit with bounded capabilities
   (`CAP_BPF`, `CAP_PERFMON`, `CAP_NET_ADMIN`) — see `AUTH_SECURITY.md` §9.
