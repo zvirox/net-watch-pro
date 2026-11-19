@@ -86,7 +86,7 @@ Phase B decides how per-app bytes are counted, and it must run on a real machine
 
 **Setup**
 
-- Rebuild the spike in Aya (the mandated stack), not C and libbpf. Record the exact toolchain: nightly Rust, `bpf-linker`, versions and build time.
+- Rebuild the spike in Aya (the mandated stack), not C and libbpf. The scaffold is at `spikes/ebpf-aya/` (Design 1 cgroup_skb byte counters, Design 2 kprobe identity, Design 3 hybrid) with the owner runbook in its README. Record the exact toolchain: nightly Rust, `bpf-linker`, versions and build time.
 - Run on your PC as root. Run a second kernel in a VM later (Ubuntu LTS or Fedora) for the kernel-variance check.
 - Compare Design 1 (cgroup\_skb counters keyed by socket cookie) with Design 3 (hybrid), as in `PLAN-FIX-INSTRUCTIONS.md` Part 3.
 

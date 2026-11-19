@@ -316,7 +316,7 @@
 | L-A8 | Correct stale tracker claims | `CHECKLIST.md`, `PLAN.md` | P2.3 unticked, 1 Hz note fixed | L-A3 |
 | L-OQ1 | 60-sample one-minute in-memory history + U4 endpoint | `netwatchd/src/rates.rs`, `netwatch-api` | 60 one-minute samples (last hour), `in_memory:true`, lost-on-restart label | L-A3 |
 | L-OQ4 | Wi-Fi signal/link from local sysfs on U3 | `netwatch-api/src/interfaces_usage.rs`, Dashboard, TS types | injectable-root tests; "—" when missing | L-A1 |
-| L-B1 | eBPF spike in Aya, Motrix workloads | `spikes/`, `docs/spike-ebpf-report.md` | owner-run with real root; `[VERIFIED]`/`[REFUTED]` claims | L-A |
+| L-B1 | eBPF spike in Aya, Motrix workloads | `spikes/ebpf-aya/`, `docs/spike-ebpf-report.md` | scaffold builds + env diagnostics verified 2026-11-19; owner-run with real root still pending; `[VERIFIED]`/`[REFUTED]` claims | L-A |
 | L-C1–C9 | Collector, identity, display names, `live.apps`, per-app speeds, sum check | `netwatch-ebpf/`, daemon, Apps/Live screens | accepted spike report | L-B1 |
 | L-D1–D5 | Range presets 1 h/24 h/7 d/30 d/cycle | usage APIs + Dashboard | timezone and cycle tests | L-A1 |
 

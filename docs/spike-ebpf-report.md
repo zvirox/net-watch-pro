@@ -3,9 +3,35 @@
 **Date:** 2026-11-15  
 **Environment:** Arch/CachyOS, kernel 7.3.4-1-cachyos, cgroup v2, WebKit2GTK 2.54.2  
 **Toolchain:** Rust nightly 1.102.0, clang 23.1.5, bpf-linker v0.13.0, libbpf 1.x  
-**Status:** Spike scaffolding complete; eBPF attachment blocked by kernel restriction
+**Status:** Phase B (Aya rebuild) pending owner run — see below. The C/libbpf
+attempt documented under "Historical" is retained for diagnosis only.
 
 ---
+
+## Phase B (Aya rebuild) — PENDING OWNER RUN (2026-11-19)
+
+**This section contains no measurements yet.** The throwaway Aya spike is at
+`spikes/ebpf-aya/`; follow its README on your real PC with real root. Paste the
+runner's environment block and final table here, then re-tag the docs' kernel
+claims `[VERIFIED: spike-ebpf-report §n]` or `[REFUTED]`. Do not start Phase C
+until the owner accepts this report (`docs/LIVE-THROUGHPUT-PLAN.md` §5/§6).
+
+| # | Question | Measurement / evidence | Status |
+|---|---|---|---|
+| Q1 | Per-app bytes vs interface counters; composition of the gap | | not measured |
+| Q2 | 1 s per-app rate stability (jitter, lag) | | not measured |
+| Q3 | CPU/RSS at idle, 50/500 connections, full-rate download | | not measured |
+| Q4 | Capabilities actually required to load/attach/run | | not measured |
+| Q5 | cgroup identity for Motrix + `aria2c`; `.desktop` name | | not measured |
+| Q6 | Secure Boot / lockdown on Ubuntu LTS + Fedora VMs | | not measured |
+
+**Go/no-go inputs:** attributed vs true ≤ 5% (curl/iperf3); attributed +
+unattributed vs interface ≤ 2%; CPU ≤ 3%; RSS ≤ 150 MB. Per owner L-OQ3, a
+UDP/short-lived gap means "TCP only" labelling in Phase C, not a block.
+
+---
+
+## Historical: earlier C/libbpf attempt (no measurements)
 
 ## Summary
 

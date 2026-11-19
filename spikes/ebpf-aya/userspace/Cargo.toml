@@ -1,0 +1,14 @@
+[package]
+name = "netwatch-spike-userspace"
+version = "0.1.0"
+edition = "2021"
+description = "Loader + measurement CLI for the Phase B per-app accounting spike (Aya)"
+
+[dependencies]
+aya = "0.16.0"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+
+[build-dependencies]
+aya-build = "0.2.1"
+anyhow = "1"

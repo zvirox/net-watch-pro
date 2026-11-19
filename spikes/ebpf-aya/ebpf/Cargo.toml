@@ -1,0 +1,15 @@
+[package]
+name = "netwatch-spike-ebpf"
+version = "0.1.0"
+edition = "2021"
+description = "eBPF programs for the Phase B per-app accounting spike (Aya)"
+
+[dependencies]
+aya-ebpf = "0.3.0"
+
+[[bin]]
+name = "netwatch-spike-ebpf"
+path = "src/main.rs"
+
+# Release/dev profiles with panic=abort live in the workspace root Cargo.toml:
+# Cargo ignores profiles in non-root members, and BPF cannot unwind.

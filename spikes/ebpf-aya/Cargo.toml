@@ -1,0 +1,28 @@
+# Standalone Aya eBPF spike — owner-run on a real PC with real root.
+# Intentionally NOT a member of the root workspace: throwaway measurement code
+# (docs/LIVE-THROUGHPUT-PLAN.md §5, AGENTS.md §5).
+[workspace]
+members = ["ebpf", "userspace"]
+resolver = "2"
+
+# Profiles must live at the workspace root; aya-build builds the eBPF crate
+# with --release, and BPF cannot unwind.
+[profile.release]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = true
+panic = "abort"
+codegen-units = 1
+rpath = false
+
+[profile.dev]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = true
+panic = "abort"
+codegen-units = 1
+rpath = false
