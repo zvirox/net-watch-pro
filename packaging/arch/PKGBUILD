@@ -1,0 +1,46 @@
+# Maintainer: Net Watch Pro maintainers <maintainers@netwatchpro.invalid>
+# AUR dev channel: net-watch-pro-git (PLAN P8.4). Stable -/-bin packages land at GA.
+pkgname=net-watch-pro-git
+_pkgname=net-watch-pro
+pkgver=0.8.0.alpha.8
+pkgrel=1
+pkgdesc='Local network-traffic monitor and per-app usage tracker (dev channel)'
+arch=('x86_64')
+url='https://github.com/zvirox/net-watch-pro'
+license=('AGPL-3.0-or-later')
+depends=('systemd' 'webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator' 'librsvg')
+makedepends=('git' 'rust' 'cargo' 'nodejs' 'npm' 'pkgconf'
+             'webkit2gtk-4.1' 'gtk3' 'gtk4' 'libayatana-appindicator' 'librsvg')
+provides=('net-watch-pro')
+conflicts=('net-watch-pro' 'net-watch-pro-bin')
+install=net-watch-pro-git.install
+source=("net-watch-pro::git+https://github.com/zvirox/net-watch-pro.git#branch=main"
+        'net-watch-pro-git.install')
+sha256sums=('SKIP' 'a834f304d575e72a260ed1134faeca979978d7e812dadee3c1e597554ec29dc9')
+
+pkgver() {
+  cd "$srcdir/$_pkgname" || { printf '%s' "$pkgver"; return; }
+  git describe --long --tags --always 2>/dev/null \
+    | sed 's/^v//; s/\([^-]*-g\)/r\1/; s/-/./g' \
+    || printf '%s' "$pkgver"
+}
+
+build() {
+  cd "$srcdir/$_pkgname"
+  # Tauri release builds embed frontendDist (app/dist), so build the UI first.
+  (cd app && npm ci && npm run build)
+  cargo build --release -p netwatchd -p netwatch-app
+}
+
+package() {
+  cd "$srcdir/$_pkgname"
+  install -Dm755 target/release/netwatchd "$pkgdir/usr/bin/netwatchd"
+  install -Dm755 target/release/netwatch-app "$pkgdir/usr/bin/netwatch-app"
+  install -Dm644 packaging/systemd/netwatchd.service \
+    "$pkgdir/usr/lib/systemd/system/netwatchd.service"
+  install -Dm644 packaging/deb/net-watch-pro.desktop \
+    "$pkgdir/usr/share/applications/net-watch-pro.desktop"
+  install -Dm644 app/src-tauri/icons/icon@2x.png \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/net-watch-pro.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

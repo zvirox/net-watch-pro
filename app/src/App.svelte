@@ -9,9 +9,12 @@
   import UpgradeModal from '$lib/screens/upgrade/UpgradeModal.svelte';
   import ExportMenu from '$lib/screens/history/ExportMenu.svelte';
   import Settings from '$lib/screens/settings/Settings.svelte';
+  import Onboarding from '$lib/screens/onboarding/Onboarding.svelte';
   import { daemonStore } from '$lib/stores/daemon.svelte';
   import { appDetailStore } from '$lib/stores/app-detail.svelte';
   import { licenseStore } from '$lib/stores/license.svelte';
+  import { onboardingStore } from '$lib/stores/onboarding.svelte';
+  import { demoStore } from '$lib/stores/demo.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import '$lib/stores/settings-ui.svelte';
 
@@ -54,6 +57,7 @@
     window.addEventListener('hashchange', updateRoute);
     updateRoute();
     void daemonStore.start();
+    onboardingStore.begin();
     // Load persisted settings at app start so the saved theme applies on any
     // screen, not only when Settings is opened.
     void settingsStore.load();
@@ -69,106 +73,124 @@
   <title>{routeLabel} · Net Watch Pro</title>
 </svelte:head>
 
-<div class="app-shell">
-  <aside class="sidebar" aria-label="Main navigation">
-    <a class="brand" href="#dashboard" aria-label="Net Watch Pro home"
-      ><img class="brand__logo" src="/logo.png" alt="" width="32" height="32" /><span
-        >Net Watch Pro</span
-      ></a
-    >
-    <nav>
-      <p class="nav-heading">MONITOR</p>
-      {#each routes as route, index (route.key)}
-        <a
-          class:active={navRoute === route.key}
-          href="#{route.key}"
-          aria-current={navRoute === route.key ? 'page' : undefined}
-          onclick={() => (activeRoute = route.key)}
-        >
-          <span class="nav-icon" aria-hidden="true">{navigationIcons[index]}</span>
-          <span>{route.label}</span>
-        </a>
-      {/each}
-      <p class="nav-heading nav-heading--lower">ACCOUNT</p>
-      <a
-        href="#upgrade"
-        onclick={(event) => {
-          event.preventDefault();
-          licenseStore.openUpgrade();
-        }}
+{#if onboardingStore.visible}
+  <Onboarding />
+{:else}
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#dashboard" aria-label="Net Watch Pro home"
+        ><img class="brand__logo" src="/logo.png" alt="" width="32" height="32" /><span
+          >Net Watch Pro</span
+        ></a
       >
-        <span class="nav-icon" aria-hidden="true">◇</span>
-        <span class="nav-label">Upgrade</span>
-        {#if licenseStore.isPro}<span class="pro-badge">PRO</span>{/if}
-      </a>
-    </nav>
-    <div class="sidebar-foot">
-      <span class="connection-dot" class:online={connected}></span>{connected
-        ? 'Daemon linked'
-        : 'Local only'}
-    </div>
-  </aside>
-
-  <div class="main-column">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">
-          {activeRoute === 'dashboard'
-            ? 'OVERVIEW'
-            : activeRoute === 'app-detail'
-              ? 'APPS / DETAIL'
-              : 'MONITOR'}
-        </p>
-        <h1>{routeLabel}</h1>
-      </div>
-      <div class="topbar-actions">
-        {#if activeRoute === 'history'}
-          <ExportMenu />
-        {/if}
-        <StatusChip /><span class="avatar" aria-label="Local user">L</span>
-      </div>
-    </header>
-    <main class="content">
-      {#if activeRoute !== 'dashboard' && activeRoute !== 'live' && activeRoute !== 'history' && activeRoute !== 'app-detail' && activeRoute !== 'settings'}
-        <section class="notice" role="status">
-          <div>
-            <strong>{routes.find((route) => route.key === activeRoute)?.label}</strong>
-            <p>This screen is scheduled for a later implementation phase.</p>
-          </div>
-        </section>
-      {/if}
-      {#if daemonStore.connection === 'auth-required' || daemonStore.connection === 'auth-invalid'}
-        <section class="notice" role="status">
-          <div>
-            <strong>Authorization needed</strong>
-            <p>Authenticate locally to connect to the Net Watch Pro daemon.</p>
-          </div>
-          <Button variant="primary" onclick={() => void daemonStore.authorize()}>Authorize</Button>
-        </section>
-      {/if}
-      {#if activeRoute === 'live'}
-        <Live />
-      {/if}
-      {#if activeRoute === 'history'}
-        <History />
-      {/if}
-      {#if activeRoute === 'dashboard'}
-        <Dashboard />
-      {/if}
-      {#if activeRoute === 'settings'}
-        <Settings />
-      {/if}
-      {#if activeRoute === 'app-detail' && selectedAppId !== null}
-        <AppDetail appId={selectedAppId} />
-      {/if}
-      <footer class="page-footer">
-        <span>NET WATCH PRO <i>·</i> PRIVATE BY DESIGN</span><span
-          >ALL DATA STORED ON THIS DEVICE</span
+      <nav>
+        <p class="nav-heading">MONITOR</p>
+        {#each routes as route, index (route.key)}
+          <a
+            class:active={navRoute === route.key}
+            href="#{route.key}"
+            aria-current={navRoute === route.key ? 'page' : undefined}
+            onclick={() => (activeRoute = route.key)}
+          >
+            <span class="nav-icon" aria-hidden="true">{navigationIcons[index]}</span>
+            <span>{route.label}</span>
+          </a>
+        {/each}
+        <p class="nav-heading nav-heading--lower">ACCOUNT</p>
+        <a
+          href="#upgrade"
+          onclick={(event) => {
+            event.preventDefault();
+            licenseStore.openUpgrade();
+          }}
         >
-      </footer>
-    </main>
+          <span class="nav-icon" aria-hidden="true">◇</span>
+          <span class="nav-label">Upgrade</span>
+          {#if licenseStore.isPro}<span class="pro-badge">PRO</span>{/if}
+        </a>
+      </nav>
+      <div class="sidebar-foot">
+        <span class="connection-dot" class:online={connected}></span>{connected
+          ? 'Daemon linked'
+          : 'Local only'}
+      </div>
+    </aside>
+
+    <div class="main-column">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">
+            {activeRoute === 'dashboard'
+              ? 'OVERVIEW'
+              : activeRoute === 'app-detail'
+                ? 'APPS / DETAIL'
+                : 'MONITOR'}
+          </p>
+          <h1>{routeLabel}</h1>
+        </div>
+        <div class="topbar-actions">
+          {#if demoStore.active}
+            <span class="demo-badge">
+              Demo mode
+              <button
+                type="button"
+                onclick={() => {
+                  demoStore.stop();
+                }}
+              >
+                Exit
+              </button>
+            </span>
+          {/if}
+          {#if activeRoute === 'history'}
+            <ExportMenu />
+          {/if}
+          <StatusChip /><span class="avatar" aria-label="Local user">L</span>
+        </div>
+      </header>
+      <main class="content">
+        {#if activeRoute !== 'dashboard' && activeRoute !== 'live' && activeRoute !== 'history' && activeRoute !== 'app-detail' && activeRoute !== 'settings'}
+          <section class="notice" role="status">
+            <div>
+              <strong>{routes.find((route) => route.key === activeRoute)?.label}</strong>
+              <p>This screen is scheduled for a later implementation phase.</p>
+            </div>
+          </section>
+        {/if}
+        {#if daemonStore.connection === 'auth-required' || daemonStore.connection === 'auth-invalid'}
+          <section class="notice" role="status">
+            <div>
+              <strong>Authorization needed</strong>
+              <p>Authenticate locally to connect to the Net Watch Pro daemon.</p>
+            </div>
+            <Button variant="primary" onclick={() => void daemonStore.authorize()}>Authorize</Button
+            >
+          </section>
+        {/if}
+        {#if activeRoute === 'live'}
+          <Live />
+        {/if}
+        {#if activeRoute === 'history'}
+          <History />
+        {/if}
+        {#if activeRoute === 'dashboard'}
+          <Dashboard />
+        {/if}
+        {#if activeRoute === 'settings'}
+          <Settings />
+        {/if}
+        {#if activeRoute === 'app-detail' && selectedAppId !== null}
+          <AppDetail appId={selectedAppId} />
+        {/if}
+        <footer class="page-footer">
+          <span>NET WATCH PRO <i>·</i> PRIVATE BY DESIGN</span><span
+            >ALL DATA STORED ON THIS DEVICE</span
+          >
+        </footer>
+      </main>
+    </div>
   </div>
-</div>
+{/if}
 
 <UpgradeModal />
 
@@ -310,6 +332,29 @@
     margin: 0;
     font-size: var(--nwp-size-title-2);
     font-weight: 600;
+  }
+  .demo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nwp-space-2);
+    border-radius: var(--nwp-radius-sm);
+    background: var(--nwp-secondary-soft);
+    padding: 2px var(--nwp-space-2);
+    color: var(--nwp-secondary);
+    font-size: var(--nwp-size-label);
+    font-weight: 600;
+  }
+  .demo-badge button {
+    border: 0;
+    background: transparent;
+    color: var(--nwp-secondary);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .demo-badge button:focus-visible {
+    outline: 2px solid var(--nwp-secondary);
+    outline-offset: 2px;
   }
   .topbar-actions {
     display: flex;

@@ -1,20 +1,71 @@
-# Net Watch Pro development systemd unit (PLAN.md P1.8).
-# Release packaging installs the same service contract with additional hardening.
+# Net Watch Pro release daemon unit — hardened per PRD §5 / PLAN P8.1.
+# Installed disabled by default; onboarding enables it (PRD Flow 4).
+# Development uses netwatchd-dev.service from the same directory.
 
 [Unit]
-Description=Net Watch Pro traffic monitor daemon (dev)
+Description=Net Watch Pro traffic monitor daemon
 Documentation=https://github.com/zvirox/net-watch-pro
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/netwatchd
+ExecStart=/usr/bin/netwatchd
 Environment=NETWATCH_DATA_DIR=/var/lib/netwatch-pro
+Environment=NETWATCH_API_SOCKET=/run/netwatch-pro/api.sock
+# Packages set NETWATCH_API_GID to the service group; see ARCHITECTURE.md §8.3.
 Environment=NETWATCH_LOG_LEVEL=info
-# Do not set NETWATCH_API_TOKEN_FILE: packaged daemon uses the helper's fixed path.
+# Socket auth is peer-credential (D1a); no bearer token or token helper exists.
 UnsetEnvironment=NETWATCH_API_TOKEN_FILE
+
+# State and runtime directories are owned and created by systemd.
+StateDirectory=netwatch-pro
+StateDirectoryMode=0750
+RuntimeDirectory=netwatch-pro
+# 0755 lets the UI traverse the directory; the socket itself is 0660.
+RuntimeDirectoryMode=0755
+
 Restart=on-failure
 RestartSec=2s
+KillMode=mixed
+TimeoutStopSec=10s
+
+# --- Sandboxing ---------------------------------------------------------
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+ProtectClock=yes
+ProtectHome=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+ProtectSystem=strict
+PrivateTmp=yes
+PrivateNetwork=yes
+RemoveIPC=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+# 0022 keeps the API socket reachable by the unprivileged UI today; the
+# peer-credential UID allowlist (D1a) will narrow that at the socket layer.
+UMask=0022
+# /var/lib/netwatch-pro and /run/netwatch-pro are the only writable paths.
+ReadWritePaths=/var/lib/netwatch-pro /run/netwatch-pro
+
+# --- Network surface ----------------------------------------------------
+# The daemon serves a Unix domain socket only — no TCP listeners, no outbound
+# traffic (PRD non-goal). AF_INET/AF_INET6 are denied by construction.
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+
+# --- Capability bounding ------------------------------------------------
+# Observability needs no ambient privileges today; if eBPF is available the
+# loader may request these from the bounding set. All other capabilities are
+# dropped, including CAP_SYS_ADMIN and CAP_DAC_OVERRIDE.
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_NET_ADMIN
+AmbientCapabilities=
 
 [Install]
 WantedBy=multi-user.target

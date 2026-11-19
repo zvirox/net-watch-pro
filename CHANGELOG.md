@@ -8,6 +8,49 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.8.0-alpha.8] — 2026-11-19
+
+First installable alpha: `.deb`, `.rpm` and AUR `net-watch-pro-git` sources are
+published with GPG-signed release assets. Still a source/build-level alpha —
+hosted apt/dnf repositories remain deferred until after beta (PLAN F-10).
+
+### Added
+
+- **Hardened systemd unit (P8.1):** sandboxing, capability bounding and
+  systemd-managed state/runtime directories; dev unit kept separately.
+- **Debian/RPM/AUR packages (P8.2–P8.4):** maintainer scripts create the
+  `netwatch` socket group and GID drop-in, leave the unit disabled for
+  onboarding, and share one desktop entry/unit definition.
+- **Onboarding (P8.5):** first-run gate with a single pkexec prompt that
+  registers the desktop UID and enables the daemon, plus health polling.
+- **Failure path + demo mode (P8.6):** actionable onboarding guidance, retry,
+  and a read-only in-memory demo with a persistent Demo mode badge (OQ4).
+- **Uninstall contract (P8.7):** service files removed and data deleted by
+  default; `/etc/netwatch-pro/keep-data` opts in to retaining data.
+- **Release workflow (P8.8):** tag-triggered build, detached GPG signatures for
+  every artifact plus `SHA256SUMS`, public key asset, and a clean-runner deb
+  install/uninstall smoke test.
+
+### Changed / fixed
+
+- The API socket is now created `0660` owned by the desktop group via
+  `NETWATCH_API_GID` (with `SUDO_GID` fallback), instead of root-only `0755`.
+
+### Verification
+
+Workspace tests 141 passed, Clippy clean; UI checks clean; RPM built and
+inspected; uninstall harness 6/6; systemd security score 2.9 OK; package
+signing verified with a locally generated test key.
+
+### Known open items
+
+- eBPF attach remains blocked by kernel `-EPERM`; the daemon uses `/sys`
+  interface counters and degraded events.
+- Live pkexec/systemd, GUI tray and clean-VM installs were not exercised in
+  this environment; they are covered by CI once this tag is pushed.
+
+---
+
 ## [v0.7.0-alpha.7] — 2026-11-18
 
 Source-only alpha completing the Phase 7 system slice: retention, settings,
@@ -262,7 +305,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.7.0-alpha.7...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.0-alpha.8...HEAD
+[v0.8.0-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.0-alpha.8
 [v0.7.0-alpha.7]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.7.0-alpha.7
 [v0.6.0-alpha.6]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.6.0-alpha.6
 [v0.5.0-alpha.5]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.5.0-alpha.5

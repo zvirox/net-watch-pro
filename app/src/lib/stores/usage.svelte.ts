@@ -2,6 +2,7 @@
 // plus the `usage.totals` WS channel for the live headline (API.md §3).
 
 import { setTrayTooltip } from '$lib/api/transport';
+import { DEMO_INTERFACES, DEMO_SUMMARY, DEMO_TIMELINE } from '$lib/fixtures/demo';
 import { formatBytes } from '$lib/utils/format';
 import { daemonStore } from './daemon.svelte';
 
@@ -43,6 +44,7 @@ let streamToday: { up: number; down: number } | null = $state(null);
 let loading = $state(false);
 let error = $state<string | null>(null);
 let requestGeneration = 0;
+let demoActive = false;
 
 function reset(): void {
   requestGeneration += 1;
@@ -66,6 +68,7 @@ function applyStreamTotals(): void {
 }
 
 function handleFrame(frame: unknown): void {
+  if (demoActive) return;
   if (typeof frame !== 'object' || frame === null) return;
   if (!('channel' in frame) || !('kind' in frame) || !('data' in frame)) return;
   if (frame.channel !== 'usage.totals' || frame.kind !== 'update') return;
@@ -82,8 +85,23 @@ function handleFrame(frame: unknown): void {
   );
 }
 
+function enterDemo(): void {
+  demoActive = true;
+  summary = DEMO_SUMMARY;
+  timeline = DEMO_TIMELINE;
+  interfaces = DEMO_INTERFACES;
+  streamToday = null;
+  loading = false;
+  error = null;
+}
+
+function exitDemo(): void {
+  demoActive = false;
+  void load();
+}
+
 async function load(): Promise<void> {
-  if (daemonStore.connection !== 'connected') return;
+  if (demoActive || daemonStore.connection !== 'connected') return;
   const generation = ++requestGeneration;
   loading = true;
   error = null;
@@ -109,6 +127,7 @@ async function load(): Promise<void> {
 daemonStore.onFrame(handleFrame);
 
 daemonStore.onConnection((state) => {
+  if (demoActive) return;
   if (state === 'connected') {
     void daemonStore.subscribe('usage.totals').catch(() => undefined);
     void load();
@@ -146,6 +165,8 @@ export const usageStore = {
     return summary?.state === 'collecting' && timeline.length === 0 && interfaces.length === 0;
   },
   load,
+  enterDemo,
+  exitDemo,
   setGranularity(value: Granularity): void {
     if (granularity === value) return;
     granularity = value;

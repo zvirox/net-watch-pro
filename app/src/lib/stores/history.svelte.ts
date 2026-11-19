@@ -4,6 +4,7 @@
 // filter keys are only sent while the license is Pro (API.md C2); the server
 // independently enforces the same gate, never UI-only (DATABASE.md §6).
 
+import { DEMO_ROWS } from '$lib/fixtures/demo';
 import { daemonStore } from './daemon.svelte';
 import { licenseStore } from './license.svelte';
 
@@ -75,6 +76,7 @@ let proFilters = $state<ProFilters>({ ...EMPTY_PRO_FILTERS });
 let cursor: string | null = null;
 let requestGeneration = 0;
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
+let demoActive = false;
 
 function buildPath(nextCursor: string | null, search: string): string {
   // Manual query building (encodeURIComponent) — a mutable URLSearchParams
@@ -99,6 +101,7 @@ function buildPath(nextCursor: string | null, search: string): string {
 
 /** Debounced page-1 refetch shared by every filter control. */
 function scheduleFirstPage(): void {
+  if (demoActive) return;
   if (searchTimer !== null) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     searchTimer = null;
@@ -118,8 +121,23 @@ function clearProFilters(): void {
   scheduleFirstPage();
 }
 
+function enterDemo(): void {
+  demoActive = true;
+  rows.splice(0, rows.length, ...DEMO_ROWS);
+  hasMore = false;
+  cursor = null;
+  loading = false;
+  loadingMore = false;
+  error = null;
+}
+
+function exitDemo(): void {
+  demoActive = false;
+  void fetchPage(null, 'first');
+}
+
 async function fetchPage(nextCursor: string | null, mode: 'first' | 'more'): Promise<void> {
-  if (daemonStore.connection !== 'connected') return;
+  if (demoActive || daemonStore.connection !== 'connected') return;
   const generation = ++requestGeneration;
   if (mode === 'first') {
     loading = true;
@@ -152,6 +170,7 @@ async function fetchPage(nextCursor: string | null, mode: 'first' | 'more'): Pro
 }
 
 daemonStore.onConnection((state) => {
+  if (demoActive) return;
   if (state === 'connected') {
     // Fresh link — refetch page 1 so the view reflects the daemon's data.
     void fetchPage(null, 'first');
@@ -213,6 +232,8 @@ export const historyStore = {
     return value !== null && value !== '' && value !== 'any';
   },
 
+  enterDemo,
+  exitDemo,
   /** Set the app-name filter (free tier) and refetch page 1, debounced. */
   setAppSearch(value: string): void {
     appSearch = value;
@@ -234,7 +255,7 @@ export const historyStore = {
 
   /** Fetch the next page when the viewport nears the end (infinite scroll). */
   loadMore(): void {
-    if (!hasMore || loading || loadingMore || cursor === null) return;
+    if (demoActive || !hasMore || loading || loadingMore || cursor === null) return;
     void fetchPage(cursor, 'more');
   },
 

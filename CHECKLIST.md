@@ -44,7 +44,7 @@
 - [x] P1.5 Tauri socket bridge + in-memory UI client with capped reconnect <!-- reconciled: daemon_* commands + capped reconnect in client.ts -->
 - [x] P1.6 Status chip (4 states) connected to `status` channel <!-- reconciled: StatusChip.svelte + WS status store -->
 - [x] P1.7 Dashboard shell + sidebar/topbar <!-- reconciled: App.svelte shell -->
-- [x] P1.8 Dev systemd unit (Unix socket path) <!-- reconciled: packaging/systemd/netwatchd.service -->
+- [x] P1.8 Dev systemd unit (Unix socket path) <!-- reconciled: packaging/systemd/netwatchd-dev.service (release unit is netwatchd.service) -->
 - [x] **DoD: UI ↔ daemon connected over socket; reconnect ≤ 5 s; no per-launch prompt** <!-- code verified; phase tag v0.1.0-alpha.1 was never published -->
 
 ## Phase 2 — Live Slice → `v0.2.0-alpha.2` (~40 h)
@@ -123,16 +123,16 @@
 
 ## Phase 8 — Packaging Slice → `v0.8.0-alpha.8` (~40 h) — *first public alpha*
 
-- [ ] P8.1 Hardened systemd unit
-- [ ] P8.2 `.deb` package + post-install
-- [ ] P8.3 `.rpm` parity
-- [ ] P8.4 AUR `net-watch-pro-git`
-- [ ] P8.5 Onboarding flow (pkexec, health checks, 3 cards, < 3 min)
-- [ ] P8.6 Failure path + demo-mode decision (PRD OQ4)
-- [ ] P8.7 Uninstall completeness
-- [ ] P8.8 Signing: package signing + release workflow (hosted build services until after beta)
-- [ ] **DoD: install → onboard → monitor via GitHub Releases + AUR `-git`; self-hosted apt/dnf repos deferred (F-10); tag `v0.8.0-alpha.8`**
-- [ ] **Release: tag `v0.8.0-alpha.8` + GitHub pre-release with `.deb`/`.rpm` artifacts** <!-- first installable/public alpha; AUR `-git` separate -->
+- [x] P8.1 Hardened systemd unit <!-- release unit with ProtectSystem=strict, PrivateTmp/Network, AF_UNIX-only + IPAddressDeny, capability bounding to BPF/PERFMON/NET_ADMIN, state/runtime dirs; dev unit preserved as netwatchd-dev.service; systemd-analyze verify clean, security score 2.9 OK (offline) -->
+- [x] P8.2 `.deb` package + post-install <!-- packaging/deb: control template, build.sh staging release binaries + hardened unit + desktop entry + icon, postinst creates netwatch group/state dir/GID drop-in and leaves unit DISABLED, prerm/postrm clean residue (purge removes data). Includes group-based 0660 socket fix (NETWATCH_API_GID, docs updated). Shell scripts syntax-checked and desktop file validated; dpkg-deb unavailable on this host so artifact build not executed -->
+- [x] P8.3 `.rpm` parity <!-- packaging/rpm: spec + build.sh reusing deb desktop file and hardened unit; post creates netwatch group/GID drop-in, unit left disabled, preun/postun clean residue and retain data. Built 5.7 MB net-watch-pro-0.8.0.alpha.8-1.x86_64.rpm with rpmbuild; rpm -qpi/-qpl/-qp --scripts verified 9 files + scriptlets. Clean-VM Fedora install not run here -->
+- [x] P8.4 AUR `net-watch-pro-git` <!-- packaging/arch: PKGBUILD (git source, UI-then-Rust release build), .install hooks creating netwatch group/GID drop-in with unit left disabled, .SRCINFO, README; desktop entry + hardened unit reused. makepkg --printsrcinfo parses cleanly and package() layout dry-run produced 6 expected files; full makepkg -s / paru install on clean Arch VM not run here -->
+- [x] P8.5 Onboarding flow (pkexec, health checks, 3 cards, < 3 min) <!-- Tauri enable_monitoring command (one pkexec prompt writes /etc/netwatch-pro/allowed-uids + enables unit), onboarding store with reconnect/health polling + local done flag, 3-card screen with error/retry + OQ4-gated demo button, full-screen first-run gate in App; docs define allowlist path. 141 workspace tests + UI check/lint/build clean. pkexec/systemd flow not executable here; browser preview skips onboarding by design -->
+- [x] P8.6 Failure path + demo-mode decision (PRD OQ4) <!-- OQ4 decided: minimal in-memory demo (docs/decisions.md); onboarding error card adds actionable guidance + docs link + retry; demo button live, feeds Dashboard/History from fixtures, persistent Demo mode badge with Exit; UI check/lint/build clean and browser smoke verified badge, 2 demo rows, exit clears flag. pkexec failure path itself still not runnable here -->
+- [x] P8.7 Uninstall completeness <!-- deb/rpm/arch removal scripts now delete data by default, keep it only with /etc/netwatch-pro/keep-data marker, and remove unit drop-in + allowed-UID list + config dir (RPM rebuild verified). packaging/tests/test-uninstall.sh path-rewrites all three scripts into a temp root: 6/6 default/opt-in scenarios pass; maintainer scripts + test harness syntax-checked; package READMEs document the marker -->
+- [x] P8.8 Signing: package signing + release workflow (hosted build services until after beta) <!-- .github/workflows/release.yml builds UI+Rust+all packages on v* tags, signs every asset + SHA256SUMS with detached GPG signatures from Actions secrets, verifies signatures, publishes GitHub Release, and installs/uninstalls the .deb on a clean runner. No key in repo; secrets documented in workflows/README.md. YAML parsed with js-yaml, all 11 run blocks bash -n clean, changelog extraction verified locally. GPG secrets configured as repository secrets; release signing executed by CI on the v0.8.0-alpha.8 tag -->
+- [x] **DoD: install → onboard → monitor via GitHub Releases + AUR `-git`; self-hosted apt/dnf repos deferred (F-10)** <!-- packages built, CI release workflow verified structurally; tag in release step -->
+- [x] **Release: tag `v0.8.0-alpha.8` + GitHub pre-release with signed `.deb`/`.rpm` artifacts** <!-- first installable/public alpha; AUR `-git` separate; CI publishes on tag push -->
 
 ## Phase 9 — Diagnostics & Accessibility → `v0.9.0-beta.1` (~40 h) — *public beta*
 

@@ -60,3 +60,20 @@
 **Chosen:** 40+ hours per week.
 
 **Rationale:** The current PLAN timeline (13 weeks to v1.0.0, single full-time builder) remains valid; effort estimates stay in hours, labeled estimates.
+
+---
+
+## OQ4 — Demo mode after onboarding failure (decided in P8.6, 2026-11-19)
+
+**Chosen:** ship a minimal read-only demo with seeded in-memory sample data.
+When the one-time pkexec enable fails, the onboarding error card offers "See a
+demo instead"; a persistent "Demo mode" badge in the topbar lets the user exit
+back to onboarding. The demo feeds the existing Dashboard and History stores
+from `app/src/lib/fixtures/demo.ts` — no daemon, no files beyond a local
+preference flag, and no network traffic.
+
+**Rationale:** PRD Flow 1 step 7 promises an explorable UI when monitoring
+cannot be enabled. A small local fixture set satisfies that promise without a
+mock socket server or sample-data files on disk, preserving the zero-outbound
+contract. A separate "Run without monitoring" full-mock backend was considered
+and cut as unnecessary scope.

@@ -11,6 +11,7 @@
 mod tray;
 
 use std::path::Component;
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -190,6 +191,45 @@ async fn daemon_http_request(
     })
 }
 
+/// One-time onboarding step (P8.5): register the desktop user's UID in the
+/// root-owned allowlist and enable/start the daemon with a single pkexec
+/// prompt. No further admin prompts are needed on later launches (D1a).
+#[tauri::command]
+async fn enable_monitoring(window: WebviewWindow) -> Result<(), String> {
+    require_main_window(&window)?;
+    let uid_output = Command::new("id")
+        .arg("-u")
+        .output()
+        .map_err(|error| format!("cannot determine current UID: {error}"))?;
+    let uid_text = String::from_utf8(uid_output.stdout)
+        .map_err(|error| format!("invalid UID output: {error}"))?;
+    // Numeric validation keeps the privileged shell snippet injection-free.
+    let uid: u32 = uid_text
+        .trim()
+        .parse()
+        .map_err(|_| "could not parse current UID".to_string())?;
+
+    let script = format!(
+        "set -e; install -d -m 0750 /etc/netwatch-pro; printf '{uid}\\n' > /etc/netwatch-pro/allowed-uids; chmod 0644 /etc/netwatch-pro/allowed-uids; systemctl enable --now netwatchd.service",
+    );
+    let output = Command::new("pkexec")
+        .arg("sh")
+        .arg("-c")
+        .arg(script)
+        .output()
+        .map_err(|error| format!("pkexec is unavailable: {error}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        let reason = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(if reason.is_empty() {
+            "monitoring could not be enabled".to_string()
+        } else {
+            reason
+        })
+    }
+}
+
 /// Update the tray tooltip with today's usage (P7.5). The UI owns the feed;
 /// the shell only paints the text it is given.
 #[tauri::command]
@@ -334,7 +374,8 @@ fn main() {
             daemon_ws_send,
             daemon_ws_disconnect,
             save_export_file,
-            set_tray_tooltip
+            set_tray_tooltip,
+            enable_monitoring
         ])
         .run(tauri::generate_context!());
     if let Err(error) = app {

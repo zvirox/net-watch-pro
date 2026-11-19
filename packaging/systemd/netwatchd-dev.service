@@ -1,0 +1,21 @@
+# Net Watch Pro development systemd unit (PLAN.md P1.8).
+# Unhardened on purpose so `cargo run`-installed binaries work from
+# /usr/local/bin. Release packaging installs netwatchd.service instead.
+
+[Unit]
+Description=Net Watch Pro traffic monitor daemon (dev)
+Documentation=https://github.com/zvirox/net-watch-pro
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/netwatchd
+Environment=NETWATCH_DATA_DIR=/var/lib/netwatch-pro
+Environment=NETWATCH_LOG_LEVEL=info
+# Do not set NETWATCH_API_TOKEN_FILE: packaged daemon uses the helper's fixed path.
+UnsetEnvironment=NETWATCH_API_TOKEN_FILE
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

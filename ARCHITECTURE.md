@@ -49,7 +49,7 @@ Explicitly **not** used (avoid over-engineering): Kubernetes/any server, GraphQL
 | eBPF layer | kernel (CO-RE, BTF) | — | Per-socket/per-cgroup byte + packet counters, process identity metadata; pushed to daemon via ring buffer |
 | UI process | Tauri 2 + Svelte 5 | user | All screens per DESIGN.md §8; connects to daemon Unix socket; tray; no root ever |
 | SQLite DB | file (WAL) | root-owned | Connections history, usage rollups (hour/day/15m + endpoint-day), app registry, settings cache, schema migrations |
-| IPC socket | `/run/netwatch-pro/api.sock` | root-owned `0750` dir, socket `0660` | Peer-credential check vs allowed-UID list; one admin prompt at onboarding, none per launch |
+| IPC socket | `/run/netwatch-pro/api.sock` | root-owned dir, socket `0660` owned by `netwatch` group | Peer-credential check vs allowed-UID list at `/etc/netwatch-pro/allowed-uids` (one numeric UID per line, root-owned `0644`); written by the one-time onboarding pkexec step, none per launch |
 | Packaging | PKGBUILD / deb / rpm + systemd unit | installer | Registers hardened unit (ProtectSystem, PrivateTmp, RestrictAddressFamilies), installs DB dir `/var/lib/netwatch-pro` |
 
 ---
@@ -118,8 +118,10 @@ net-watch-pro/
 │   ├── arch/PKGBUILD
 │   ├── deb/                         # debian control + repo tooling
 │   ├── rpm/                         # spec file + repo tooling
-│   ├── systemd/netwatchd.service    # hardened unit (PRD §5 contract)
-│   └── licenses/                    # offline license-key public key + verifier
+│   ├── systemd/netwatchd.service    # hardened release unit (PRD §5 contract)
+│   │   └── netwatchd-dev.service     # unhardened local dev unit (P1.8)
+│   ├── licenses/                    # offline license-key public key + verifier
+│   └── tests/                       # package maintainer-script checks (P8.7)
 │   # packaging/polkit/ REMOVED (D1a): no per-launch Polkit token helper
 │
 ├── docs/
@@ -293,6 +295,7 @@ Retry policy: user-initiated retries everywhere except WS reconnect (automatic, 
 | `NETWATCH_LOG_DIR` | netwatchd | `NETWATCH_DATA_DIR/log` | Log output |
 | `NETWATCH_LOG_LEVEL` | netwatchd | `info` | `error/warn/info/debug/trace` |
 | `NETWATCH_API_SOCKET` | netwatchd + UI | `/run/netwatch-pro/api.sock` | Unix domain socket path; peer-credential UID allowlist authorization |
+| `NETWATCH_API_GID` | netwatchd | `SUDO_GID` if set, else root GID | Group id allowed to connect: socket is created `0660` owned by this group (desktop user's primary group in dev, service group in packages) |
 | `NETWATCH_RETENTION_DAYS` | netwatchd | `90` | Default retention; user setting overrides (Pro > 90) |
 | `NETWATCH_DISABLE_EBPF` | netwatchd | unset | Diagnostic switch: run with empty collector (degraded chip) |
 | `NETWATCH_DEV_DAEMON_ADDR` | UI (dev only) | unset | Point the UI at a dev daemon socket; never read in packaged builds |

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Net Watch Pro
+GenericName=Network Usage Monitor
+Comment=Local network monitoring and per-app data usage
+Exec=/usr/bin/netwatch-app
+Icon=net-watch-pro
+Terminal=false
+NoDisplay=false
+Categories=Network;
+StartupNotify=true

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Stop the daemon before package files are removed.
+set -e
+
+if [ "${1:-}" = "remove" ] || [ "${1:-}" = "deconfigure" ]; then
+  systemctl stop netwatchd.service 2>/dev/null || true
+fi
+
+exit 0

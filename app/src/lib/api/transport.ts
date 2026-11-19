@@ -38,6 +38,11 @@ export async function disconnectDaemonWebSocket(): Promise<void> {
 /** Mirrors `tray::PAUSE_EVENT` in the Tauri shell (P7.5). */
 export const TRAY_PAUSE_EVENT = 'tray://pause-notifications';
 
+/** One-time pkexec onboarding: allowlist the user and enable the daemon. */
+export async function enableMonitoring(): Promise<void> {
+  await invoke('enable_monitoring');
+}
+
 /** Paint today's usage on the tray tooltip (P7.5). */
 export async function setTrayTooltip(text: string): Promise<void> {
   await invoke('set_tray_tooltip', { text });

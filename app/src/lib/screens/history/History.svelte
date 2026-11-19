@@ -15,6 +15,7 @@
     TableHead,
     TableCell,
   } from '$lib/components/ui';
+  import { demoStore } from '$lib/stores/demo.svelte';
   import { historyStore, type HistoryRow } from '$lib/stores/history.svelte';
   import { licenseStore } from '$lib/stores/license.svelte';
   import { formatBytes } from '$lib/utils/format';
@@ -41,7 +42,8 @@
     { key: 'protocol', label: 'Protocol', tooltip: 'Filter by TCP, UDP, ICMP or other' },
   ];
 
-  const connected = $derived(historyStore.connection === 'connected');
+  // Demo mode has no daemon but still renders its seeded rows (OQ4).
+  const connected = $derived(demoStore.active || historyStore.connection === 'connected');
   const isPro = $derived(licenseStore.isPro);
   const rows = $derived(historyStore.rows);
   const winStart = $derived(Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN));
