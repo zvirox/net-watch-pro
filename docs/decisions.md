@@ -113,3 +113,6 @@ than no per-app speed, provided the sum check still includes the remainder.
 dropped from this plan; this decision overrides that. Values come from local
 sysfs (`/sys/class/net/<iface>/wireless/link`, `/sys/class/net/<iface>/speed`),
 never from a network call. Missing values are shown as "—", never invented.
+**[HYPOTHESIS]** `wireless/link` is read as dBm per this decision; verify on
+the target hardware, since some kernels expose a 0–100 link-quality value
+there instead (see ARCHITECTURE.md §5.1b).

@@ -204,7 +204,11 @@ See `docs/spike-ebpf-report.md` for the measurement tables, chosen design, and r
   (signal, dBm) and `/sys/class/net/<iface>/speed` (negotiated Mbps). The UI
   never touches sysfs (AGENTS.md §5). Reads are injectable-root for tests;
   missing/invalid values serialize as `null` and render as "—", never zero.
-  No network call is made.
+  No network call is made. **[HYPOTHESIS]** the file is read verbatim as dBm
+  per the owner decision; on kernels where `wireless/link` is a legacy
+  0–100 link-quality percentage instead, the UI label must be revisited after
+  verification on the target hardware — do not present that guess as a
+  measured contract.
 
 
 **None at runtime.** The app's own traffic is visible in its own Live view (PRD "dogfooding zero-outbound" metric). At build/install time only: package repos fetch artifacts; the offline license verifier uses an embedded public key — no server roundtrip in MVP.
