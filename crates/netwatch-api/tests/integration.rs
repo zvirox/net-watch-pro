@@ -53,6 +53,7 @@ fn live_feed_with_totals() -> (
             snapshot: snapshot_rx,
             deltas: delta_tx.clone(),
             totals: totals_rx,
+            rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
         },
         delta_tx,
         totals_tx,
@@ -102,7 +103,7 @@ pub(crate) async fn seed_history_schema(pool: &sqlx::SqlitePool) {
             ('billing_cycle_day', '1'),
             ('budget_total_daily_mb', '0'), ('budget_total_monthly_mb', '0'),
             ('budget_per_app_daily_mb', '0'), ('budget_per_app_monthly_mb', '0'),
-            ('budget_warn_pct', '80')",
+            ('budget_warn_pct', '80'), ('speed_unit', 'mbps')",
     )
     .execute(pool)
     .await
@@ -348,6 +349,7 @@ async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
         snapshot: snapshot_rx,
         deltas: delta_tx.clone(),
         totals: totals_rx,
+        rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
     };
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
@@ -449,6 +451,7 @@ async fn connections_live_rest_matches_ws_snapshot() {
         snapshot: snapshot_rx,
         deltas: delta_tx.clone(),
         totals: totals_rx,
+        rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
     };
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
@@ -1889,7 +1892,7 @@ async fn settings_list_and_free_retention_ceiling() {
     assert_eq!(status, 200, "body: {body}");
     let rows: Value = serde_json::from_str(&body).unwrap();
     let rows = rows.as_array().unwrap();
-    assert_eq!(rows.len(), 12);
+    assert_eq!(rows.len(), 13);
     let retention = rows
         .iter()
         .find(|row| row["key"] == "retention_days")
@@ -2172,4 +2175,30 @@ async fn deactivation_lets_started_export_finish_but_blocks_new_ones() {
     assert_eq!(status, 403, "body: {}", String::from_utf8_lossy(&body));
     let v: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(v["error"]["code"], "EXPORT_PRO_REQUIRED");
+}
+
+// ------------------------------------------------ §3 live-rate stream (F11)
+
+#[tokio::test(flavor = "multi_thread")]
+async fn subscribe_net_rates_delivers_snapshot() {
+    let db = test_db().await;
+    let (sock, _tx) = spawn_server_with(db).await;
+    let mut ws = ws_connect(&sock).await;
+    ws_send(
+        &mut ws,
+        json!({ "op": "subscribe", "channel": "net.rates" }),
+    )
+    .await;
+    let frame = ws_next(&mut ws).await;
+    assert_eq!(frame["channel"], "net.rates");
+    assert_eq!(frame["kind"], "update");
+    assert!(frame["data"]["down_bps"].is_u64(), "frame: {frame}");
+    assert!(frame["data"]["up_bps"].is_u64());
+    assert!(frame["data"]["interfaces"].is_array());
+    assert!(frame["data"]["ts"].is_u64());
+    ws_send(
+        &mut ws,
+        json!({ "op": "unsubscribe", "channel": "net.rates" }),
+    )
+    .await;
 }

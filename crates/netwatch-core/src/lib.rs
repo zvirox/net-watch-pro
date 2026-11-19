@@ -10,5 +10,6 @@ pub mod budgets;
 pub mod episode;
 pub mod interfaces;
 pub mod license;
+pub mod rates;
 pub mod retention;
 pub mod settings;

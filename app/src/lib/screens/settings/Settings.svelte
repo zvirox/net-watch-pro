@@ -23,6 +23,11 @@
   ] as const;
   type Section = (typeof sections)[number];
 
+  const speedUnits = [
+    { value: 'mbps', label: 'Mbps' },
+    { value: 'mbytes', label: 'MB/s' },
+  ];
+
   const themes: Array<{ value: ThemePreference; label: string }> = [
     { value: 'system', label: 'System' },
     { value: 'light', label: 'Light' },
@@ -188,6 +193,24 @@
             {/each}
           </div>
           <p class="hint">System follows your desktop preference. No fonts are fetched online.</p>
+          <p class="field-label speed-unit-label">Live speed unit</p>
+          <div class="segmented" role="group" aria-label="Live speed unit">
+            {#each speedUnits as unit (unit.value)}
+              <button
+                type="button"
+                aria-pressed={settingsStore.value('speed_unit') === unit.value}
+                class:segment--active={settingsStore.value('speed_unit') === unit.value}
+                onclick={() => {
+                  void save('speed_unit', unit.value);
+                }}
+              >
+                {unit.label}
+              </button>
+            {/each}
+          </div>
+          <p class="hint">
+            Applies to the Network now card immediately; download managers often show MB/s.
+          </p>
         </div>
       {:else if active === 'Data'}
         <div class="card">
@@ -517,6 +540,9 @@
     color: var(--nwp-text);
     font-size: var(--nwp-size-label);
     font-weight: 500;
+  }
+  .speed-unit-label {
+    margin-top: var(--nwp-space-5);
   }
   .segmented {
     display: inline-flex;

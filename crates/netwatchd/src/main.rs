@@ -16,6 +16,7 @@ mod config;
 mod db;
 mod live;
 mod pruner;
+mod rates;
 mod sampler;
 mod service;
 mod usage;
@@ -106,6 +107,26 @@ fn main() {
 /// Open the database, apply migrations, then serve until SIGINT/SIGTERM.
 /// Status is a stub "monitoring" state (PLAN.md P1.6 explicitly allows the
 /// stub until the Phase 2 collector).
+/// Boot-time raw-window compaction; failure is degraded, never fatal (§7.1).
+async fn boot_compaction(pool: &sqlx::SqlitePool, now: i64) {
+    match db::compact_old_connections(pool, now, netwatch_core::retention::DEFAULT_ENDPOINT_CAP)
+        .await
+    {
+        Ok(report) if report.compacted_connections > 0 => tracing::info!(
+            connections = report.compacted_connections,
+            rollups = report.rollup_rows,
+            endpoints = report.endpoint_rows,
+            "raw-window compaction complete"
+        ),
+        Ok(_) => {}
+        Err(error) => {
+            let message = format!("compaction failed; raw rows kept: {error}");
+            tracing::warn!("{message}");
+            record_degraded_event(pool, now, "COMPACTION_FAILED", message).await;
+        }
+    }
+}
+
 async fn run(cfg: config::Config) -> Result<(), StartupError> {
     // P2.4: open SQLite and apply embedded migrations at boot (DATABASE.md
     // §8). Unwritable dir / newer schema → fail-fast with exit 4.
@@ -116,36 +137,17 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     db::migrate(&pool).await.map_err(StartupError::Db)?;
     tracing::info!(?db_path, "database open, migrations applied");
 
-    // P4.1: compact raw episodes that already aged past the raw window on
-    // boot. A failure is degraded state, never a startup failure (§7.1);
-    // P7.1's scheduled pruner will own recurring runs.
+    // P4.1: compact raw episodes that already aged past the raw window on boot.
     let now = epoch_now();
-    match db::compact_old_connections(&pool, now, netwatch_core::retention::DEFAULT_ENDPOINT_CAP)
-        .await
-    {
-        Ok(report) if report.compacted_connections > 0 => tracing::info!(
-            connections = report.compacted_connections,
-            rollups = report.rollup_rows,
-            endpoints = report.endpoint_rows,
-            "raw-window compaction complete"
-        ),
-        Ok(_) => {}
-        Err(e) => {
-            tracing::warn!("compaction failed; raw rows kept: {e}");
-            record_degraded_event(
-                &pool,
-                now,
-                "COMPACTION_FAILED",
-                format!("compaction failed; raw rows kept: {e}"),
-            )
-            .await;
-        }
-    }
+    boot_compaction(&pool, now).await;
 
     // P4.2: interface counters use their own cadence; the first tick only
     // establishes the cumulative-counter baseline.
     let sampler_abort = sampler::spawn(pool.clone());
     let (totals_tx, totals_abort) = usage::spawn(pool.clone());
+    // A3: 1 Hz rate task for live PC speed (net.rates).
+    let (rates_tx, rates_rx) = watch::channel(Arc::new(netwatch_common::RateSnapshot::default()));
+    let rates_abort = rates::spawn(pool.clone(), rates_tx);
     // P7.1: recurring tier-aware retention pruning, with a first pass at boot.
     let pruner_abort = pruner::spawn(pool.clone());
     // P7.7: keep systemd's startup enablement in sync with the setting.
@@ -191,10 +193,12 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
         tracing::info!("writer task stopped");
     });
 
+    // A7: honest status — no eBPF collector is running, so the UI chip must
+    // not appear green. The 1 Hz rate sampler still provides live PC speed.
     let (status_tx, _status_rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
-        ebpf: EbpfState::Attached,
-        recording: true,
+        ebpf: EbpfState::NoCollector,
+        recording: false,
     });
 
     // Install signal handlers up front (fail-fast on handler errors).
@@ -217,6 +221,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
             snapshot: snapshot_rx,
             deltas: delta_tx,
             totals: totals_tx.subscribe(),
+            rates: rates_rx,
         },
         pool,
         shutdown,
@@ -225,6 +230,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     .map_err(|e| StartupError::Server(format!("api server: {e}")));
     sampler_abort.abort();
     totals_abort.abort();
+    rates_abort.abort();
     pruner_abort.abort();
     service_abort.abort();
     result

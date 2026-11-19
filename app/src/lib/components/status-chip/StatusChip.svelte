@@ -1,6 +1,7 @@
 <script lang="ts">
   import { daemonStore } from '$lib/stores/daemon.svelte';
 
+  const state = $derived(daemonStore.chipState);
   const labels = {
     monitoring: 'Monitoring',
     degraded: 'Degraded',
@@ -10,11 +11,13 @@
 </script>
 
 <button
-  class="status-chip status-chip--{daemonStore.daemon}"
+  class="status-chip status-chip--{state}"
   type="button"
-  aria-label="Daemon status: {labels[daemonStore.daemon]}"
+  aria-label="Daemon status: {labels[state]}"
   aria-live="polite"
-  title={labels[daemonStore.daemon]}
+  title={state === 'degraded' && daemonStore.ebpf === 'no_collector'
+    ? 'No collector — PC live speed works, per-app rates unavailable'
+    : labels[state]}
   onclick={() => {
     if (daemonStore.connection === 'auth-required' || daemonStore.connection === 'auth-invalid') {
       void daemonStore.authorize();
@@ -22,11 +25,11 @@
   }}
 >
   <span class="status-chip__icon" aria-hidden="true">
-    {#if daemonStore.daemon === 'monitoring'}✓{:else if daemonStore.daemon === 'degraded'}!{:else if daemonStore.daemon === 'stopped'}×{:else}<span
+    {#if state === 'monitoring'}✓{:else if state === 'degraded'}!{:else if state === 'stopped'}×{:else}<span
         class="status-chip__spinner"
       ></span>{/if}
   </span>
-  <span>{labels[daemonStore.daemon]}</span>
+  <span>{labels[state]}</span>
 </button>
 
 <style>

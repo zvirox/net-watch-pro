@@ -686,7 +686,13 @@ mod tests {
             .fetch_one(&pool)
             .await
             .unwrap();
-        assert_eq!(settings, 7); // closed key list, DATABASE.md §2.6
+        assert_eq!(settings, 8); // 7 from 0001 + speed_unit from 0005 (DATABASE.md §2.6)
+        let unit: String =
+            sqlx::query_scalar("SELECT value FROM settings WHERE key = 'speed_unit'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(unit, "mbps");
 
         let (tier,): (String,) = sqlx::query_as("SELECT tier FROM license WHERE id = 1")
             .fetch_one(&pool)

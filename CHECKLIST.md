@@ -169,12 +169,12 @@
 ## Phase L — Live Throughput (F11; `docs/LIVE-THROUGHPUT-PLAN.md`)
 
 - [x] L-A1 Docs first, version bumps for PRD/API/ARCHITECTURE/api-contract/env-vars/DATABASE/DESIGN/FEATURES/TESTING/PLAN/CHECKLIST <!-- plan committed as docs/LIVE-THROUGHPUT-PLAN.md; net.rates/speed_unit/no_collector contracts recorded; stale token-auth wording fixed in AGENTS.md + SECURITY.md -->
-- [ ] L-A2 Pure rate math + tests (`netwatch-core/src/rates.rs`)
-- [ ] L-A3 1 Hz sysfs rate task + degraded event (`netwatchd/src/rates.rs`, wiring)
-- [ ] L-A4 `net.rates` stream + shared payload types
-- [ ] L-A5 Network now card + rates store (loading/idle/stale/error)
-- [ ] L-A6 `speed_unit` setting + migration 0005
-- [ ] L-A7 Honest `/status` + chip (`no_collector` not green)
+- [x] L-A2 Pure rate math + tests (`netwatch-core/src/rates.rs`) <!-- 5 tests: decimal rate, baseline, reset/decrease, churn, late tick, EMA -->
+- [x] L-A3 1 Hz sysfs rate task + degraded event (`netwatchd/src/rates.rs`, wiring) <!-- excluded interfaces reused; synthetic sysfs test -->
+- [x] L-A4 `net.rates` stream + shared payload types <!-- Channel::Rates, RateSnapshot, snapshot-on-subscribe integration test -->
+- [x] L-A5 Network now card + rates store (loading/idle/stale/error) <!-- 60-point ECharts sparkline, stale after 3 s, no new primitives -->
+- [x] L-A6 `speed_unit` setting + migration 0005 <!-- mbps default, mbytes option, live unit switch -->
+- [x] L-A7 Honest `/status` + chip (`no_collector` not green) <!-- EbpfState::NoCollector, daemonStore.chipState, warning chip + tooltip -->
 - [x] L-A8 Correct stale CHECKLIST/PLAN claims (P2.3 unticked, 1 Hz note) <!-- P2.2 note now says no 1 Hz live-delta collector; P2.3 unticked because no collector feeds attribution -->
 - [ ] **Stop for owner approval after Phase A**
 - [ ] L-B1 Owner-run Aya eBPF spike with Motrix; accept `docs/spike-ebpf-report.md`

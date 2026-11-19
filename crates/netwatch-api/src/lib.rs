@@ -32,7 +32,7 @@ pub mod usage;
 use std::path::Path;
 use std::sync::Arc;
 
-use netwatch_common::{StatusSnapshot, UsageTotals};
+use netwatch_common::{RateSnapshot, StatusSnapshot, UsageTotals};
 use tokio::net::UnixListener;
 use tokio::sync::{broadcast, watch};
 
@@ -49,6 +49,8 @@ pub struct LiveFeed {
     pub deltas: broadcast::Sender<netwatch_common::LiveDelta>,
     /// Latest headline totals, replaced once per second (API.md §3).
     pub totals: watch::Receiver<Arc<UsageTotals>>,
+    /// Latest live PC rates, replaced once per second (API.md §3 `net.rates`).
+    pub rates: watch::Receiver<Arc<RateSnapshot>>,
 }
 
 /// Serve the API on a Unix domain socket until `shutdown` resolves.

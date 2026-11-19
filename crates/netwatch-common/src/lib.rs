@@ -71,6 +71,9 @@ pub enum EbpfState {
     Unsupported,
     /// Not yet attempted (daemon starting).
     Unattached,
+    /// No collector is running; PC rate sampling still works (Phase A).
+    #[serde(rename = "no_collector")]
+    NoCollector,
 }
 
 /// Snapshot served by `GET /status` and pushed on the `status` WS channel
@@ -102,6 +105,32 @@ pub struct UsageTotals {
     pub today: DirectionTotals,
 }
 
+/// One interface's live rate, in integer bits per second (API.md §3 `net.rates`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InterfaceRate {
+    /// sysfs interface name.
+    pub name: String,
+    /// Download (rx) bits per second.
+    pub down_bps: u64,
+    /// Upload (tx) bits per second.
+    pub up_bps: u64,
+}
+
+/// Live PC rate snapshot pushed on the `net.rates` WS channel (API.md §3).
+///
+/// Rates are decimal bits per second; `ts` is epoch seconds of the sample.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RateSnapshot {
+    /// Sample timestamp (epoch seconds).
+    pub ts: u64,
+    /// Total download bits per second across non-excluded interfaces.
+    pub down_bps: u64,
+    /// Total upload bits per second across non-excluded interfaces.
+    pub up_bps: u64,
+    /// Per-interface rates (only interfaces seen in the latest sample).
+    pub interfaces: Vec<InterfaceRate>,
+}
+
 /// WS channel names (API.md §3, dot-namespaced kebab-case).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Channel {
@@ -114,6 +143,9 @@ pub enum Channel {
     /// Headline usage totals.
     #[serde(rename = "usage.totals")]
     UsageTotals,
+    /// 1 Hz live PC network rates.
+    #[serde(rename = "net.rates")]
+    Rates,
 }
 
 impl Channel {
@@ -124,6 +156,7 @@ impl Channel {
             Channel::LiveConnections => "live.connections",
             Channel::Status => "status",
             Channel::UsageTotals => "usage.totals",
+            Channel::Rates => "net.rates",
         }
     }
 }
@@ -299,6 +332,13 @@ mod tests {
     fn channels_use_contract_names() {
         assert_eq!(Channel::LiveConnections.as_str(), "live.connections");
         assert_eq!(Channel::UsageTotals.as_str(), "usage.totals");
+        assert_eq!(Channel::Rates.as_str(), "net.rates");
+    }
+
+    #[test]
+    fn no_collector_status_serializes_to_contract_string() {
+        let value = serde_json::to_string(&EbpfState::NoCollector).unwrap();
+        assert_eq!(value, "\"no_collector\"");
     }
 
     #[test]

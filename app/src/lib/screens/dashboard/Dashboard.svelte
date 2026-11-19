@@ -1,11 +1,18 @@
 <!-- Dashboard screen — DESIGN.md §8.3 (content-only; app shell owns chrome). -->
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { EChartsCoreOption } from 'echarts/core';
   import { Chart } from '$lib/components/charts';
   import { Button, EmptyState } from '$lib/components/ui';
+  import { daemonStore } from '$lib/stores/daemon.svelte';
+  import { ratesStore } from '$lib/stores/rates.svelte';
   import { usageStore, type Granularity } from '$lib/stores/usage.svelte';
   import { formatBytes } from '$lib/utils/format';
+
+  const rates = $derived(ratesStore.snapshot);
+  const rateHistory = $derived(ratesStore.history);
+  const rateStale = $derived(ratesStore.stale);
+  const noCollector = $derived(daemonStore.ebpf === 'no_collector');
 
   const today = $derived(usageStore.summary?.today ?? null);
   const month = $derived(usageStore.summary?.month ?? null);
@@ -18,6 +25,10 @@
 
   onMount(() => {
     void usageStore.load();
+    ratesStore.start();
+  });
+  onDestroy(() => {
+    ratesStore.stop();
   });
 
   function labelFor(bucket: number, granularity: Granularity): string {
@@ -80,6 +91,18 @@
     ],
   });
 
+  // Network now sparkline: 60 one-second samples, theme series, no labels.
+  const sparkOption: EChartsCoreOption = $derived({
+    animation: false,
+    grid: { left: 0, right: 0, top: 2, bottom: 2 },
+    xAxis: { type: 'category', show: false, data: rateHistory.map((_, index) => index) },
+    yAxis: { type: 'value', show: false },
+    series: [
+      { name: 'Download', type: 'line', showSymbol: false, data: rateHistory.map((p) => p.down) },
+      { name: 'Upload', type: 'line', showSymbol: false, data: rateHistory.map((p) => p.up) },
+    ],
+  });
+
   function onAppClick(params: unknown): void {
     if (typeof params !== 'object' || params === null || !('dataIndex' in params)) return;
     const index = params.dataIndex;
@@ -101,6 +124,43 @@
       >
     </div>
   {/if}
+
+  <article class="panel network-now" aria-label="Network now">
+    <div class="network-now__head">
+      <p class="eyebrow">NETWORK NOW</p>
+      {#if rates === null}
+        <span class="network-now__state" role="status">Loading…</span>
+      {:else if rateStale}
+        <span class="network-now__state network-now__state--stale" role="status">Stale</span>
+      {:else}
+        <span class="network-now__state network-now__state--live">Live</span>
+      {/if}
+    </div>
+    <div class="network-now__body">
+      <div class="network-now__numbers">
+        <div>
+          <span class="network-now__dir">▼ Download</span>
+          <strong class="mono">{rates ? ratesStore.display(rates.down_bps) : '—'}</strong>
+        </div>
+        <div>
+          <span class="network-now__dir">▲ Upload</span>
+          <strong class="mono">{rates ? ratesStore.display(rates.up_bps) : '—'}</strong>
+        </div>
+      </div>
+      <div class="network-now__spark" aria-hidden="true">
+        {#if rateHistory.length > 0}
+          <Chart option={sparkOption} ariaLabel="Last 60 seconds of download and upload speed" />
+        {:else}
+          <div class="sparkline-placeholder"></div>
+        {/if}
+      </div>
+    </div>
+    {#if noCollector}
+      <p class="network-now__note">
+        PC speed works without eBPF; per-app live rates need a collector.
+      </p>
+    {/if}
+  </article>
 
   <div class="metrics" aria-label="Usage headline">
     <article class="metric-card">
@@ -274,6 +334,61 @@
     padding: var(--nwp-space-3) var(--nwp-space-4);
     color: var(--nwp-text);
     font-size: var(--nwp-size-label);
+  }
+  .network-now {
+    padding: var(--nwp-space-5);
+    margin-bottom: var(--nwp-space-4);
+  }
+  .network-now__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--nwp-space-3);
+  }
+  .network-now__state {
+    color: var(--nwp-text-secondary);
+    font-size: var(--nwp-size-label);
+  }
+  .network-now__state--live {
+    color: var(--nwp-success);
+  }
+  .network-now__state--stale {
+    color: var(--nwp-warning);
+  }
+  .network-now__body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nwp-space-6);
+  }
+  .network-now__numbers {
+    display: flex;
+    gap: var(--nwp-space-8);
+  }
+  .network-now__dir {
+    display: block;
+    margin-bottom: var(--nwp-space-1);
+    color: var(--nwp-text-secondary);
+    font-size: var(--nwp-size-caption);
+  }
+  .network-now__numbers strong {
+    font-size: var(--nwp-size-data-lg);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .network-now__spark {
+    width: 40%;
+    min-width: 180px;
+    height: 56px;
+  }
+  .sparkline-placeholder {
+    width: 100%;
+    height: 100%;
+  }
+  .network-now__note {
+    margin: var(--nwp-space-3) 0 0;
+    color: var(--nwp-text-secondary);
+    font-size: var(--nwp-size-caption);
   }
   .metrics {
     display: grid;

@@ -15,9 +15,9 @@ use std::sync::Arc;
 use axum::extract::ws::Message;
 use axum::extract::ws::WebSocket;
 use futures_util::StreamExt;
-use netwatch_common::{Channel, ErrorCode, StatusSnapshot, UsageTotals};
+use netwatch_common::{Channel, ErrorCode, RateSnapshot, StatusSnapshot, UsageTotals};
 use serde_json::json;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, watch};
 
 use crate::state::AppState;
 
@@ -66,6 +66,15 @@ fn usage_totals_obj(totals: &UsageTotals) -> serde_json::Value {
     })
 }
 
+/// Build a JSON object for a live-rate frame (API.md §3 `net.rates`).
+fn rates_obj(rates: &RateSnapshot) -> serde_json::Value {
+    json!({
+        "channel": Channel::Rates.as_str(),
+        "kind": "update",
+        "data": rates,
+    })
+}
+
 /// Build a JSON object for an error frame.
 fn error_obj(code: ErrorCode, message: impl Into<String>) -> serde_json::Value {
     json!({
@@ -80,8 +89,34 @@ fn initial_frame(channel: Channel, state: &AppState) -> Message {
         Channel::Status => status_obj(&state.status.borrow().clone()),
         Channel::LiveConnections => live_snapshot_obj(&state.live.snapshot.borrow()),
         Channel::UsageTotals => usage_totals_obj(&state.live.totals.borrow()),
+        Channel::Rates => rates_obj(&state.live.rates.borrow()),
     };
     Message::text(v.to_string())
+}
+
+/// Wait for the next value on a watch receiver, or forever if it was closed.
+async fn watch_signal<T>(rx: &mut Option<watch::Receiver<Arc<T>>>) -> bool {
+    match rx.as_mut() {
+        Some(receiver) => receiver.changed().await.is_ok(),
+        None => std::future::pending().await,
+    }
+}
+
+/// Send one frame only when the client subscribed to that channel.
+/// `false` means the client went away.
+async fn send_if_subscribed(
+    subs: &HashSet<Channel>,
+    stream: &mut WebSocket,
+    channel: Channel,
+    payload: serde_json::Value,
+) -> bool {
+    if !subs.contains(&channel) {
+        return true;
+    }
+    stream
+        .send(Message::text(payload.to_string()))
+        .await
+        .is_ok()
 }
 
 /// Run one connection until the client disconnects or the server shuts down.
@@ -92,6 +127,7 @@ pub async fn run_connection(state: Arc<AppState>, mut stream: WebSocket) {
     };
     let mut status_rx = state.status.clone();
     let mut totals_rx = Some(state.live.totals.clone());
+    let mut rates_rx = Some(state.live.rates.clone());
     // Per-connection delta receiver; subscribed to the broadcast on connect
     // so frames between subscribe and this point are not lost (the client
     // still gets the fresh snapshot on subscribe).
@@ -120,27 +156,19 @@ pub async fn run_connection(state: Arc<AppState>, mut stream: WebSocket) {
             // Headline totals tick at the publisher's 1 Hz cadence (§3).
             // A closed publisher disables only this branch — the rest of the
             // multiplexed connection stays alive (§7.1 degraded, not dead).
-            changed = async {
-                match totals_rx.as_mut() {
-                    Some(rx) => rx.changed().await,
-                    None => std::future::pending().await,
+            changed = watch_signal(&mut totals_rx) => {
+                if !changed { totals_rx = None; continue; }
+                if let Some(rx) = &totals_rx {
+                    let payload = usage_totals_obj(&rx.borrow().clone());
+                    if !send_if_subscribed(&conn.subs, &mut stream, Channel::UsageTotals, payload).await { break; }
                 }
-            } => {
-                if changed.is_err() {
-                    totals_rx = None;
-                    continue;
-                }
-                if let Some(rx) = &totals_rx
-                    && conn.subs.contains(&Channel::UsageTotals)
-                {
-                    let totals = rx.borrow().clone();
-                    if stream
-                        .send(Message::text(usage_totals_obj(&totals).to_string()))
-                        .await
-                        .is_err()
-                    {
-                        break;
-                    }
+            }
+            // Live PC rates tick at the publisher's 1 Hz cadence (§3).
+            changed = watch_signal(&mut rates_rx) => {
+                if !changed { rates_rx = None; continue; }
+                if let Some(rx) = &rates_rx {
+                    let payload = rates_obj(&rx.borrow().clone());
+                    if !send_if_subscribed(&conn.subs, &mut stream, Channel::Rates, payload).await { break; }
                 }
             }
             // Live deltas push to subscribed clients (§3: ≤ 1 msg/s, kept
@@ -263,6 +291,7 @@ fn parse_channel(v: &serde_json::Value) -> Result<Channel, String> {
         "live.connections" => Ok(Channel::LiveConnections),
         "status" => Ok(Channel::Status),
         "usage.totals" => Ok(Channel::UsageTotals),
+        "net.rates" => Ok(Channel::Rates),
         other => Err(format!("Unknown channel '{other}'")),
     }
 }

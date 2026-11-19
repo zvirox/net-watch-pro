@@ -1,6 +1,7 @@
 import { DaemonApiClient } from '$lib/api/client';
 
 type DaemonState = 'monitoring' | 'degraded' | 'stopped' | 'starting';
+type EbpfState = 'attached' | 'failed' | 'unsupported' | 'unattached' | 'no_collector';
 type ConnectionState =
   'disconnected' | 'connecting' | 'connected' | 'auth-required' | 'auth-invalid';
 type Listener = (state: ConnectionState) => void;
@@ -15,7 +16,7 @@ type StatusFrame = {
   kind: 'update';
   data: {
     daemon: DaemonState;
-    ebpf: string;
+    ebpf: EbpfState;
     recording: boolean;
   };
 };
@@ -23,6 +24,8 @@ type StatusFrame = {
 const client = new DaemonApiClient();
 let connection = $state<ConnectionState>('disconnected');
 let daemon = $state<DaemonState>('stopped');
+// Honest default: no collector is known until a status frame arrives.
+let ebpf = $state<EbpfState>('no_collector');
 let started = false;
 
 client.onState((state) => {
@@ -34,6 +37,7 @@ client.onState((state) => {
     return;
   }
   daemon = state === 'connecting' || state === 'disconnected' ? 'starting' : 'stopped';
+  ebpf = 'no_collector';
 });
 
 client.onFrame((frame) => {
@@ -44,6 +48,7 @@ client.onFrame((frame) => {
   });
   if (!isStatusFrame(frame)) return;
   daemon = frame.data.daemon;
+  ebpf = frame.data.ebpf;
 });
 
 export const daemonStore = {
@@ -51,6 +56,16 @@ export const daemonStore = {
     return connection;
   },
   get daemon(): DaemonState {
+    return daemon;
+  },
+  get ebpf(): EbpfState {
+    return ebpf;
+  },
+  /** Chip state: no collector means Degraded, never green (DESIGN.md §7.5). */
+  get chipState(): DaemonState {
+    if (daemon === 'monitoring' && (ebpf === 'no_collector' || ebpf === 'unattached')) {
+      return 'degraded';
+    }
     return daemon;
   },
   get recording(): boolean {
@@ -69,7 +84,7 @@ export const daemonStore = {
       frameListeners.delete(listener);
     };
   },
-  subscribe(channel: 'status' | 'live.connections' | 'usage.totals'): Promise<void> {
+  subscribe(channel: 'status' | 'live.connections' | 'usage.totals' | 'net.rates'): Promise<void> {
     return client.send({ op: 'subscribe', channel });
   },
   request(method: string, path: string, body?: unknown): Promise<unknown> {
