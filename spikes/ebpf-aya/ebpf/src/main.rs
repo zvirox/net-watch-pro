@@ -28,6 +28,11 @@ const MAX_ENTRIES: u32 = 8192;
 const RING_BYTES: u32 = 256 * 1024;
 const SRC_CGROUP_SKB: u32 = 1;
 const SRC_KPROBE: u32 = 2;
+/// cgroup_skb verdict: the kernel DROPS the packet when the program returns
+/// 0 and accepts it on any nonzero value. Returning 0 here dropped ALL
+/// traffic while the programs were attached (observed 2026-11-20). The
+/// correct observe-only verdict is nonzero — 1 is the conventional OK.
+const CGROUP_SKB_ACCEPT: i32 = 1;
 
 /// Identity attached to a socket cookie. `identity_hits` shows whether the
 /// Design 2 helper ever ran for that socket — the measure of identity coverage.
@@ -135,7 +140,8 @@ fn count_skb(ctx: &SkBuffContext, direction: u32) -> i32 {
         },
         0,
     );
-    0 // CGROUP_SKB_OK — observe only, never drop traffic
+    // Observe-only: return nonzero so the kernel ACCEPTS the packet. 0 drops.
+    CGROUP_SKB_ACCEPT
 }
 
 /// Generic kprobe: userspace attaches it to tcp_sendmsg, tcp_recvmsg,

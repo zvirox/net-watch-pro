@@ -72,6 +72,28 @@ The runner completed the full 60 s. Findings:
 **Next step:** re-run with a real workload active (curl/iperf3/Motrix) in a
 second terminal, plus `pidstat` for Q3. Record those numbers here.
 
+### Third owner run — 2026-11-20 (180 s, CRITICAL BUG FOUND)
+
+The owner reported that **while the spike was attached, all other downloads
+and web access stopped working**. Cause found and fixed:
+
+- The cgroup_skb programs returned `0`. For `BPF_PROG_TYPE_CGROUP_SKB` the
+  kernel **drops the packet when the program returns 0**; observe-only programs
+  must return a nonzero verdict (1). Because the spike attaches to the root
+  cgroup, this dropped traffic for the whole system — not monitor-only.
+  → **[VERIFIED: spike-ebpf-report §Third owner run]** returning 0 from
+  cgroup_skb drops packets under kernel 7.3.4-cachyos. **All previous byte
+  counts from attached runs are INVALID** and discarded (the programs were
+  dropping most traffic, so attributed bytes are meaningless).
+- **Fix:** return `CGROUP_SKB_ACCEPT = 1`. Verified in the compiled BPF object:
+  `r0 = 0x1` before `exit` in `cgroup_skb/egress`.
+- **Product implication for Phase C:** any cgroup_skb-based collector must
+  return the accept verdict, and the spike/first integration must explicitly
+  test that traffic still flows while attached. This is a hard safety gate.
+
+The third run's numbers are discarded for the same reason. The next run is
+the first one that can yield valid Q1/Q2 data.
+
 | # | Question | Measurement / evidence | Status |
 |---|---|---|---|
 | Q1 | Per-app bytes vs interface counters; composition of the gap | | not measured |

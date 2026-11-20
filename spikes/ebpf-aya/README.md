@@ -101,6 +101,14 @@ bpffs mount.
 > identity = 0 until a `sock_ops`-based identity probe is implemented).
 > See `docs/spike-ebpf-report.md` "First owner run".
 
+> **CRITICAL (third owner run, 2026-11-20):** the first eBPF build returned
+> `0` from the cgroup_skb programs, which makes the kernel **drop every
+> packet** — while attached, all other downloads and web access stop. Fixed:
+> the programs now return `1` (accept); verified `r0 = 0x1` before `exit` in
+> the compiled object. **All byte numbers from the earlier attached runs are
+> invalid** and were discarded. If you ever see traffic stop during the
+> spike, Ctrl-C immediately — a monitor-only program must never drop packets.
+
 > **Second owner run (2026-11-20):** with no workload running, interface
 > deltas were ~0 and the accuracy percentage was meaningless. The runner now
 > (a) compares per-interval deltas on both sides, (b) compares cumulative vs

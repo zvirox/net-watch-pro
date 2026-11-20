@@ -39,6 +39,19 @@ struct Args {
     #[arg(long)]
     no_kprobes: bool,
 
+    /// Generate our own known-rate download during collection, so no second
+    /// terminal or external download setup is needed. Uses a ranged HTTP GET.
+    #[arg(long)]
+    workload: bool,
+
+    /// Host:port for --workload's HTTP server
+    #[arg(long, default_value = "proof.ovh.net:80")]
+    workload_host: String,
+
+    /// Path for --workload's HTTP GET (a large, static file)
+    #[arg(long, default_value = "/files/100Mb.dat")]
+    workload_path: String,
+
     /// Print environment diagnostics only; do not load or attach eBPF
     #[arg(long)]
     env_only: bool,
