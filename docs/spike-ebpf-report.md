@@ -210,6 +210,33 @@ in principle. **Still to verify:** that Motrix and its `aria2c` child land in
 the same cgroup (the specific Q5 grouping question) — needs a run with Motrix
 active. Kprobe identity remains `[REFUTED]`; sock_ops is the working path.
 
+### Sixteenth owner run — 2026-11-20 (60 s, --root-attach, Motrix ONLY — Q5)
+
+Motrix was the only bulk workload. The final table shows:
+
+- **`Motrix | high | 143335 | app-motrix-40588.scope | 576,687,411 rx |
+  11,088,014 tx | 431,221 events`** — 100.0% of attributed rx. This is the
+  single row containing the Motrix download bytes.
+- → **[VERIFIED: spike-ebpf-report §Sixteenth owner run]** per-app grouping
+  works: a `motrix` row (cgroup `app-motrix-<pid>.scope`, confidence `high`)
+  carries the download. Motrix's downloader is `aria2c`; both processes were
+  measured earlier in the same `app-motrix-*.scope` (§Tenth run, from
+  `/proc/<pid>/cgroup`), and no other row in this run holds bulk bytes, so
+  the aria2c-attributed bytes are inside this one row. **Q5 (Motrix + aria2c
+  grouped into one app row) is VERIFIED.**
+- Note: the "Motrix" debug-pid column shows one pid (`40588/motrix`); the
+  spike records only the first pid per cgroup, so both pids are not printed
+  in the row itself. The grouping evidence is the cgroup path + byte share.
+- A second tiny `Motrix` row (143265, `app-motrix@…service`, 144/144 B) and
+  a few low-confidence system rows exist; they hold no bulk traffic.
+- rx: 97.0% of `wlan0` (3.0% error, PASS); tx: 56.7% (43.3% error).
+- **tx gap reproduced a third time: 42.0 B/pkt** over **201,690 packets**
+  (app 55.0 vs iface 97.0 B/pkt). **[VERIFIED]** per-packet constant across
+  all three root-attach runs; 14-byte header alone remains **[REFUTED]**,
+  exact composition **[HYPOTHESIS]**.
+- Loopback 202,371/202,959 B vs sysfs 203,271/203,271 B (~0.5%);
+  CPU 0.0%, RSS 4,384 KiB; 431,500 events, 0 bad; clean detach. **[VERIFIED]**
+
 ### Fourteenth owner run — 2026-11-20 (60 s, --root-attach, two curls)
 
 First run of the new cgroup-id-keyed build, attached at the root cgroup with
@@ -520,7 +547,7 @@ Fedora VMs) is still outstanding.
 | Q2 | 1 s per-app rate stability (jitter, lag) | 94.3–95.7% rx across 12 steady download seconds | verified |
 | Q3 | CPU/RSS at load | 0.0% CPU, 4,116 KiB RSS under ~10 MB/s download | verified (partial: no 500-conn test) |
 | Q4 | Capabilities required | CAP_BPF + CAP_PERFMON + CAP_NET_ADMIN effective | verified on this host |
-| Q5 | cgroup identity for Motrix + `aria2c` | per-cgroup naming WORKS (§Fourteenth: Foot Server/Claude/OpenCode/Motrix/Helium from cgroup id); Motrix row had 0 bytes because it was not transferring; OS-level /proc grouping verified (§Tenth) | naming VERIFIED; Motrix+aria2c bytes in one row UNMEASURED |
+| Q5 | cgroup identity for Motrix + `aria2c` | §Sixteenth: single `motrix` row (app-motrix-40588.scope, high) holds 576 MB = 100% of attributed rx; both processes share that cgroup (§Tenth /proc) | VERIFIED |
 | Q6 | Secure Boot / lockdown on Ubuntu LTS + Fedora VMs | — | SKIPPED by owner (2026-11-20); not measured |
 
 **Go/no-go inputs:** attributed vs true ≤ 5% (curl/iperf3); attributed +
