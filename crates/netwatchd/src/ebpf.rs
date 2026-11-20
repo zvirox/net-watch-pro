@@ -80,9 +80,12 @@ pub fn start(
     };
 
     // Write lo's ifindex so the BPF side can filter loopback by number.
-    // let-chains avoid nested ifs; each failure only degrades loopback filtering.
-    if let (Some(lo_index), Some(map)) = (lo_ifindex(), bpf.take_map("CONFIG"))
-        && let Ok(mut config) = Array::<_, u32>::try_from(map)
+    // Use map_mut (borrow) rather than take_map (move): take_map closes the
+    // fd on drop, leaving the program's map relocation pointing at an
+    // invalid fd ("fd N is not pointing to valid bpf_map" on BPF_PROG_LOAD).
+    if let Some(lo_index) = lo_ifindex()
+        && let Some(map) = bpf.map_mut("CONFIG")
+        && let Ok(mut config) = Array::<&mut MapData, u32>::try_from(map)
         && let Err(error) = config.set(0, &lo_index, 0)
     {
         tracing::warn!(%error, "cannot write lo ifindex into CONFIG");
