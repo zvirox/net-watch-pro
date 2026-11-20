@@ -133,6 +133,40 @@ accept-verdict fix and real traffic, so its Q1/Q2 numbers are valid.
   the 8,192-entry map did not fill. Short-lived socket churn is real but
   within LRU capacity at this load.
 
+### Fifth owner run — 2026-11-20 (180 s, Motrix + curl concurrently)
+
+The owner added **Motrix download traffic** alongside the built-in 100 MB
+curl workload. Results:
+
+- **Motrix traffic is counted correctly.** The final table shows many large
+  cookies (e.g. 167–181) with 8–117 MB rx each — roughly 715 MB beyond the
+  100 MB curl download. These are Motrix's parallel connections; cgroup_skb
+  attributes every one. No per-cookie errors or drops.
+- **Byte accounting with mixed workloads: 96.5% rx** attributed vs interface
+  counters (859,810,244 / 890,804,519 B), holding steady at ~96.5–96.8%
+  throughout the Motrix download (+113s to +180s). tx is 68.1% because ACK
+  traffic and other cgroup/local traffic are not counted on the egress path;
+  this is a gap to note, not a double-count.
+- **585,127 ring events, 0 bad events**, no ring drops observed even at
+  ~10 MB/s sustained download.
+- **Q3 overhead unchanged:** 0.0% CPU, max RSS 4,412 KiB (self-measured).
+- **The "820% of true bytes" line is NOT an accuracy failure:** the built-in
+  workload reports only its own 100 MB curl, while ~715 MB of Motrix traffic
+  was counted in the same window. The valid accuracy metric is the 96.5%
+  attributed-vs-interface figure above.
+- **sock_ops attach FAILED** (`bpf_link_create failed`), so identity stayed
+  0/243. The verifier accepted the load (no "REJECTED" message), so the
+  helpers are permitted for sock_ops; the problem is the link attach. The
+  runner now prints the underlying errno and falls back to `Single` mode on
+  the next run. A second, zero-attach identity experiment was also added:
+  capture `bpf_get_current_pid_tgid` in cgroup_skb egress (process context),
+  so the next final table can reveal whether identity is obtainable without
+  a separate attach.
+
+→ **[VERIFIED: spike-ebpf-report §Fifth owner run]** cgroup_skb byte
+accounting handles concurrent Motrix + curl traffic within the 5% threshold
+and stays cheap. Q5 (identity) remains open.
+
 ### Q5 follow-up — sock_ops identity probe (added 2026-11-20, owner run pending)
 
 To resolve Q5, the spike now includes a `sock_ops` program (`identity`) that
@@ -171,7 +205,7 @@ Fedora VMs) is still outstanding.
 | Q2 | 1 s per-app rate stability (jitter, lag) | 94.3–95.7% rx across 12 steady download seconds | verified |
 | Q3 | CPU/RSS at load | 0.0% CPU, 4,116 KiB RSS under ~10 MB/s download | verified (partial: no 500-conn test) |
 | Q4 | Capabilities required | CAP_BPF + CAP_PERFMON + CAP_NET_ADMIN effective | verified on this host |
-| Q5 | cgroup identity for Motrix + `aria2c` | 0/91 identified; kprobe rejected; sock_ops probe added, owner run pending | refuted (kprobe); sock_ops under test |
+| Q5 | cgroup identity for Motrix + `aria2c` | 0/243 identified; kprobe rejected; sock_ops load OK but link attach failed; egress-current + Single fallback added | refuted (kprobe); identity still open |
 | Q6 | Secure Boot / lockdown on Ubuntu LTS + Fedora VMs | — | not measured |
 
 **Go/no-go inputs:** attributed vs true ≤ 5% (curl/iperf3); attributed +

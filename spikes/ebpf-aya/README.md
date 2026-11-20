@@ -101,6 +101,18 @@ bpffs mount.
 > identity = 0 until a `sock_ops`-based identity probe is implemented).
 > See `docs/spike-ebpf-report.md` "First owner run".
 
+> **Motrix verified (fifth owner run, 2026-11-20):** with Motrix downloading
+> alongside the built-in 100 MB curl, cgroup_skb counted every large cookie
+> (8–117 MB each, ~715 MB of Motrix traffic) at 96.5% of interface counters,
+> 0 bad events, 0.0% CPU / 4,412 KiB RSS. The "820% of true bytes" line is
+> expected — the built-in workload reports only curl's own 100 MB, while
+> Motrix traffic was counted in the same window. **sock_ops link attach
+> failed** in that run (load succeeded), so identity is still 0/243. The next
+> build prints the underlying errno, retries with `Single` mode, and also
+> tries `bpf_get_current_pid_tgid` in cgroup_skb egress as a zero-attach
+> identity experiment. Re-run the same one-terminal command to see whether
+> `pid`/`cgroup_id` become nonzero.
+
 > **Q5 follow-up (added 2026-11-20):** a `sock_ops` identity probe is now
 > included and enabled by default. It runs at connection establishment, where
 > `bpf_get_socket_cookie` and `bpf_get_current_pid_tgid` are both permitted

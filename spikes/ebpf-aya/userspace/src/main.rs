@@ -218,14 +218,34 @@ fn main() -> Result<()> {
         if let Some(program) = bpf.program_mut("identity") {
             match TryInto::<&mut SockOps>::try_into(program) {
                 Ok(prog) => match prog.load() {
-                    Ok(()) => match prog.attach(&cgroup, CgroupAttachMode::AllowMultiple) {
-                        Ok(link) => {
-                            println!("  sockops: attached");
-                            _sock_ops_link = Some(link);
+                    Ok(()) => {
+                        // AllowMultiple preserves any existing system program;
+                        // fall back to Single only if the kernel rejects it.
+                        // Print the Debug form so the underlying errno is
+                        // visible (Aya's Display hides it as "`call` failed").
+                        let multi = prog.attach(&cgroup, CgroupAttachMode::AllowMultiple);
+                        match multi {
+                            Ok(link) => {
+                                println!("  sockops: attached (AllowMultiple)");
+                                _sock_ops_link = Some(link);
+                            }
+                            Err(multi_error) => {
+                                println!(
+                                    "  sockops AllowMultiple FAILED: {multi_error:?} — record this"
+                                );
+                                match prog.attach(&cgroup, CgroupAttachMode::Single) {
+                                    Ok(link) => {
+                                        println!("  sockops: attached (Single fallback; may override an existing program)");
+                                        _sock_ops_link = Some(link);
+                                    }
+                                    Err(single_error) => println!(
+                                        "  sockops Single FAILED: {single_error:?} — record this"
+                                    ),
+                                }
+                            }
                         }
-                        Err(error) => println!("  sockops attach FAILED: {error} — record this"),
-                    },
-                    Err(error) => println!("  sockops load REJECTED: {error} — record this"),
+                    }
+                    Err(error) => println!("  sockops load REJECTED: {error:?} — record this"),
                 },
                 Err(error) => println!("  identity program wrong type: {error}"),
             }

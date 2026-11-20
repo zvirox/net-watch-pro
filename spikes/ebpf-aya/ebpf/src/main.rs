@@ -125,6 +125,18 @@ fn count_skb(ctx: &SkBuffContext, direction: u32) -> i32 {
     let _ = COUNTS.insert(&cookie, &counts, 0);
 
     let mut meta = read_meta(cookie);
+    // Identity experiment (no extra attach): egress runs with the sending
+    // process in `current`; record pid/cgroup if nothing else has. If this
+    // yields 0, softirq context makes `current` unreliable — a measurement
+    // for Q5, not a contract. sock_ops (if attached) takes precedence.
+    if meta.pid == 0 {
+        let pid_tgid = unsafe { bpf_get_current_pid_tgid() };
+        let pid = (pid_tgid >> 32) as u32;
+        if pid != 0 {
+            meta.pid = pid;
+            meta.cgroup_id = unsafe { bpf_get_current_cgroup_id() };
+        }
+    }
     if direction == 0 {
         meta.ingress_hits = meta.ingress_hits.saturating_add(1);
     } else {
