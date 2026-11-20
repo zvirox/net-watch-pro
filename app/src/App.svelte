@@ -29,7 +29,7 @@
   // DESIGN.md §6.2: Lucide stroke icons. Inline SVG keeps the zero-dependency
   // promise (no icon package); each entry is a Lucide `path` `d` string.
   const navigationIcons = [
-    ['M3 3h7v9H3z', 'M14 3h7v5h-7z', 'M14 12h7v9h-7z', 'M3 16h7v5H3z'], // layout-dashboard
+    ['m12 14 4-4', 'M3.34 19a10 10 0 1 1 17.32 0'], // gauge — distinct from the Apps grid
     ['M22 12h-4l-3 9L9 3l-3 9H2'], // activity
     ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'], // layout-grid
     ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5', 'M12 7v5l4 2'], // history
