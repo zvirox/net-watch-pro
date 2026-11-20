@@ -206,6 +206,28 @@ in principle. **Still to verify:** that Motrix and its `aria2c` child land in
 the same cgroup (the specific Q5 grouping question) — needs a run with Motrix
 active. Kprobe identity remains `[REFUTED]`; sock_ops is the working path.
 
+### Ninth owner run — 2026-11-20 (30 s, four parallel curls, loopback-filtered)
+
+Workload: four concurrent `curl` downloads of the 100 MB OVH file. Same
+`--no-sock-ops` / loopback-filtered build.
+
+- rx: attributed **140,889,668 B** vs `wlan0` delta **147,607,398 B** =
+  **95.4% attributed, error 4.6%** → passes ≤5%. Consistent with Test 1's
+  96.3%. **[VERIFIED: spike-ebpf-report §Ninth owner run]** download byte
+  accounting holds within 5% with four parallel transfers.
+- tx: attributed **1,659,817 B** vs `wlan0` delta **2,593,241 B** =
+  **64.0% attributed, error 36.0%** → fails. This is nearly identical to
+  Test 1's 63.8% / 36.2%. **[VERIFIED]** the tx gap is **reproducible and not
+  load-dependent** between one and four connections. **Cause remains
+  UNMEASURED [HYPOTHESIS]** — loopback is again refuted (14,120/14,300 B
+  attributed vs 14,456/14,456 B sysfs `lo`, ~14 KB against a ~933 KB gap).
+  A systematic L2/WiFi-retransmission or ACK-related difference is a
+  hypothesis only; no measurement supports it yet.
+- rx stability: 95.0–97.3% during the download. **[VERIFIED]**
+- Overhead: 0.0% CPU, 4,200 KiB RSS; 58,571 ring events, 0 bad; clean detach.
+  **[VERIFIED]**
+- Identity: 0/1 (sock_ops disabled) — no new Q5 evidence.
+
 ### Eighth owner run — 2026-11-20 (30 s, single curl, loopback-filtered, byte data)
 
 Built as the normal user, run with `--no-sock-ops` (bpftune owns the root
