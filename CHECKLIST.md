@@ -138,7 +138,7 @@
 
 - [x] P8.9 Embed the object in `netwatchd` via `aya::include_bytes_aligned!`; `NETWATCH_EBPF_OBJECT` dev override only <!-- build.rs copies prebuilt object into OUT_DIR; cfg-gated embed; no-object path compiles and reports no_collector; embedded-object ELF unit test green; clippy/workspace tests green -->
 - [x] P8.10 Build object in CI + AUR `PKGBUILD` (stable + `RUSTC_BOOTSTRAP=1`, `rust-src`, pinned `bpf-linker` 0.13.0); no `.o` in git <!-- RUSTC_BOOTSTRAP build measured with stable 1.99.1 + rust-src + bpf-linker 0.13.0; xtask uses bootstrap by default (NWP_BPF_NIGHTLY=1 opts to nightly); release.yml/ci.yml/PKGBUILD call `cargo run -p xtask -- bpf`; .SRCINFO regenerated, pkgrel=2; workflows parse, shell syntax clean -->
-- [ ] P8.11 Clean-install test + `.SRCINFO`/`pkgrel` fix <!-- script added with --ci smoke passing locally; `[VERIFIED]` for the host path only after a real `makepkg -si` → pkexec → `/status ebpf=attached` run by the owner; PKGBUILD pkgver already current, .SRCINFO fixed -->
+- [x] P8.11 Clean-install test + `.SRCINFO`/`pkgrel` fix <!-- [VERIFIED 2026-11-20 owner host run] `sudo bash packaging/tests/test-clean-install.sh --host` after `makepkg -si` + onboarding pkexec: PASS no runtime eBPF object / PASS daemon unit active / PASS daemon restarted from installed binary / PASS status ebpf=attached and recording=true with no manual steps. Independent check: /api/v1/usage/summary?range=24h returns range/cycle data; live bpf_packets_seen=801, bpf_loopback_skipped=335. Earlier run passed against a stale pre-upgrade daemon and was rejected; script now restarts the unit first. PKGBUILD pkgver already current, .SRCINFO regenerated, pkgrel=2. -->
 
 ## Phase 9 — Diagnostics & Accessibility → `v0.9.0-beta.1` (~40 h) — *public beta*
 

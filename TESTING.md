@@ -238,7 +238,7 @@
 | Embedded object | clean `cargo build` after `cargo run -p xtask -- bpf` | `netwatchd` loads the object with no runtime file and no `NETWATCH_EBPF_OBJECT` |
 | No embedded object | build without `target/netwatch_ebpf.o` | honest `ebpf=no_collector`, no crash; dev override still readable |
 | Dev override | `NETWATCH_EBPF_OBJECT=/tmp/other.o` | override bytes take precedence over embedded bytes |
-| Clean install | fresh `makepkg -si` → one onboarding pkexec → `GET /status` | `ebpf=attached`, `recording=true`, no `/usr/lib/netwatch-pro/netwatch_ebpf.o` exists, no manual steps |
+| Clean install | fresh `makepkg -si` → one onboarding pkexec → `GET /status` | `ebpf=attached`, `recording=true`, no `/usr/lib/netwatch-pro/netwatch_ebpf.o` exists, no manual steps — **[VERIFIED 2026-11-20 owner host run]** via `packaging/tests/test-clean-install.sh --host`; the script restarts the unit first so an upgrade cannot be verified against a stale daemon |
 | Uninstall | `pacman -R` the package | no object residue; data removed unless `/etc/netwatch-pro/keep-data` |
 | CI smoke | `packaging/tests/test-clean-install.sh --ci` | binary carries the object; package install/uninstall residue checks pass (container may not allow attach) |
 

@@ -14,7 +14,10 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 - Self-contained eBPF collector: the object is embedded in `netwatchd` at build
   time, so packaged installs attach without a separate object file (P8.9–P8.11).
-- Clean-install verification script and an eBPF dev-override contract.
+- Clean-install verification script and an eBPF dev-override contract. The host
+  check is **[VERIFIED 2026-11-20]** on Arch/CachyOS after `makepkg -si` and the
+  onboarding pkexec: no runtime object file, daemon restarted from the installed
+  binary, `/status` `ebpf=attached` and `recording=true`.
 
 ### Changed
 
