@@ -61,9 +61,18 @@ export const daemonStore = {
   get ebpf(): EbpfState {
     return ebpf;
   },
+  /** True when no eBPF collector is feeding per-app data (any degraded variant). */
+  get collectorMissing(): boolean {
+    return (
+      ebpf === 'no_collector' ||
+      ebpf === 'unattached' ||
+      ebpf === 'failed' ||
+      ebpf === 'unsupported'
+    );
+  },
   /** Chip state: no collector means Degraded, never green (DESIGN.md §7.5). */
   get chipState(): DaemonState {
-    if (daemon === 'monitoring' && (ebpf === 'no_collector' || ebpf === 'unattached')) {
+    if (daemon === 'monitoring' && this.collectorMissing) {
       return 'degraded';
     }
     return daemon;

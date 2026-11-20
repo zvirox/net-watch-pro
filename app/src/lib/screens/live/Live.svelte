@@ -169,8 +169,10 @@
         <p>
           {#if search || protocol !== 'all'}
             Nothing matches the current filters.
-          {:else if daemonStore.ebpf === 'no_collector' || daemonStore.ebpf === 'failed'}
-            No eBPF collector is running, so live connections cannot be shown. PC speed still works.
+          {:else if daemonStore.collectorMissing}
+            {daemonStore.ebpf === 'failed'
+              ? 'The eBPF collector failed to attach, so live connections cannot be shown. PC speed still works.'
+              : 'No eBPF collector is running, so live connections cannot be shown. PC speed still works.'}
           {:else}
             No connections are active right now.
           {/if}

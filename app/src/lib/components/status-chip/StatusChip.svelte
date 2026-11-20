@@ -15,8 +15,10 @@
   type="button"
   aria-label="Daemon status: {labels[state]}"
   aria-live="polite"
-  title={state === 'degraded' && daemonStore.ebpf === 'no_collector'
-    ? 'No collector — PC live speed works, per-app rates unavailable'
+  title={state === 'degraded' && daemonStore.collectorMissing
+    ? daemonStore.ebpf === 'failed'
+      ? 'eBPF collector failed — PC live speed works, per-app rates unavailable'
+      : 'No collector — PC live speed works, per-app rates unavailable'
     : labels[state]}
   onclick={() => {
     if (daemonStore.connection === 'auth-required' || daemonStore.connection === 'auth-invalid') {

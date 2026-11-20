@@ -13,7 +13,7 @@
   const rates = $derived(ratesStore.snapshot);
   const rateHistory = $derived(ratesStore.history);
   const rateStale = $derived(ratesStore.stale);
-  const noCollector = $derived(daemonStore.ebpf === 'no_collector');
+  const noCollector = $derived(daemonStore.collectorMissing);
   const liveApps = $derived(liveAppsStore.sorted());
   const liveAppsStale = $derived(liveAppsStore.stale);
 
