@@ -1,3 +1,14 @@
+> **CURRENT BUILD (2026-11-20, pending owner verification):** this build adds
+> a loopback filter (`lo` ifindex is skipped in cgroup_skb and reported
+> separately), reads only `--iface` sysfs counters (default = default route),
+> prints `bpftool cgroup tree` before sock_ops attach and refuses Single if
+> another program is attached, removes the verifier-rejected kprobe, captures
+> identity (pid/tgid/cgroup/comm) only at sock_ops connect/accept, resolves
+> `/proc/<pid>/cgroup` paths, treats `cgroup_id=1` as unidentified, and detaches
+> all links on exit. `cgroup2 mounts` detection now uses `/proc/self/mountinfo`.
+> **None of this has been measured on the owner's host yet** — see
+> `docs/spike-ebpf-report.md` "Spike code update".
+
 # Phase B spike — per-app byte accounting (Aya)
 
 **Owner-run, real root, real PC. Time box: 25 hours. Throwaway code.**

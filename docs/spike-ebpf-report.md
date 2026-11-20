@@ -107,12 +107,21 @@ accept-verdict fix and real traffic, so its Q1/Q2 numbers are valid.
 
 **Interpretation:**
 - **Q1 attribution vs interface:** rx is 95.9% of interface counters — a 4.1%
-  gap, **within the 5% go threshold** for curl. The tx figure is 101.2%
-  (>100%) because cgroup_skb counts L3 bytes (including loopback and local
-  socket traffic) while interface counters exclude `lo`; the 1.2% excess is
-  the documented "[HYPOTHESIS] header/ACK overhead" being measured, not a
-  double-count error. → **[VERIFIED: spike-ebpf-report §Fourth owner run]**
-  cgroup_skb attributes ≥95% of download bytes to the cgroup on curl workloads.
+  gap, **within the 5% go threshold** for curl. → **[VERIFIED:
+  spike-ebpf-report §Fourth owner run]** cgroup_skb attributes ≥95% of
+  download bytes to the cgroup on curl workloads.
+- **tx gap is NOT yet explained.** The tx figure was 101.2% (>100%) here and
+  68.1% in the Motrix run (§Fifth run). The earlier explanation — that this
+  was loopback or header/ACK overhead — was an **assumption, now withdrawn**.
+  At the time the spike did not separate loopback bytes from interface bytes,
+  so there is **no measurement** supporting any cause.
+  **[HYPOTHESIS]** the two tx gaps come from cgroup_skb counting traffic that
+  the single interface counter does not see (loopback, other interfaces, or
+  local sockets), and from egress path differences. This will be tested by
+  the loopback-filtered run: the new spike skips `lo` by ifindex, reports
+  loopback bytes separately, and reads only the selected interface's sysfs
+  counters. Until that run's numbers are pasted here, **tx accuracy is
+  UNMEASURED** and must not be marked VERIFIED.
 - **Q2 stability:** during steady download the per-second ratio is very stable
   at **94.3–95.7% rx** for ~12 consecutive seconds (e.g. +107s to +116s,
   +155s to +166s). That is smooth enough for a 1 Hz display; the occasional
@@ -144,9 +153,10 @@ curl workload. Results:
   attributes every one. No per-cookie errors or drops.
 - **Byte accounting with mixed workloads: 96.5% rx** attributed vs interface
   counters (859,810,244 / 890,804,519 B), holding steady at ~96.5–96.8%
-  throughout the Motrix download (+113s to +180s). tx is 68.1% because ACK
-  traffic and other cgroup/local traffic are not counted on the egress path;
-  this is a gap to note, not a double-count.
+  throughout the Motrix download (+113s to +180s). The tx figure was 68.1%.
+  **The cause of the tx gap is UNMEASURED** — the earlier "ACK / local traffic"
+  explanation was an assumption and is withdrawn. See §Fourth run: the
+  loopback-filtered build will report loopback bytes separately to test it.
 - **585,127 ring events, 0 bad events**, no ring drops observed even at
   ~10 MB/s sustained download.
 - **Q3 overhead unchanged:** 0.0% CPU, max RSS 4,412 KiB (self-measured).
@@ -196,6 +206,35 @@ in principle. **Still to verify:** that Motrix and its `aria2c` child land in
 the same cgroup (the specific Q5 grouping question) — needs a run with Motrix
 active. Kprobe identity remains `[REFUTED]`; sock_ops is the working path.
 
+### Spike code update — pending owner verification (2026-11-20)
+
+The owner reviewed this report and required four changes before further
+claims. They are implemented in `spikes/ebpf-aya/` but **not yet measured**:
+
+1. **Loopback filter** — cgroup_skb now skips packets whose `ifindex` or
+   `ingress_ifindex` equals `lo`'s ifindex (written into CONFIG by userspace).
+   Loopback bytes are emitted with `source=SRC_LOOPBACK` and reported
+   separately. Userspace now reads only the chosen interface's sysfs counters
+   (`--iface`, default = default-route interface) and prints the `lo` delta
+   separately. This is the experiment that can explain the tx gaps above —
+   **[HYPOTHESIS] until the owner runs it.**
+2. **sock_ops attach safety** — before any sock_ops attach, the runner prints
+   the full `bpftool cgroup tree <cgroup>` output and checks for an existing
+   sock_ops program. If one exists it **refuses** to fall back to Single
+   (no silent override). All program links are dropped explicitly at exit for
+   a clean detach. Not yet exercised on the owner's host.
+3. **Identity source** — the verifier-rejected kprobe is removed. Identity
+   comes only from sock_ops at connect/accept, with pid/tgid/cgroup/comm in
+   the map. The runner resolves cgroup paths from `/proc/<pid>/cgroup`
+   (primary) and by cgroup-id inode walk (fallback), and treats `cgroup_id=1`
+   as UNIDENTIFIED. Whether Motrix + aria2c share a cgroup is **UNMEASURED**.
+4. **Mount detection** — cgroup2 detection now reads `/proc/self/mountinfo`
+   (the old `/proc/mounts` check inspected the wrong field). Verified locally:
+   it now reports `/sys/fs/cgroup` and `/run/bpftune/cgroupv2`.
+
+None of these changes has been run on the owner's host yet. No checklist item
+is ticked on the strength of these code changes.
+
 ### Q5 follow-up — sock_ops identity probe (added 2026-11-20, owner run pending)
 
 To resolve Q5, the spike now includes a `sock_ops` program (`identity`) that
@@ -230,11 +269,11 @@ Fedora VMs) is still outstanding.
 
 | # | Question | Measurement / evidence | Status |
 |---|---|---|---|
-| Q1 | Per-app bytes vs interface counters; composition of the gap | 95.9% rx / 101.2% tx of interface counters (§Fourth run) | verified (curl) |
+| Q1 | Per-app bytes vs interface counters; composition of the gap | rx 95.9% (§Fourth), 96.5% (§Fifth); tx 101.2% / 68.1% unexplained | rx verified; tx unmeasured |
 | Q2 | 1 s per-app rate stability (jitter, lag) | 94.3–95.7% rx across 12 steady download seconds | verified |
 | Q3 | CPU/RSS at load | 0.0% CPU, 4,116 KiB RSS under ~10 MB/s download | verified (partial: no 500-conn test) |
 | Q4 | Capabilities required | CAP_BPF + CAP_PERFMON + CAP_NET_ADMIN effective | verified on this host |
-| Q5 | cgroup identity for Motrix + `aria2c` | 12/37 identified; sock_ops Single + egress-current both yield pid/cgroup (§Sixth run); Motrix grouping itself not yet exercised | verified (capture); Motrix grouping open |
+| Q5 | cgroup identity for Motrix + `aria2c` | §Sixth run: 12/37 cookies had pid/cgroup via sock_ops, but several rows had cgroup_id=1 (root) and are UNIDENTIFIED by the owner's rule; Motrix was not active, so grouping was never measured | capture demonstrated; Motrix/aria2c grouping UNMEASURED |
 | Q6 | Secure Boot / lockdown on Ubuntu LTS + Fedora VMs | — | not measured |
 
 **Go/no-go inputs:** attributed vs true ≤ 5% (curl/iperf3); attributed +
