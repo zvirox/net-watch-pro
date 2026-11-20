@@ -150,6 +150,10 @@ pub fn start(
         .take_map("STATS")
         .and_then(|map| Array::<MapData, u64>::try_from(map).ok());
     let handle = tokio::spawn(async move {
+        // Hold `bpf` for the collector's lifetime: dropping it detaches the
+        // programs (the link fds live in ProgramData). The map wrappers moved
+        // into the task keep the kernel maps open independently.
+        let _bpf = bpf;
         sample_loop(bytes_map, stats_map, tx).await;
     });
     (CollectorState::Attached, rx, Some(handle))
@@ -157,17 +161,32 @@ pub fn start(
 
 async fn sample_loop(
     map: AyaHashMap<MapData, u64, Counts>,
-    _stats: Option<Array<MapData, u64>>,
+    stats: Option<Array<MapData, u64>>,
     tx: watch::Sender<std::sync::Arc<Vec<AppUsage>>>,
 ) {
     let mut previous: BTreeMap<u64, Counts> = BTreeMap::new();
     let mut tick = tokio::time::interval(SAMPLE_INTERVAL);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut log_at = std::time::Instant::now();
     loop {
         tick.tick().await;
         let mut current = BTreeMap::new();
         for item in map.iter().flatten() {
             current.insert(item.0, item.1);
+        }
+        // Periodic diagnostic (every 10 s): proves whether the BPF program is
+        // writing bytes into the map. STATS: 0=packets seen, 1=loopback,
+        // 2=map insert failures (crates/netwatch-ebpf/src/main.rs).
+        if log_at.elapsed() >= Duration::from_secs(10) {
+            let counters = stats
+                .as_ref()
+                .map(|s| [0u32, 1, 2].map(|i| s.get(&i, 0).unwrap_or(0)));
+            tracing::info!(
+                cgroup_entries = current.len(),
+                ?counters,
+                "eBPF collector map diagnostic"
+            );
+            log_at = std::time::Instant::now();
         }
         let now = u64::try_from(crate::epoch_now()).unwrap_or(0);
         let mut rows = Vec::with_capacity(current.len());

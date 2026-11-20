@@ -32,7 +32,7 @@ echo "=== status ==="
 curl --unix-socket "$SOCK" http://localhost/api/v1/status
 echo
 echo "=== bpftool: our programs ==="
-bpftool cgroup tree | grep -E 'cgroup_inet_(ingress|egress).* (ingress|egress)$' || true
+bpftool cgroup tree | grep -E 'cgroup_inet_(ingress|egress)' | grep -E ' (ingress|egress)[[:space:]]*$' || true
 echo
 echo "=== live.apps verifier (start Motrix download first!) ==="
 python3 spikes/ebpf-aya/verify_product.py "$SOCK" 20
