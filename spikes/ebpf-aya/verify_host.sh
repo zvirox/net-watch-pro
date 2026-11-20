@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Real-host verification of the Phase C collector. Run as root from the repo
 # root. Starts the built daemon in the background, waits for the socket,
-# prints status, then runs the live.apps verifier. Stops the daemon on exit.
+# prints status + attach evidence, runs the live.apps verifier, waits past the
+# 60 s checkpoint, then dumps rollups and the collector diagnostic log.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."   # repo root
@@ -26,8 +27,6 @@ for i in $(seq 1 30); do
 done
 sleep 0.5
 
-echo "=== daemon log ==="
-cat /tmp/nwp-verify-run/daemon.log
 echo "=== status ==="
 curl --unix-socket "$SOCK" http://localhost/api/v1/status
 echo
@@ -36,7 +35,11 @@ bpftool cgroup tree | grep -E 'cgroup_inet_(ingress|egress)' | grep -E ' (ingres
 echo
 echo "=== live.apps verifier (start Motrix download first!) ==="
 python3 spikes/ebpf-aya/verify_product.py "$SOCK" 20
-echo "=== rollups after ~60s checkpoint ==="
+echo "=== waiting for the 60 s app-usage checkpoint (keep traffic flowing) ==="
+sleep 45
+echo "=== rollups after checkpoint ==="
 sqlite3 "$DATA/netwatch.db" \
   "SELECT a.name, a.app_key, SUM(r.bytes_down), SUM(r.bytes_up)
    FROM usage_rollup_15m r JOIN apps a ON a.id=r.app_id GROUP BY a.name, a.app_key;"
+echo "=== collector diagnostic log (map entries + BPF STATS) ==="
+grep -E 'collector map diagnostic|checkpoint written|APP_USAGE_WRITE_FAILED' /tmp/nwp-verify-run/daemon.log || true
