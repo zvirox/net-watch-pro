@@ -126,6 +126,9 @@ struct AppAgg {
     tx: u64,
     loopback_rx: u64,
     loopback_tx: u64,
+    /// One Delta = one packet; used to test L2-header/per-packet tx-gap theory.
+    rx_packets: u64,
+    tx_packets: u64,
     identity_hits: u32,
     events: u64,
 }
@@ -641,9 +644,11 @@ fn collect(
             } else if delta.source == SRC_CGROUP_SKB {
                 if delta.direction == 0 {
                     app.rx += delta.delta_bytes;
+                    app.rx_packets += 1;
                     interval_rx += delta.delta_bytes;
                 } else {
                     app.tx += delta.delta_bytes;
+                    app.tx_packets += 1;
                     interval_tx += delta.delta_bytes;
                 }
             } else if delta.source == SRC_LOOPBACK {
@@ -720,6 +725,8 @@ fn collect(
 
     let app_rx: u64 = apps.values().map(|a| a.rx).sum();
     let app_tx: u64 = apps.values().map(|a| a.tx).sum();
+    let rx_packets: u64 = apps.values().map(|a| a.rx_packets).sum();
+    let tx_packets: u64 = apps.values().map(|a| a.tx_packets).sum();
     let loopback_rx: u64 = apps.values().map(|a| a.loopback_rx).sum();
     let loopback_tx: u64 = apps.values().map(|a| a.loopback_tx).sum();
 
@@ -787,6 +794,36 @@ fn collect(
             pct(unattr_tx, iface_delta_tx)
         );
     }
+    // tx-gap diagnostic: one Delta = one packet, so bytes/packet on each side
+    // can be compared. A ~14 B/packet difference would support the L2-header
+    // hypothesis; this prints the numbers, it does NOT assert the cause.
+    let avg_app_tx = if tx_packets == 0 {
+        0.0
+    } else {
+        app_tx as f64 / tx_packets as f64
+    };
+    let avg_iface_tx = if tx_packets == 0 {
+        0.0
+    } else {
+        iface_delta_tx as f64 / tx_packets as f64
+    };
+    println!(
+        "tx-gap diagnostic: cgroup_skb tx packets {tx_packets}, app {:.1} B/pkt vs \
+         iface({iface}) {:.1} B/pkt (delta {:.1} B/pkt over {} packets). \
+         Compare ~14 B Ethernet header; cause UNMEASURED until checked.",
+        avg_app_tx,
+        avg_iface_tx,
+        avg_iface_tx - avg_app_tx,
+        tx_packets
+    );
+    println!(
+        "rx diagnostic: cgroup_skb rx packets {rx_packets}, app {:.1} B/pkt.",
+        if rx_packets == 0 {
+            0.0
+        } else {
+            app_rx as f64 / rx_packets as f64
+        }
+    );
     println!(
         "loopback (reported separately, NOT compared): cgroup_skb {loopback_rx}/{loopback_tx} B, \
          sysfs lo delta {lo_delta_rx}/{lo_delta_tx} B."
