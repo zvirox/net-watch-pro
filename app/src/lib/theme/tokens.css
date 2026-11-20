@@ -36,10 +36,10 @@
   --nwp-surface: #ffffff;
   --nwp-surface-2: #eef2f7;
   --nwp-border: #dce3ed;
-  --nwp-border-strong: #c3cddc;
+  --nwp-border-strong: #7b8794;
   --nwp-text: #101828;
   --nwp-text-secondary: #475467;
-  --nwp-text-disabled: #98a2b3;
+  --nwp-text-disabled: #7b8794;
   --nwp-primary: #0e7490;
   --nwp-primary-hover: #155e75;
   --nwp-primary-active: #164e63;
@@ -64,12 +64,12 @@
   /* §3.3 Chart palette — light */
   --nwp-chart-1: #0e7490;
   --nwp-chart-2: #4338ca;
-  --nwp-chart-3: #17b26a;
-  --nwp-chart-4: #f79009;
+  --nwp-chart-3: #0b8f5f;
+  --nwp-chart-4: #c5680a;
   --nwp-chart-5: #7a5af8;
-  --nwp-chart-muted: #98a2b3;
+  --nwp-chart-muted: #7b8794;
   --nwp-chart-axis-line: #dce3ed;
-  --nwp-chart-axis-label: #98a2b3;
+  --nwp-chart-axis-label: #667085;
   --nwp-chart-grid: #eef2f7;
 
   /* §4.1 Fonts — families (files bundled in P0.6 completion) */
@@ -134,7 +134,7 @@
   --nwp-surface: #161b26;
   --nwp-surface-2: #212a3b;
   --nwp-border: #2c3442;
-  --nwp-border-strong: #3d4754;
+  --nwp-border-strong: #667085;
   --nwp-text: #f0f2f5;
   --nwp-text-secondary: #9aa4b2;
   --nwp-text-disabled: #5d6b7e;

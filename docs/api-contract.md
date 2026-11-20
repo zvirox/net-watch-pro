@@ -43,6 +43,8 @@ Status mapping: 400 QUERY_INVALID · 401 AUTH_INVALID · 403 PERMISSION_DENIED/E
 
 Rate limits: 600/min reads · 5/min export create · 10/min writes & downloads → 429 + `Retry-After`.
 
+Diagnostics S3/S4: `checks[].result` is `pass|fail|skip`; `skip` (always with `detail`) means the local API process cannot observe that check in-process — service-unit state and kernel/BTF compatibility are reported this way rather than guessed, and render as "—" in the modal. S3's `journal_excerpt` reads `daemon_events` newest-first; S4 is the paginated version of the same table.
+
 ## Live throughput (API.md §3, Phase A)
 
 - `net.rates` frame: `{ "channel":"net.rates","kind":"update","data":{ "ts":<epoch>,"down_bps":<int>,"up_bps":<int>,"interfaces":[{ "name","down_bps","up_bps" }] } }`; snapshot on subscribe, then 1 Hz.

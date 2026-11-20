@@ -1,9 +1,9 @@
 # Net Watch Pro — DESIGN.md (UI Design System)
 
-**Version:** 1.4 · **Date:** 2026-11-20
+**Version:** 1.5 · **Date:** 2026-11-20
 **Source of truth:** `PRD.md` (scope, screens, flows) · `REAPM.md` (reference teardown) · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a). 1.2 (2026-11-19): add the "Network now" live-rate card with 60-second sparkline, Apps live-speed columns, `speed_unit` selector, and stale/no-collector states (live throughput plan, Phase A). 1.3 (2026-11-19): interfaces card shows Wi-Fi signal/link from local sysfs with "—" for missing values; last-hour rate history is labelled in-memory. 1.4 (2026-11-20): Phase D — range selector (§7.13), range-driven Dashboard totals and bar timeline plus billing-cycle card (§8.3), and the new Apps list screen (§8.10).
+**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a). 1.2 (2026-11-19): add the "Network now" live-rate card with 60-second sparkline, Apps live-speed columns, `speed_unit` selector, and stale/no-collector states (live throughput plan, Phase A). 1.3 (2026-11-19): interfaces card shows Wi-Fi signal/link from local sysfs with "—" for missing values; last-hour rate history is labelled in-memory. 1.4 (2026-11-20): Phase D — range selector (§7.13), range-driven Dashboard totals and bar timeline plus billing-cycle card (§8.3), and the new Apps list screen (§8.10). 1.5 (2026-11-20): Phase 9 contrast fix — `border-strong`, light `text-disabled`, light chart series 3/4/muted and the light axis-label were recalculated to satisfy §9.1 (owner-approved; measured ratios recorded there). No new tokens.
 **Stack context:** Tauri 2 shell · Svelte 5 · shadcn-svelte components · ECharts · localhost WS data
 
 > **STRICT RULES — every UI built later must follow this file.**
@@ -48,10 +48,10 @@ Semantic layers: `background` (window) → `surface` (cards/panels) → `surface
 | `surface` | `#FFFFFF` | Cards, panels, tables, inputs |
 | `surface-2` | `#EEF2F7` | Muted fills, row hover, nested blocks |
 | `border` | `#DCE3ED` | Hairline borders, dividers |
-| `border-strong` | `#C3CDDC` | Input borders, emphasized dividers |
+| `border-strong` | `#7B8794` | Input borders, emphasized dividers (3.66:1 vs surface — §9.1) |
 | `text` | `#101828` | Primary text |
 | `text-secondary` | `#475467` | Secondary text, labels |
-| `text-disabled` | `#98A2B3` | Disabled text, placeholders |
+| `text-disabled` | `#7B8794` | Disabled text, placeholders (3.66:1 vs surface — §9.1) |
 | `primary` | `#0E7490` | Actions, active nav, links, primary chart series |
 | `primary-hover` | `#155E75` | Hover on primary fills |
 | `primary-active` | `#164E63` | Pressed on primary fills |
@@ -81,7 +81,7 @@ Semantic layers: `background` (window) → `surface` (cards/panels) → `surface
 | `surface` | `#161B26` | Cards, panels, tables, inputs |
 | `surface-2` | `#212A3B` | Muted fills, row hover, nested blocks |
 | `border` | `#2C3442` | Hairline borders, dividers |
-| `border-strong` | `#3D4754` | Input borders, emphasized dividers |
+| `border-strong` | `#667085` | Input borders, emphasized dividers (3.46:1 vs surface — §9.1) |
 | `text` | `#F0F2F5` | Primary text |
 | `text-secondary` | `#9AA4B2` | Secondary text, labels |
 | `text-disabled` | `#5D6B7E` | Disabled text, placeholders |
@@ -114,11 +114,11 @@ Fixed series order — charts never introduce colors outside this list. **Downlo
 |---|---|---|---|
 | 1 | `#0E7490` | `#22D3EE` | Primary series / Download |
 | 2 | `#4338CA` / `#6172F3` | `#A5B4FC` | Upload / secondary series |
-| 3 | `#17B26A` | `#32D583` | Tertiary (success-tinted series) |
-| 4 | `#F79009` | `#FDB022` | Quaternary (quota/warning series) |
+| 3 | `#0B8F5F` | `#32D583` | Tertiary (success-tinted series) |
+| 4 | `#C5680A` | `#FDB022` | Quaternary (quota/warning series) |
 | 5 | `#7A5AF8` | `#B69DF8` | Fifth series |
-| 6 | `#98A2B3` | `#667085` | Muted/other |
-| Axis line/label | `#DCE3ED` / `#98A2B3` | `#2C3442` / `#9AA4B2` | |
+| 6 | `#7B8794` | `#667085` | Muted/other |
+| Axis line/label | `#DCE3ED` / `#667085` | `#2C3442` / `#9AA4B2` | Axis **label** is text: 4.97:1 light / 6.83:1 dark |
 | Grid split line | `#EEF2F7` | `#212A3B` | |
 | Tooltip | surface + shadow-md | surface + shadow-dk | Glass style, radius 8 |
 
@@ -578,17 +578,21 @@ Blockers per the strict rules — a build failing any of these does not ship.
 
 Text ≥ 4.5:1 (≥ 3:1 for text ≥ 24px/600). UI components & focus indicators ≥ 3:1 against adjacent colors. Verified pairs (both themes):
 
-| Pair | Light ratio | Dark ratio |
-|---|---|---|
-| `text` on `background` / `surface` | ≥ 12:1 | ≥ 13:1 |
-| `text-secondary` on `surface` | ≥ 5:1 | ≥ 5:1 |
-| `on-primary` on `primary` | ≥ 4.5:1 | ≥ 7:1 (`#0C111D` on `#22D3EE`) |
-| `primary` text/icons on `surface` | ≥ 4.5:1 | ≥ 7:1 |
-| status colors (`success/warning/error`) as text on `surface` | ≥ 4.5:1 | ≥ 4.5:1 |
-| `text-disabled` on `surface` | ≥ 3:1 (disabled exempt) | ≥ 3:1 |
-| `border-strong` vs `surface` (input boundaries) | ≥ 3:1 | ≥ 3:1 |
+Ratios below are **computed** from the token hex values (`tests/a11y/contrast.py`, P9.4). A pair is only allowed in this table when its measured ratio clears the requirement in both themes.
 
-New token pairs must be checked before entering this file; chart series sit on `surface` and each pair ≥ 3:1.
+| Pair | Requirement | Light measured | Dark measured |
+|---|---|---|---|
+| `text` on `background` / `surface` | ≥ 12 / ≥ 13 | 16.68 / 17.75 | 16.82 / 15.36 |
+| `text-secondary` on `surface` | ≥ 4.5 | 7.69 | 6.83 |
+| `on-primary` on `primary` | ≥ 4.5 | 5.36 | 10.44 |
+| `primary` text/icons on `surface` | ≥ 4.5 | 5.36 | 9.53 |
+| `success` / `warning` / `error` as text on `surface` | ≥ 4.5 | 5.69 / 5.43 / 6.57 | 8.50 / 9.36 / 6.18 |
+| `text-disabled` on `surface` (disabled exempt) | ≥ 3 | 3.66 | 3.17 |
+| `border-strong` vs `surface` (input boundaries) | ≥ 3 | 3.66 | 3.46 |
+| chart series 1–6 on `surface` | ≥ 3 | 5.36 / 7.90 / 4.11 / 3.92 / 4.52 / 3.66 | ≥ 7.5 (muted 3.46) |
+| chart axis **label** (text) on `surface` | ≥ 4.5 | 4.97 | 6.83 |
+
+New token pairs must be checked with `tests/a11y/contrast.py` before entering this file; chart series sit on `surface` and each pair must clear 3:1.
 
 ### 9.2 Focus rings
 

@@ -135,6 +135,7 @@ net-watch-pro/
 └── tests/
     ├── integration/                 # daemon<->db<->api on **VMs** (F-08: containers share host kernel, cannot test kernel variance)
     ├── accuracy/                    # accounting vs interface counters harness (PRD accuracy: totals equal kernel counters, ≥95% attributed)
+    ├── a11y/                        # stdlib contrast check for DESIGN.md §9.1 token pairs (P9.4)
     └── fixtures/                    # seeded sample data (demo mode, PRD OQ4)
 ```
 

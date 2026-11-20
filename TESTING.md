@@ -215,6 +215,22 @@
 | Cycle card | cycle day and budget set | bytes used, days left and budget level match the cycle setting |
 | Invalid range | `?range=13h` | 400 `QUERY_INVALID` naming `range` |
 
+### F13 — Diagnostics & accessibility (Phase 9)
+
+| Scenario | Input | Expected |
+|---|---|---|
+| Token contrast | `python3 tests/a11y/contrast.py` | every §9.1 pair passes in both themes; CI fails on regression |
+| Diagnostics payload | `GET /diagnostics` with seeded events | checks carry `pass/fail/skip`, `skip` has a `detail`; journal excerpt newest-first |
+| Events journal | `GET /events?limit=40` | paginated `daemon_events` envelope, level/code filters |
+| No daemon | stop service, open UI | non-dismissible banner, Start daemon + Open diagnostics actions |
+| No eBPF | `NETWATCH_DISABLE_EBPF=1` | Degraded chip + explanatory copy in Live/Apps/Dashboard (already in F11/L-C9) |
+| Permission denied | UID not in allowed-uids | Stopped/connecting chip, banner with Start daemon (pkexec) action |
+| Focus return | open UpgradeModal, press Escape | focus returns to the trigger |
+| Collapsed sidebar | window ≤1279px, Tab through nav | every icon link still has an accessible name |
+| Chart fallback | Dashboard/AppDetail charts | sr-only table mirrors every series; sparkline also has one |
+| Reduced motion | `prefers-reduced-motion: reduce` | no row fades/pulses; chart animation off; durations ≤1ms |
+| 200% zoom / 320px | narrow viewport, both themes | no horizontal page scroll, nav names present, controls reachable |
+
 ---
 
 ## 5. Edge & Negative Test Matrix (cross-feature)
@@ -253,6 +269,9 @@
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                      # unit + integration
 cargo llvm-cov --workspace --html           # coverage report
+
+# A11y tokens (P9.4 — implemented, stdlib only, no new dependencies)
+python3 tests/a11y/contrast.py
 
 # UI: everything (from app/)
 npm run lint && npm run svelte-check
