@@ -101,6 +101,14 @@ bpffs mount.
 > identity = 0 until a `sock_ops`-based identity probe is implemented).
 > See `docs/spike-ebpf-report.md` "First owner run".
 
+> **Second owner run (2026-11-20):** with no workload running, interface
+> deltas were ~0 and the accuracy percentage was meaningless. The runner now
+> (a) compares per-interval deltas on both sides, (b) compares cumulative vs
+> cumulative in the final summary, and (c) prints `WARNING: no interface
+> traffic` when idle. **You must have a workload running in a second terminal**
+> for the 60 s — an idle run cannot answer Q1/Q2. (`pidstat` now uses the
+> real PID instead of a `pidof` name that matched nothing.)
+
 ## 5. Workloads — Motrix first
 
 Run each separately; record interface delta, attributed total, per-app split,

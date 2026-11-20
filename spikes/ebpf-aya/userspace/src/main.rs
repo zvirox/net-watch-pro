@@ -194,7 +194,8 @@ fn main() -> Result<()> {
         args.duration, args.interval
     );
     println!(
-        "PID {} — sample CPU/RSS with `pidstat -p $(pidof netwatch-spike) 1`.",
+        "PID {} — sample CPU/RSS with `pidstat -p {} 1` in another terminal.",
+        std::process::id(),
         std::process::id()
     );
 
@@ -208,7 +209,21 @@ fn collect(events: &mut RingBuf<aya::maps::MapData>, args: &Args) -> Result<()> 
     let mut apps: BTreeMap<u64, AppAgg> = BTreeMap::new();
     let mut total_events: u64 = 0;
     let mut ignored_events: u64 = 0;
-    let (mut prev_rx, mut prev_tx) = interface_totals()?;
+    // Interface baseline captured once, so the final summary compares like
+    // with like: cumulative attributed bytes vs cumulative interface delta.
+    let (base_rx, base_tx) = interface_totals()?;
+    let (mut prev_rx, mut prev_tx) = (base_rx, base_tx);
+    // Per-interval app deltas, reset at each print, so the live accuracy line
+    // compares an interval's attributed bytes with the same interval's
+    // interface bytes (the previous code compared cumulative vs interval).
+    let (mut interval_rx, mut interval_tx) = (0u64, 0u64);
+    let pct = |part: u64, whole: u64| -> f64 {
+        if whole == 0 {
+            0.0
+        } else {
+            100.0 * part as f64 / whole as f64
+        }
+    };
 
     loop {
         let mut drained = 0usize;
@@ -227,8 +242,10 @@ fn collect(events: &mut RingBuf<aya::maps::MapData>, args: &Args) -> Result<()> 
             } else if delta.source == SRC_CGROUP_SKB {
                 if delta.direction == 0 {
                     app.rx += delta.delta_bytes;
+                    interval_rx += delta.delta_bytes;
                 } else {
                     app.tx += delta.delta_bytes;
+                    interval_tx += delta.delta_bytes;
                 }
             } else {
                 ignored_events += 1;
@@ -242,26 +259,17 @@ fn collect(events: &mut RingBuf<aya::maps::MapData>, args: &Args) -> Result<()> 
             let iface_tx = tx.saturating_sub(prev_tx);
             prev_rx = rx;
             prev_tx = tx;
-            let app_rx: u64 = apps.values().map(|a| a.rx).sum();
-            let app_tx: u64 = apps.values().map(|a| a.tx).sum();
             let identified = apps.values().filter(|a| a.identity_hits > 0).count();
-            let pct = |part: u64, whole: u64| -> f64 {
-                if whole == 0 {
-                    0.0
-                } else {
-                    100.0 * part as f64 / whole as f64
-                }
-            };
             println!(
                 "[+{:>3}s] rx: app {} / iface {} ({:5.1}%)  tx: app {} / iface {} ({:5.1}%)  \
                  cookies {} identified {}/{}  ring events {} (drained {} this tick, bad {})",
                 started.elapsed().as_secs(),
-                human(app_rx),
+                human(interval_rx),
                 human(iface_rx),
-                pct(app_rx, iface_rx),
-                human(app_tx),
+                pct(interval_rx, iface_rx),
+                human(interval_tx),
                 human(iface_tx),
-                pct(app_tx, iface_tx),
+                pct(interval_tx, iface_tx),
                 apps.len(),
                 identified,
                 apps.len(),
@@ -269,6 +277,8 @@ fn collect(events: &mut RingBuf<aya::maps::MapData>, args: &Args) -> Result<()> 
                 drained,
                 ignored_events,
             );
+            interval_rx = 0;
+            interval_tx = 0;
             next_print += Duration::from_secs(args.interval);
         }
 
@@ -287,13 +297,25 @@ fn collect(events: &mut RingBuf<aya::maps::MapData>, args: &Args) -> Result<()> 
             app.pid, app.cgroup_id, app.identity_hits, app.rx, app.tx, app.events
         );
     }
-    let (iface_rx, iface_tx) = interface_totals()?;
+    let (iface_now_rx, iface_now_tx) = interface_totals()?;
+    let iface_delta_rx = iface_now_rx.saturating_sub(base_rx);
+    let iface_delta_tx = iface_now_tx.saturating_sub(base_tx);
     let app_rx: u64 = apps.values().map(|a| a.rx).sum();
     let app_tx: u64 = apps.values().map(|a| a.tx).sum();
     println!(
-        "\nattributed rx/tx = {app_rx}/{app_tx}; interface counters (absolute) = {iface_rx}/{iface_tx}; \
-         total ring events = {total_events}; bad events = {ignored_events}."
+        "\nattributed rx/tx (cumulative) = {app_rx}/{app_tx}; interface delta over the same \
+         window = {iface_delta_rx}/{iface_delta_tx} ({:5.1}% / {:5.1}% attributed); \
+         total ring events = {total_events}; bad events = {ignored_events}.",
+        pct(app_rx, iface_delta_rx),
+        pct(app_tx, iface_delta_tx)
     );
+    // An idle run cannot answer the accuracy questions; say so loudly.
+    if iface_delta_rx == 0 && iface_delta_tx == 0 {
+        println!(
+            "WARNING: no interface traffic was seen — was a workload (curl/Motrix/iperf3) \
+             running? This run cannot answer Q1/Q2. Re-run with traffic."
+        );
+    }
     println!(
         "Go/no-go inputs: attributed-vs-true <= 5% (curl/iperf3), attributed+unattributed vs \
          interface <= 2%, CPU <= 3%, RSS <= 150 MB. Measure CPU/RSS externally with pidstat."

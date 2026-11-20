@@ -46,8 +46,31 @@ that allows it — the documented candidate is `sock_ops` at
 and permits both `bpf_get_socket_cookie` and `bpf_get_current_pid_tgid`.
 This is a finding for Phase C design, **not** a blocker: the runner now
 degrades gracefully and continues with Design 1 byte counters, so the accuracy
-workload (Q1/Q2) can still be measured. No Q1–Q3 numbers were captured on this
-first attempt — the run aborted at the kprobe load before the old fix.
+workload (Q1/Q2) can still be measured.
+
+### Second owner run — 2026-11-20 (60 s, still no workload)
+
+The runner completed the full 60 s. Findings:
+
+- **cgroup_skb byte counting works**: 607 ring events, 0 bad, 95 distinct
+  cookie/socket keys, tx attributed 127,408 B cumulatively. No drops detected.
+  → **[VERIFIED: spike-ebpf-report §Second owner run]** cgroup_skb ingress and
+  egress count bytes and flush to userspace with the bounded capability set.
+- **No workload was running.** Interface deltas were ~0 (only background
+  blips of 70–200 B), so this run **cannot answer Q1/Q2**. Attributed rx was
+  2,100 B over 60 s — consistent with an idle PC, not a known rate. The runner
+  now prints an explicit `WARNING: no interface traffic` in this case.
+- **Q5 unmeasured**: identity_hits = 0 for every cookie (kprobe rejected).
+- **Q8 partial**: 95 cookies in 60 s shows high short-lived socket churn;
+  the 8,192-entry LRU map did not fill, 0 dropped events observed in 607.
+- **Reporting bug found and fixed after this run**: the live line compared
+  *cumulative* attributed bytes against a *per-interval* interface delta,
+  producing meaningless percentages (>1000%). Q1/Q2 numbers from this
+  specific run are therefore **discarded**, not reported. The runner now
+  compares per-interval to per-interval and cumulative-to-cumulative.
+
+**Next step:** re-run with a real workload active (curl/iperf3/Motrix) in a
+second terminal, plus `pidstat` for Q3. Record those numbers here.
 
 | # | Question | Measurement / evidence | Status |
 |---|---|---|---|
