@@ -235,7 +235,7 @@
 
 | Scenario | Input | Expected |
 |---|---|---|
-| Embedded object | clean `cargo build` after `cargo xtask bpf` | `netwatchd` loads the object with no runtime file and no `NETWATCH_EBPF_OBJECT` |
+| Embedded object | clean `cargo build` after `cargo run -p xtask -- bpf` | `netwatchd` loads the object with no runtime file and no `NETWATCH_EBPF_OBJECT` |
 | No embedded object | build without `target/netwatch_ebpf.o` | honest `ebpf=no_collector`, no crash; dev override still readable |
 | Dev override | `NETWATCH_EBPF_OBJECT=/tmp/other.o` | override bytes take precedence over embedded bytes |
 | Clean install | fresh `makepkg -si` → one onboarding pkexec → `GET /status` | `ebpf=attached`, `recording=true`, no `/usr/lib/netwatch-pro/netwatch_ebpf.o` exists, no manual steps |

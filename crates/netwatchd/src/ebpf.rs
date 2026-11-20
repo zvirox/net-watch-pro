@@ -8,6 +8,7 @@
 //! Identity comes from the socket's cgroup (`bpf_skb_cgroup_id` in the BPF
 //! program), never from `current` — see docs/spike-ebpf-report.md §Twelfth.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::PathBuf;
@@ -21,7 +22,15 @@ use tokio::task::JoinHandle;
 
 use netwatch_common::{AppUsage, AppUsageFrame, CollectorStats, RateSnapshot};
 
-const DEFAULT_OBJECT: &str = "/usr/lib/netwatch-pro/netwatch_ebpf.o";
+// The object is embedded at build time by build.rs (ARCHITECTURE.md §1.8).
+// A plain checkout without `cargo xtask bpf` compiles with an empty slice and
+// reports an honest degraded state; no runtime file path is needed.
+#[cfg(nwp_embedded_ebpf)]
+const EMBEDDED_OBJECT: &[u8] =
+    aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/netwatch_ebpf.o"));
+#[cfg(not(nwp_embedded_ebpf))]
+const EMBEDDED_OBJECT: &[u8] = &[];
+
 const ROOT_CGROUP: &str = "/sys/fs/cgroup";
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -64,13 +73,21 @@ pub fn start(
         tracing::info!("NETWATCH_DISABLE_EBPF set: collector disabled");
         return (CollectorState::Disabled, rx, None);
     }
-    let object = object_override.unwrap_or_else(|| PathBuf::from(DEFAULT_OBJECT));
-    let bytes = match std::fs::read(&object) {
-        Ok(bytes) => bytes,
-        Err(error) => {
-            tracing::warn!(path = %object.display(), %error, "eBPF object unavailable; collector degraded");
-            return (CollectorState::Disabled, rx, None);
+    // `NETWATCH_EBPF_OBJECT` is a dev override; packaged builds use the
+    // embedded bytes and need no object file at runtime.
+    let bytes: Cow<'static, [u8]> = if let Some(object) = object_override {
+        match std::fs::read(&object) {
+            Ok(bytes) => Cow::Owned(bytes),
+            Err(error) => {
+                tracing::warn!(path = %object.display(), %error, "eBPF object override unavailable; collector degraded");
+                return (CollectorState::Disabled, rx, None);
+            }
         }
+    } else if EMBEDDED_OBJECT.is_empty() {
+        tracing::warn!("no embedded eBPF object; collector degraded (run `cargo xtask bpf`)");
+        return (CollectorState::Disabled, rx, None);
+    } else {
+        Cow::Borrowed(EMBEDDED_OBJECT)
     };
 
     let mut bpf = match Ebpf::load(&bytes) {
@@ -274,4 +291,21 @@ fn lo_ifindex() -> Option<u32> {
         .trim()
         .parse()
         .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// build.rs embeds the object only when `cargo xtask bpf` ran first. In
+    /// that case the bytes must be a valid ELF64 eBPF object.
+    #[test]
+    fn embedded_object_is_elf_when_present() {
+        if cfg!(nwp_embedded_ebpf) {
+            assert!(EMBEDDED_OBJECT.starts_with(&[0x7f, b'E', b'L', b'F']));
+            assert!(EMBEDDED_OBJECT.len() > 64);
+        } else {
+            assert_eq!(EMBEDDED_OBJECT.len(), 0, "unexpected embedded bytes");
+        }
+    }
 }

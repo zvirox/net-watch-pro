@@ -20,32 +20,46 @@ fn main() {
     }
 }
 
-/// Build the separate eBPF crate with nightly + -Z build-std=core and copy
-/// the object to the path the daemon loads by default (ARCHITECTURE.md §8.3).
+/// Build the separate eBPF crate and copy the object to `target/netwatch_ebpf.o`
+/// for `netwatchd/build.rs` to embed (ARCHITECTURE.md §1.8).
+///
+/// Default: the active stable toolchain with `RUSTC_BOOTSTRAP=1` (measured to
+/// work with 1.99.1 + rust-src + bpf-linker). `NWP_BPF_NIGHTLY=1` opts back
+/// into a real nightly toolchain for toolchain debugging.
 fn bpf() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let repo = repo_root()?;
     let crate_dir = repo.join("crates/netwatch-ebpf");
     let target_dir = crate_dir.join("target");
+    let use_nightly = std::env::var_os("NWP_BPF_NIGHTLY").is_some();
 
-    let status = Command::new("rustup")
-        .args([
-            "run",
-            "nightly",
-            "cargo",
-            "build",
-            "--release",
-            "--target",
-            "bpfel-unknown-none",
-            "-Z",
-            "build-std=core",
-        ])
+    let args = [
+        "build",
+        "--release",
+        "--target",
+        "bpfel-unknown-none",
+        "-Z",
+        "build-std=core",
+    ];
+    let mut command = if use_nightly {
+        let mut cmd = Command::new("rustup");
+        cmd.args(["run", "nightly", "cargo"]);
+        cmd
+    } else {
+        let mut cmd = Command::new("cargo");
+        cmd.env("RUSTC_BOOTSTRAP", "1");
+        cmd
+    };
+    let status = command
+        .args(args)
         .current_dir(&crate_dir)
         .env("CARGO_TARGET_DIR", &target_dir)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status()?;
     if !status.success() {
-        return Err("nightly eBPF build failed (need nightly + rust-src + bpf-linker)".into());
+        return Err(
+            "eBPF build failed (need rust-src + bpf-linker; stable uses RUSTC_BOOTSTRAP=1)".into(),
+        );
     }
 
     let src = target_dir.join("bpfel-unknown-none/release/netwatch-ebpf");

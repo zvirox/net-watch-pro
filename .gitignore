@@ -9,6 +9,7 @@ app/src-tauri/gen/
 packaging/arch/src/
 packaging/arch/pkg/
 packaging/arch/net-watch-pro/
+packaging/arch/*.pkg.tar.zst
 
 # Dev-only env files (ARCHITECTURE.md §8.3: .env is dev-only, never committed)
 .env

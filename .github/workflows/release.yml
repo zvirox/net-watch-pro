@@ -56,6 +56,14 @@ jobs:
             libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev \
             libayatana-appindicator3-dev dpkg-dev fakeroot rpm
 
+      - name: Install eBPF build tools
+        run: |
+          rustup component add rust-src
+          cargo install --locked bpf-linker --version 0.13.0
+
+      - name: Build eBPF object for embedding
+        run: cargo run -p xtask -- bpf
+
       - name: Build UI
         working-directory: app
         run: |
@@ -175,6 +183,8 @@ jobs:
           dpkg -L net-watch-pro | grep -q '/lib/systemd/system/netwatchd.service'
           getent group netwatch
           test -f /usr/share/applications/net-watch-pro.desktop
+          # The collector object is embedded; no runtime file may be needed.
+          ! test -e /usr/lib/netwatch-pro/netwatch_ebpf.o
           # Package leaves the unit disabled for onboarding. GitHub runners
           # have no systemd as PID 1, so accept unknown/static here too.
           enabled="$(systemctl is-enabled netwatchd.service 2>/dev/null || true)"

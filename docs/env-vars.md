@@ -11,7 +11,7 @@
 | `NETWATCH_API_GID` | netwatchd | `SUDO_GID` if set, else root GID | Group id allowed to connect; socket is created `0660` owned by this group |
 | `NETWATCH_RETENTION_DAYS` | netwatchd | `90` | Default retention; user setting overrides (Pro > 90) |
 | `NETWATCH_DISABLE_EBPF` | netwatchd | unset | Diagnostic switch: run with empty collector (degraded chip) |
-| `NETWATCH_EBPF_OBJECT` | netwatchd (dev only) | unset | Dev override to read the compiled object from a file instead of using the bytes embedded by `build.rs` (built by `cargo xtask bpf`); a bad override -> degraded state, not a crash |
+| `NETWATCH_EBPF_OBJECT` | netwatchd (dev only) | unset | Dev override to read the compiled object from a file instead of using the bytes embedded by `build.rs` (built by `cargo run -p xtask -- bpf`); a bad override -> degraded state, not a crash |
 | `NETWATCH_DEV_DAEMON_ADDR` | UI (dev only) | unset | Point UI at a dev daemon socket; never read in packaged builds |
 
 Removed: `NETWATCH_API_ADDR`, `NETWATCH_API_TOKEN_FILE` (Unix socket + peer-credential replaces loopback TCP + bearer token).

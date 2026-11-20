@@ -136,9 +136,9 @@
 
 ### Phase 8 follow-up — self-contained eBPF collector (owner-approved 2026-11-20)
 
-- [ ] P8.9 Embed the object in `netwatchd` via `aya::include_bytes_aligned!`; `NETWATCH_EBPF_OBJECT` dev override only <!-- docs-first: ARCHITECTURE 1.8, env-vars, TESTING F14, README; code pending -->
-- [ ] P8.10 Build object in CI + AUR `PKGBUILD` (stable + `RUSTC_BOOTSTRAP=1`, `rust-src`, pinned `bpf-linker` 0.13.0); no `.o` in git <!-- bootstrap build measured locally with stable 1.99.1; code pending -->
-- [ ] P8.11 Clean-install test + `.SRCINFO`/`pkgrel` fix <!-- `[VERIFIED]` only after a real `makepkg -si` → pkexec → `/status ebpf=attached` host run; PKGBUILD pkgver already current, .SRCINFO stale -->
+- [x] P8.9 Embed the object in `netwatchd` via `aya::include_bytes_aligned!`; `NETWATCH_EBPF_OBJECT` dev override only <!-- build.rs copies prebuilt object into OUT_DIR; cfg-gated embed; no-object path compiles and reports no_collector; embedded-object ELF unit test green; clippy/workspace tests green -->
+- [x] P8.10 Build object in CI + AUR `PKGBUILD` (stable + `RUSTC_BOOTSTRAP=1`, `rust-src`, pinned `bpf-linker` 0.13.0); no `.o` in git <!-- RUSTC_BOOTSTRAP build measured with stable 1.99.1 + rust-src + bpf-linker 0.13.0; xtask uses bootstrap by default (NWP_BPF_NIGHTLY=1 opts to nightly); release.yml/ci.yml/PKGBUILD call `cargo run -p xtask -- bpf`; .SRCINFO regenerated, pkgrel=2; workflows parse, shell syntax clean -->
+- [ ] P8.11 Clean-install test + `.SRCINFO`/`pkgrel` fix <!-- script added with --ci smoke passing locally; `[VERIFIED]` for the host path only after a real `makepkg -si` → pkexec → `/status ebpf=attached` run by the owner; PKGBUILD pkgver already current, .SRCINFO fixed -->
 
 ## Phase 9 — Diagnostics & Accessibility → `v0.9.0-beta.1` (~40 h) — *public beta*
 

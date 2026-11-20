@@ -2,14 +2,14 @@
 # AUR dev channel: net-watch-pro-git (PLAN P8.4). Stable -/-bin packages land at GA.
 pkgname=net-watch-pro-git
 _pkgname=net-watch-pro
-pkgver=0.8.1.alpha.8.r0.g4a33419
-pkgrel=1
+pkgver=0.9.0.beta.1.r0.gbc9f33b
+pkgrel=2
 pkgdesc='Local network-traffic monitor and per-app usage tracker (dev channel)'
 arch=('x86_64')
 url='https://github.com/zvirox/net-watch-pro'
 license=('AGPL-3.0-or-later')
 depends=('systemd' 'webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator' 'librsvg')
-makedepends=('git' 'rust' 'cargo' 'nodejs' 'npm' 'pkgconf'
+makedepends=('git' 'rust' 'cargo' 'rust-src' 'nodejs' 'npm' 'pkgconf'
              'webkit2gtk-4.1' 'gtk3' 'gtk4' 'libayatana-appindicator' 'librsvg')
 provides=('net-watch-pro')
 conflicts=('net-watch-pro' 'net-watch-pro-bin')
@@ -33,6 +33,14 @@ build() {
   export CFLAGS=""
   export CXXFLAGS=""
   export LDFLAGS=""
+  # eBPF object: pinned bpf-linker (the version verified by the spike) is
+  # installed into $srcdir so the recipe does not depend on the distro's
+  # bpf-linker version. Stable Rust + RUSTC_BOOTSTRAP=1 + rust-src is enough
+  # (no nightly toolchain needed). The object is embedded by build.rs.
+  export PATH="$srcdir/bpf-tools/bin:$PATH"
+  cargo install --locked bpf-linker --version 0.13.0 --root "$srcdir/bpf-tools"
+  cargo run -p xtask -- bpf
+
   # Tauri release builds embed frontendDist (app/dist), so build the UI first.
   (cd app && npm ci && npm run build)
   # Plain cargo builds leave Tauri in dev mode (loads devUrl http://127.0.0.1:5173).

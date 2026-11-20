@@ -180,11 +180,11 @@ collector yourself, install `rust-src` and `bpf-linker` (both available in the
 Arch `extra` repo; CI pins `bpf-linker` 0.13.0), then:
 
 ~~~bash
-cargo xtask bpf                 # writes target/netwatch_ebpf.o
+cargo run -p xtask -- bpf                 # writes target/netwatch_ebpf.o
 cargo build --release -p netwatchd   # build.rs embeds that object
 ~~~
 
-`cargo xtask bpf` uses stable Rust with `RUSTC_BOOTSTRAP=1`, `rust-src` and
+`cargo run -p xtask -- bpf` uses stable Rust with `RUSTC_BOOTSTRAP=1`, `rust-src` and
 `bpf-linker`; no nightly toolchain is required. To iterate on the BPF program
 without rebuilding the daemon, set `NETWATCH_EBPF_OBJECT` to the object path.
 The object is never committed to git.

@@ -27,6 +27,12 @@ jobs:
         run: cargo fmt --check
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: install eBPF build tools
+        run: |
+          rustup component add rust-src
+          cargo install --locked bpf-linker --version 0.13.0
+      - name: build eBPF object for embedding
+        run: cargo run -p xtask -- bpf
       - name: build daemon binary for process-level tests
         run: cargo build -p netwatchd
       - name: tests
