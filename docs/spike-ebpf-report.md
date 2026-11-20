@@ -206,6 +206,29 @@ in principle. **Still to verify:** that Motrix and its `aria2c` child land in
 the same cgroup (the specific Q5 grouping question) — needs a run with Motrix
 active. Kprobe identity remains `[REFUTED]`; sock_ops is the working path.
 
+### Thirteenth owner run — 2026-11-20 (20 s, UDP/DNS burst)
+
+Workload: 200 parallel `dig +time=1 +tries=1 example.com @8.8.8.8` queries.
+The burst showed up in the spike at +6s (cookies 8 → 211, ring 26 → 442)
+so UDP traffic was present during collection.
+
+- attributed rx/tx = **20,377 / 16,653 B** vs `wlan0` delta **30,952 /
+  25,305 B** = **65.8% / 65.8% attributed (34.2% error)**.
+- → **[VERIFIED: spike-ebpf-report §Thirteenth owner run]** cgroup_skb
+  **does count UDP bytes** (the DNS burst produced attributed rx and tx).
+  UDP is not invisible to this hook. This does **not** by itself decide the
+  L-OQ3 "TCP only" label, which was about reliable *per-app attribution* —
+  still unmeasured.
+- **[VERIFIED]** the 34% gap now appears on **rx as well as tx** for this
+  small-packet workload, whereas bulk TCP downloads showed ~4% rx / ~36% tx.
+  This is a measurement, not yet an explanation. **[HYPOTHESIS]** the gap
+  scales with packet size / protocol mix (per-packet L2/WiFi overhead and
+  ACKs), not with direction alone — must be measured before claiming a cause.
+- Loopback 7,821/8,601 B attributed vs 8,705/8,705 B sysfs `lo`; CPU 0.0%,
+  RSS 4,212 KiB, 521 events, 0 bad, clean detach. **[VERIFIED]**
+- Note: the workload command's pasted timestamp is after the run's output,
+  but the in-window cookie/ring burst at +6s confirms traffic overlapped.
+
 ### Twelfth owner run — 2026-11-20 (60 s, leaf scope, NEW download after attach)
 
 A brand-new Motrix download was started after the spike attached. sock_ops
