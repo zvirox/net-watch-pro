@@ -206,6 +206,38 @@ in principle. **Still to verify:** that Motrix and its `aria2c` child land in
 the same cgroup (the specific Q5 grouping question) — needs a run with Motrix
 active. Kprobe identity remains `[REFUTED]`; sock_ops is the working path.
 
+### Tenth owner run — 2026-11-20 (60 s, Motrix active, loopback-filtered)
+
+Motrix was downloading during the 60 s window. Byte accounting:
+rx attributed **634,456,623 B** vs `wlan0` delta **659,351,144 B** =
+**96.2% (3.8% error, PASS)**; tx **14,521,310 / 22,428,622 B** = **64.7%
+(35.3% error, FAIL)** — same reproducible tx gap. Loopback 183,230/183,590
+B attributed vs 183,902/183,902 B sysfs `lo`. Overhead 0.0% CPU / 4,252 KiB
+RSS; 424,956 events, 0 bad; clean detach. **[VERIFIED]** for these numbers.
+
+**Q5 grouping — OS-level answer VERIFIED, eBPF attribution NOT demonstrated:**
+The owner's `for p in $(pgrep -f 'motrix|aria2c'); do cat /proc/$p/cgroup; done`
+showed **both the Motrix main process (PID 31433) and `aria2c` (PID 31670)
+in the same cgroup**:
+`/user.slice/user-1000.slice/user@1000.service/app.slice/app-motrix-31433.scope`.
+→ **[VERIFIED: spike-ebpf-report §Tenth owner run]** Motrix and aria2c share
+one cgroup on this host, measured from `/proc/<pid>/cgroup`.
+
+However, the spike's own final table showed **100% UNIDENTIFIED** (0 bytes
+attributed to any app). Reason: the run used `--no-sock-ops` (bpftune owns the
+root sock_ops hook), and the verifier-rejected kprobe plus the unreliable
+egress-current guess were removed, so with sock_ops disabled there is **no
+identity source at all**. The spike therefore did **not** attribute any bytes
+to the Motrix cgroup. → **eBPF per-app byte attribution to a cgroup is
+UNMEASURED**, even though the OS-level grouping is verified. No Q5 claim about
+eBPF identity may be marked VERIFIED from this run.
+
+**Next:** attach the spike to the leaf Motrix scope (`--cgroup <scope>`), where
+no sock_ops program exists, so both cgroup_skb byte counters and sock_ops
+identity fire only for Motrix/aria2c. That will measure whether bytes can be
+attributed to that cgroup. Accuracy percentages from that run are not
+comparable to the interface-wide runs.
+
 ### Ninth owner run — 2026-11-20 (30 s, four parallel curls, loopback-filtered)
 
 Workload: four concurrent `curl` downloads of the 100 MB OVH file. Same
