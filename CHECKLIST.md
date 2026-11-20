@@ -179,7 +179,7 @@
 - [x] **Stop for owner approval after Phase A** <!-- owner answered L-OQ1..L-OQ4 on 2026-11-19 -->
 - [x] L-OQ1 60-sample one-minute in-memory history + `GET /usage/rate-history` (`in_memory:true`, lost-on-restart label) <!-- bounded VecDeque in netwatch-common, one point per minute fed by the 1 Hz task, 3 unit + 2 contract tests -->
 - [x] L-OQ4 Wi-Fi signal/link on U3 from local sysfs + Dashboard display ("—" when missing) <!-- injectable-root sysfs reader, wifi-only, 3 unit tests; TS types + demo fixture updated -->
-- [ ] L-B1 Owner-run Aya eBPF spike with Motrix; accept `docs/spike-ebpf-report.md` <!-- Arch/CachyOS run complete (§Fourth owner run): byte accounting GO (95.9% rx, 4.1% gap, 0.0% CPU / 4 MB RSS, stable 1 Hz ratio); identity REFUTED for kprobe, sock_ops needed; owner sign-off + Q6 VM matrix still pending; Q5 identity VERIFIED (12/37 cookies, pid+cgroup via sock_ops Single and egress-current, §Sixth run); Motrix/aria2c grouping still to confirm; Phase C must avoid root-cgroup Single attach -->
+- [ ] L-B1 Owner-run Aya eBPF spike with Motrix; accept `docs/spike-ebpf-report.md` <!-- Arch/CachyOS runs done (§Fourth/Sixth): rx attribution ~96% and stable; tx gaps 101.2%/68.1% UNEXPLAINED (old cause withdrawn as assumption); kprobe identity REFUTED; sock_ops captured pid/cgroup but several rows cgroup_id=1 (root, UNIDENTIFIED by owner rule) and Motrix was NOT active, so Motrix/aria2c grouping UNMEASURED. Pending: loopback-filtered run, safe sock_ops run, Motrix cgroup-path run, Q6 VM matrix, owner sign-off. Checklist stays open until evidence exists. -->
 - [ ] L-C1–C9 Collector, identity, display names, `live.apps`, per-app speeds, sum check
 - [ ] L-D1–D5 Range presets 1 h/24 h/7 d/30 d/billing cycle
 
