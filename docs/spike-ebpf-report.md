@@ -291,8 +291,14 @@ Final run evidence:
   **[VERIFIED: spike-ebpf-report §Final verification]**
 - Disabled path: owner ran `verify_degraded.sh` — daemon logged
   `state=Disabled`, `/status` returned `ebpf=no_collector`, `recording=false`
-  with zero drops. **[VERIFIED]** for the daemon status path. The UI states
-  still need a manual check against that socket (no vitest in the UI).
+  with zero drops. **[VERIFIED]** for the daemon status path. A visual UI
+  check was attempted in the agent session but the Tauri WebKit window never
+  became accessible (GL init failure; no AT-SPI window), and onboarding opens
+  a pkexec password prompt that must not be automated. The three UI states
+  derive from `daemonStore.collectorMissing` and are svelte-check clean, but
+  the rendered check is **owner-run pending** — run the UI against the
+  degraded socket and confirm chip = Degraded, Dashboard live-speed note, and
+  Live empty state (no vitest in the UI yet).
 - Re-run of `verify_host.sh` had no Motrix download active (idle ~2 kbps), so
   no motrix row appeared; the Motrix rollup shown was from a previous run.
   Scripts now clear the DB so results reflect the current run.
