@@ -203,20 +203,114 @@ fn main() -> Result<()> {
     }
 
     println!(
-        "\nCollecting for {}s at {}s intervals. Start your workload now (Motrix/curl/iperf3).",
+        "\nCollecting for {}s at {}s intervals.",
         args.duration, args.interval
     );
-    println!(
-        "PID {} — sample CPU/RSS with `pidstat -p {} 1` in another terminal.",
-        std::process::id(),
-        std::process::id()
-    );
 
-    collect(&mut events, &args).context("collection loop")?;
+    // Built-in workload: spawn curl so redirects/TLS are handled for us; no
+    // second terminal or external setup. curl's size_download is the known
+    // truth for the accuracy check.
+    let workload_bytes = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let workload_handle = if args.workload {
+        println!(
+            "Built-in workload: https://{}{} (no second terminal needed)",
+            args.workload_host, args.workload_path
+        );
+        let bytes = std::sync::Arc::clone(&workload_bytes);
+        let host = args.workload_host.clone();
+        let path = args.workload_path.clone();
+        let duration = args.duration;
+        Some(std::thread::spawn(move || {
+            curl_download(&host, &path, duration, &bytes);
+        }))
+    } else {
+        println!("Start your workload now (Motrix/curl/iperf3) in another terminal.");
+        println!(
+            "PID {} — CPU/RSS measured by this process; no pidstat needed.",
+            std::process::id()
+        );
+        None
+    };
+
+    collect(&mut events, &args, &workload_bytes).context("collection loop")?;
+    if let Some(handle) = workload_handle {
+        let _ = handle.join();
+    }
     Ok(())
 }
 
-fn collect(events: &mut RingBuf<aya::maps::MapData>, args: &Args) -> Result<()> {
+/// Spawn curl to download the target into /dev/null and read its exact
+/// byte count from `-w %{size_download}`. curl handles the HTTPS redirect
+/// that a raw std TCP GET cannot. The URL host may include a `:port`, which
+/// we drop for the default https URL (curl defaults to 443).
+fn curl_download(host: &str, path: &str, duration: u64, total: &std::sync::atomic::AtomicU64) {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::sync::atomic::Ordering;
+
+    let host_only = host.split(':').next().unwrap_or(host);
+    let url = format!("https://{host_only}{path}");
+    let output = Command::new("curl")
+        .args([
+            "-sSL",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{size_download}",
+            "--max-time",
+            &duration.to_string(),
+            &url,
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
+
+    let mut child = match output {
+        Ok(child) => child,
+        Err(error) => {
+            eprintln!("workload: failed to spawn curl: {error}");
+            return;
+        }
+    };
+    let mut out = String::new();
+    if let Some(mut stdout) = child.stdout.take() {
+        let _ = stdout.read_to_string(&mut out);
+    }
+    let counted = out.trim().parse::<u64>().unwrap_or(0);
+    total.store(counted, Ordering::Relaxed);
+    println!(
+        "workload: downloaded {counted} bytes ({:.1} MiB)",
+        counted as f64 / 1_048_576.0
+    );
+}
+
+/// Snapshot this process's CPU ticks and RSS pages from /proc (no sysstat).
+struct ProcSample {
+    ticks: u64,
+    rss_pages: u64,
+}
+
+fn sample_proc() -> Option<ProcSample> {
+    let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
+    // comm can contain spaces/parens; fields after the final ')' start at
+    // state (field 3). utime/stime are fields 14/15 → indexes 11/12.
+    let rest = stat.rsplit_once(')')?.1;
+    let fields: Vec<&str> = rest.split_whitespace().collect();
+    let utime: u64 = fields.get(11)?.parse().ok()?;
+    let stime: u64 = fields.get(12)?.parse().ok()?;
+    let statm = std::fs::read_to_string("/proc/self/statm").ok()?;
+    let rss_pages: u64 = statm.split_whitespace().nth(1)?.parse().ok()?;
+    Some(ProcSample {
+        ticks: utime + stime,
+        rss_pages,
+    })
+}
+
+fn collect(
+    events: &mut RingBuf<aya::maps::MapData>,
+    args: &Args,
+    workload_bytes: &std::sync::atomic::AtomicU64,
+) -> Result<()> {
     let started = Instant::now();
     let mut next_print = started + Duration::from_secs(args.interval);
     let mut apps: BTreeMap<u64, AppAgg> = BTreeMap::new();
@@ -230,6 +324,13 @@ fn collect(events: &mut RingBuf<aya::maps::MapData>, args: &Args) -> Result<()> 
     // compares an interval's attributed bytes with the same interval's
     // interface bytes (the previous code compared cumulative vs interval).
     let (mut interval_rx, mut interval_tx) = (0u64, 0u64);
+    let mut proc_prev = sample_proc();
+    let mut cpu_pct = 0.0f64;
+    let mut max_rss_kib = 0u64;
+    // Linux x86_64: USER_HZ is 100 and page size 4096. Only a rough overhead
+    // estimate for the spike (Q3), not product code.
+    const USER_HZ: f64 = 100.0;
+    const PAGE_KIB: u64 = 4;
     let pct = |part: u64, whole: u64| -> f64 {
         if whole == 0 {
             0.0
@@ -273,9 +374,18 @@ fn collect(events: &mut RingBuf<aya::maps::MapData>, args: &Args) -> Result<()> 
             prev_rx = rx;
             prev_tx = tx;
             let identified = apps.values().filter(|a| a.identity_hits > 0).count();
+            // Self CPU/RSS: no pidstat or sysstat needed (Q3).
+            let now_proc = sample_proc();
+            if let (Some(prev), Some(now)) = (proc_prev.as_ref(), now_proc.as_ref()) {
+                let delta_ticks = now.ticks.saturating_sub(prev.ticks);
+                cpu_pct = (delta_ticks as f64 / USER_HZ) / started.elapsed().as_secs_f64().max(1.0)
+                    * 100.0;
+                max_rss_kib = max_rss_kib.max(now.rss_pages * PAGE_KIB);
+            }
+            proc_prev = now_proc;
             println!(
                 "[+{:>3}s] rx: app {} / iface {} ({:5.1}%)  tx: app {} / iface {} ({:5.1}%)  \
-                 cookies {} identified {}/{}  ring events {} (drained {} this tick, bad {})",
+                 cookies {} identified {}/{}  ring {} (drained {} bad {})  cpu {:4.1}% rss {} KiB",
                 started.elapsed().as_secs(),
                 human(interval_rx),
                 human(iface_rx),
@@ -289,6 +399,8 @@ fn collect(events: &mut RingBuf<aya::maps::MapData>, args: &Args) -> Result<()> 
                 total_events,
                 drained,
                 ignored_events,
+                cpu_pct,
+                max_rss_kib,
             );
             interval_rx = 0;
             interval_tx = 0;
@@ -322,16 +434,29 @@ fn collect(events: &mut RingBuf<aya::maps::MapData>, args: &Args) -> Result<()> 
         pct(app_rx, iface_delta_rx),
         pct(app_tx, iface_delta_tx)
     );
+    // Built-in workload's own byte count is the known truth for Q1.
+    let workload_total = workload_bytes.load(std::sync::atomic::Ordering::Relaxed);
+    if workload_total > 0 {
+        println!(
+            "built-in workload true bytes = {workload_total}; attributed rx = {app_rx} \
+             ({:5.1}% of true) — Q1 accuracy input",
+            pct(app_rx, workload_total)
+        );
+    }
     // An idle run cannot answer the accuracy questions; say so loudly.
-    if iface_delta_rx == 0 && iface_delta_tx == 0 {
+    if iface_delta_rx == 0 && iface_delta_tx == 0 && workload_total == 0 {
         println!(
             "WARNING: no interface traffic was seen — was a workload (curl/Motrix/iperf3) \
-             running? This run cannot answer Q1/Q2. Re-run with traffic."
+             running? This run cannot answer Q1/Q2. Re-run with --workload or start traffic."
         );
     }
     println!(
+        "Q3 self-measured: peak CPU {:4.1}%, max RSS {} KiB (budget: <=3% CPU, <=150 MB RSS).",
+        cpu_pct, max_rss_kib
+    );
+    println!(
         "Go/no-go inputs: attributed-vs-true <= 5% (curl/iperf3), attributed+unattributed vs \
-         interface <= 2%, CPU <= 3%, RSS <= 150 MB. Measure CPU/RSS externally with pidstat."
+         interface <= 2%, CPU <= 3%, RSS <= 150 MB."
     );
     Ok(())
 }

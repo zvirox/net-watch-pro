@@ -101,6 +101,21 @@ bpffs mount.
 > identity = 0 until a `sock_ops`-based identity probe is implemented).
 > See `docs/spike-ebpf-report.md` "First owner run".
 
+> **VALID RESULT (fourth owner run, 2026-11-20):** with a real
+> `curl` workload and the accept-verdict fix, cgroup_skb attributed **95.9%
+> of download bytes** vs interface counters (4.1% gap, inside the 5% go
+> threshold); the 1 Hz ratio stayed at 94.3–95.7% during steady download;
+> CPU/RSS were 0.0% / 4,116 KiB. Identity was 0/91 (kprobe rejected), so
+> per-app rows need a `sock_ops` identity probe in Phase C. Full analysis in
+> `docs/spike-ebpf-report.md` §Fourth owner run. **Byte accounting: GO;
+> identity: open.**
+
+> The runner now also has `--workload`: it spawns curl to download
+> `https://proof.ovh.net/files/100Mb.dat` for the collection window and
+> reports curl's exact byte count as the accuracy truth. It self-samples
+> CPU/RSS from `/proc`, so you need only **one terminal**:
+> `sudo ./target/debug/netwatch-spike-userspace --workload --duration 180`.
+
 > **CRITICAL (third owner run, 2026-11-20):** the first eBPF build returned
 > `0` from the cgroup_skb programs, which makes the kernel **drop every
 > packet** — while attached, all other downloads and web access stop. Fixed:
