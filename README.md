@@ -5,7 +5,7 @@
 <h1 align="center">Net Watch Pro</h1>
 
 <p align="center">
-  <strong>A local-first Linux network-traffic monitor and per-app data-usage tracker, built with Rust, Tauri 2, Svelte 5, and Aya eBPF.</strong>
+  <strong>Local-first Linux network monitoring and per-app data usage. No cloud, no telemetry, no outbound connections.</strong>
 </p>
 
 <p align="center">
@@ -18,70 +18,58 @@
   <a href="https://github.com/zvirox/net-watch-pro/releases">Releases</a> ·
   <a href="PLAN.md">Project plan</a> ·
   <a href="CHECKLIST.md">Live progress checklist</a> ·
-  <a href="FEATURES.md">Feature build order</a> ·
-  <a href="#development-setup">Development</a> ·
-  <a href="#contributing">Contributing</a>
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#faq">FAQ</a> ·
+  <a href="#troubleshooting">Troubleshooting</a>
 </p>
 
 ## Project status
 
-Net Watch Pro is **pre-alpha**. The repository currently contains the complete
-specification set (see [Project plan](PLAN.md) and the docs listed there) plus
-the Phase 0 foundation: a six-crate Cargo workspace, the Tauri 2 desktop
-shell, the UI workspace with the vendored design-system primitives, and CI.
-**No traffic monitoring exists yet** — the daemon observes nothing and the UI
-shows no data. Phase tracking, with per-task verification evidence, lives in
-the [progress checklist](CHECKLIST.md).
+Net Watch Pro is a **public alpha**. The latest tag is `v0.8.10-alpha.8`
+(2026-11-19); see the [changelog](CHANGELOG.md) for every release.
 
-**Current work (2026-11-15):** the planning docs are being revised per
-`PLAN-FIX-INSTRUCTIONS.md` findings F-01–F-11 (eBPF spike inserted as Phase S,
-Unix-socket + peer-credential transport replacing loopback+token, endpoint-day
-aggregates for long-term history, interface-counter headline totals, and
-certainty tagging of unmeasured kernel claims). Owner decisions D1–D7 are
-recorded in `docs/decisions.md`. No product code is being written during this
-fix effort except inside `spikes/`.
+Monitoring works end to end:
 
-The [changelog](CHANGELOG.md) records what each tagged release contains. The
-first tagged release, `v0.0.1-alpha.1`, is the Phase 0 scaffold: it compiles,
-passes fmt/clippy/check, and ships no product features.
+- A root systemd daemon (`netwatchd`) samples kernel interface counters and,
+  where the kernel permits it, attaches an **Aya eBPF** collector for per-socket
+  byte accounting and per-app attribution. If eBPF is unavailable the daemon
+  stays up in an honest **degraded** state — PC-level speeds still work, and the
+  UI says exactly which per-app data is missing.
+- An unprivileged Tauri 2 + Svelte 5 UI talks **only** to a localhost Unix
+  socket with peer-credential UID authorization. There is no bearer token, no
+  cloud, no analytics, and no outbound connection by contract.
+- SQLite stores connections, rollups, settings, and diagnostics locally.
+  Free tier: live monitoring, per-app usage, 90-day history. Pro: an offline
+  license key unlocks advanced filters and CSV/JSON export.
+
+Phases 0–8 (foundation, eBPF spike, doc fixes, walking skeleton, live, history,
+dashboard, apps, freemium, system, and installable packaging) are complete.
+**Phase 9 — Diagnostics & Accessibility** is in progress. **Phase L — Live
+Throughput** landed its live PC speed (A), eBPF spike (B), and per-app collector
+(C) slices; range presets (D) are pending. Per-task evidence lives in the
+[progress checklist](CHECKLIST.md) and the [live-throughput plan](docs/LIVE-THROUGHPUT-PLAN.md).
+
+Firewall features are **out of scope until after v1.0** (PRD §12). This is a
+monitor-first product promise, not a roadmap shortcut.
 
 ## What works in the current checkout
 
-- The workspace builds and passes the local gate: `cargo fmt --check`,
-  `cargo clippy --workspace --all-targets -- -D warnings`, and
-  `cargo test --workspace` are green.
-- Five daemon-side crate skeletons (`netwatch-common`, `netwatch-core`,
-  `netwatchd`, `netwatch-api`, `xtask`) compile with zero external
-  dependencies and the workspace-wide lint set (`deny(unsafe_code)`,
-  `clippy::pedantic`, no `unwrap`/`expect` outside startup).
-- The Tauri 2 shell (`app/src-tauri`) compiles against system WebKit2GTK with
-  a least-privilege capability (`core:default`) and a strict CSP. It opens a
-  window showing a smoke UI; no daemon link yet.
-- The UI workspace (`app/`) runs Svelte 5 (runes-only), strict TypeScript,
-  ESLint flat config, and Prettier, with `npm run check` / `npm run lint`.
-- The DESIGN.md token system is implemented as CSS custom properties
-  (`app/src/lib/theme/tokens.css`): light and dark themes, chart palette,
-  type scale, spacing, radius, shadows, motion, with self-hosted Inter
-  Variable and JetBrains Mono — no font CDN fetches.
-- Vendored shadcn-svelte-style primitives (`button`, `input`, `table`) styled
-  strictly from those tokens; Tailwind is intentionally not a dependency.
-- CI (`.github/workflows/ci.yml`) runs the Rust and UI gates on every push
-  and pull request; the doc mirrors in `docs/` are the drift checks for
-  `API.md`, `DATABASE.md`, and the environment-variable list.
-
-## Known limitations and work in progress
-
-- **No monitoring yet.** The eBPF collector, attribution, accounting, SQLite
-  persistence, and the localhost API arrive in Phases 1–3 (see
-  [PLAN.md](PLAN.md)). The UI's only screen is a Phase 0 smoke stub.
-- No packages exist. Arch, deb, and rpm packaging is planned for Phase 8;
-  until then the app runs only from a development checkout.
-- No license/Pro functionality, no exports, no history — freemium gates land
-  after the core monitoring slice (see [FEATURES.md](FEATURES.md)).
-- The reference teardown in `REAPM.md` documents a *different* product and is
-  background material only.
-- Firewall features are **out of scope until after V1.0** (PRD §12); the
-  monitor-first boundary is a product promise, not a roadmap shortcut.
+- **Live PC speed** at 1 Hz from interface counters, with a 60-second sparkline
+  and a selectable Mbps / MB/s unit.
+- **Per-app live speed** from eBPF cgroup/socket attribution when a collector
+  is attached, with low-confidence and unattributed rows shown honestly.
+- **Live connections**, usage history, dashboards, per-app detail, budgets,
+  retention, settings, offline Pro licensing, and export.
+- **Signed packages**: `.deb`, `.rpm`, and an AUR `-git` recipe, built and GPG-
+  signed in CI on release tags.
+- **Design system**: DESIGN.md tokens implemented as CSS custom properties in
+  `app/src/lib/theme/tokens.css`, with self-hosted Inter Variable and JetBrains
+  Mono — no font CDN fetch. Light/dark themes, reduced-motion support, and
+  keyboard navigation follow DESIGN.md §9.
+- **Gates**: `cargo fmt --check`, `cargo clippy --workspace --all-targets --
+  -D warnings`, `cargo test --workspace`, and in `app/`: `npm run check`,
+  `npm run lint`, `npm run build`. CI runs these on every push and PR.
 
 ## Architecture
 
@@ -90,7 +78,7 @@ flowchart LR
   UI["Svelte 5 UI (unprivileged)"]
   API["netwatch-api - Unix socket, peer credentials"]
   Core["netwatch-core - accounting, attribution, retention"]
-  EBPF["Aya eBPF - observe only"]
+  EBPF["Aya eBPF - observe only (optional)"]
   DB[("SQLite - connections, rollups, events")]
 
   UI -->|WS and REST over Unix socket| API
@@ -100,30 +88,67 @@ flowchart LR
   DB --> API
 ~~~
 
-Two processes, one boundary: a root systemd daemon (`netwatchd`) observes
-traffic with eBPF and writes local SQLite; the unprivileged Tauri UI talks
-**only** to the peer-credential-authorized local API on a Unix domain socket.
-There is no bearer token, no cloud, no telemetry, and no outbound connection —
-by contract, not by accident ([AUTH_SECURITY.md](AUTH_SECURITY.md)). Details in
-[ARCHITECTURE.md](ARCHITECTURE.md).
+Two processes, one boundary: the root daemon observes traffic and writes local
+SQLite; the unprivileged UI talks **only** to the peer-credential-authorized
+local API. Details in [ARCHITECTURE.md](ARCHITECTURE.md) and
+[AUTH_SECURITY.md](AUTH_SECURITY.md).
 
-## Install and try it
+## Install
 
-**There are no installable packages yet.** Pre-release builds will appear on
-the [releases page](https://github.com/zvirox/net-watch-pro/releases) once
-packaging lands (Phase 8, per the [plan](PLAN.md)). Do not install anything
-claiming to be Net Watch Pro before then.
+### From GitHub Releases (recommended)
+
+Download the latest signed `.deb` or `.rpm` from the
+[releases page](https://github.com/zvirox/net-watch-pro/releases). Each release
+publishes `SHA256SUMS` and detached GPG signatures for every artifact.
+
+~~~bash
+# Debian / Ubuntu
+sudo apt install ./net-watch-pro-*.deb
+
+# Fedora / RHEL
+sudo dnf install ./net-watch-pro-*.rpm
+~~~
+
+Package installation creates the `netwatch` group, state directory, and socket
+GID drop-in, and leaves the daemon unit **disabled**. The first-run onboarding
+in the app asks for one root authorization (via `pkexec`) to register your UID
+in `/etc/netwatch-pro/allowed-uids` and enable the unit. No background
+privilege escalation happens without that prompt.
+
+### Arch (AUR)
+
+The `-git` package builds from source:
+
+~~~bash
+paru -S net-watch-pro-git
+# or: yay -S net-watch-pro-git
+~~~
+
+### From source
+
+See [Development setup](#development-setup), then build release binaries with
+`cargo build --release` and the UI with `cd app && npm run build`. eBPF builds
+additionally require `cargo xtask bpf` (nightly Rust + `bpf-linker`) and the
+resulting object at `NETWATCH_EBPF_OBJECT`; without it the daemon degrades
+gracefully instead of crashing.
+
+### Uninstall
+
+Package removal deletes local data by default. To keep it, create
+`/etc/netwatch-pro/keep-data` before removing the package. Removal also drops
+the unit override, the allowed-UID list, and the config directory.
 
 ## Development setup
 
 ### Requirements
 
-- Linux with a current Rust toolchain (MSRV 1.99.1, pinned in
-  `rust-toolchain.toml`) and Node.js 20+.
-- Tauri 2 development dependencies: `webkit2gtk-4.1`, `gtk4`, and friends —
-  see [CONTRIBUTING.md](CONTRIBUTING.md) for per-distro package lists.
-- Root access is **not** needed for development; the daemon stub runs
-  unprivileged.
+- Linux, Rust **1.99.1** (pinned in `rust-toolchain.toml`), Node.js 20+.
+- Tauri 2 system dependencies: WebKit2GTK 4.1, GTK 4, `libayatana-appindicator`,
+  and the usual build tools. See your distro's Tauri v2 guide; a desktop
+  session with D-Bus is required for the UI.
+- Root access is **not** needed for the UI gate. eBPF attach and the pkexec
+  onboarding flow need root and are checked manually per
+  [TESTING.md](TESTING.md).
 
 ### Build and verify
 
@@ -139,42 +164,107 @@ cargo test --workspace
 # UI gate
 cd app
 npm install
-npm run check    # svelte-check (strict TS)
+npm run check
 npm run lint
+npm run build
 ~~~
 
-The CI workflow runs exactly these gates. Behaviour that CI cannot verify
-(eBPF attach, root-privileged flows, packaged installs) is re-checked
-manually per [TESTING.md](TESTING.md) before each release.
+For a live dev UI, start `npm run dev` in `app/` before launching the debug
+Tauri binary — debug builds load the Vite dev URL from `tauri.conf.json`.
 
 ### Documentation-first rule
 
 The specs are the contract, in priority order: `PRD.md` → `DESIGN.md` →
 `ARCHITECTURE.md` → `DATABASE.md` → `API.md`. Code that drifts from them is
 wrong. [AGENTS.md](AGENTS.md) is the binding rulebook for human and AI
-contributors alike.
+contributors. Configuration variables are listed in
+[docs/env-vars.md](docs/env-vars.md).
+
+## Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `NETWATCH_DATA_DIR` | `/var/lib/netwatch-pro` | Database and state directory |
+| `NETWATCH_API_SOCKET` | `/run/netwatch-pro/api.sock` | Unix socket path |
+| `NETWATCH_API_GID` | `SUDO_GID` or root GID | Group allowed to connect (socket is `0660`) |
+| `NETWATCH_RETENTION_DAYS` | `90` | Default retention (Pro can exceed) |
+| `NETWATCH_DISABLE_EBPF` | unset | Run with no collector (degraded state) |
+| `NETWATCH_EBPF_OBJECT` | `/usr/lib/netwatch-pro/netwatch_ebpf.o` | eBPF object path |
+| `NETWATCH_LOG_LEVEL` | `info` | `error` / `warn` / `info` / `debug` / `trace` |
+
+The full closed list is in [docs/env-vars.md](docs/env-vars.md).
+
+## FAQ
+
+**Does Net Watch Pro send my traffic anywhere?** No. There is no cloud,
+telemetry, analytics, update ping, or CDN font fetch. Data stays in local
+SQLite. The UI's own Live view is designed to make the zero-outbound promise
+checkable.
+
+**Why does the status chip say "Degraded"?** The daemon is monitoring, but a
+per-app eBPF collector is not feeding data. PC-level speeds still work. Common
+causes: missing eBPF object, a kernel that denies BPF, or `NETWATCH_DISABLE_EBPF`
+being set.
+
+**What is "Unattributed" traffic?** Interface-counter totals minus bytes the
+collector could attribute to apps — headers, ACKs, retransmits, and kernel/VPN
+traffic. It is shown explicitly rather than silently assigned to an app.
+
+**Is my history kept forever?** The free tier keeps 90 days. Pro extends
+retention with an offline license key; no account or online activation is
+required.
+
+**Can it block traffic?** Not yet. Firewall features are planned only after
+v1.0 (PRD §12). Net Watch Pro is monitor-only today.
+
+**Why do I need root once?** Only to register your UID and enable the daemon at
+onboarding. Day-to-day UI use is unprivileged and talks to the daemon over a
+peer-credential-checked Unix socket.
+
+## Troubleshooting
+
+**UI shows "Connection refused" or "Connecting…" in a debug build.** Debug
+Tauri binaries load the Vite dev URL. Start `npm run dev` in `app/`, or use a
+release package. If the daemon is linked, its `/status` reports
+`ws_clients: 1`.
+
+**"Authorization needed" appears.** Your UID is not in
+`/etc/netwatch-pro/allowed-uids`. Re-run onboarding, or have root add your
+numeric UID to that file. Socket access also requires membership of the group
+set by `NETWATCH_API_GID` (normally `netwatch`).
+
+**Chip is Degraded / per-app speeds missing.** Check the daemon log and
+`NETWATCH_EBPF_OBJECT`; build the object with `cargo xtask bpf` if absent. A
+locked-down kernel or missing `CAP_BPF`/`CAP_PERFMON` can also prevent attach —
+the daemon degrades rather than crashing.
+
+**Dashboard says "Stale" or stays empty.** Confirm the unit is enabled and
+running (`systemctl status netwatchd`) and that the daemon can see host
+interfaces under `/sys/class/net`. A network-namespace mismatch has caused
+empty dashboards before; the hardened unit is configured to avoid it.
+
+**Missing shared libraries when launching the UI.** Install the full Tauri 2
+system dependency set for your distribution (WebKit2GTK 4.1, GTK 4, app
+indicator). The packaged builds bundle the frontend but still need these
+system libraries.
+
+**Need to report a bug?** Include the release version, distribution, desktop
+session (X11/Wayland), and reproduction steps in the
+[issue tracker](https://github.com/zvirox/net-watch-pro/issues). For security
+issues, follow [SECURITY.md](SECURITY.md) — never open a public issue.
 
 ## Releases and feedback
 
 Release gates, tagging, and the alpha→beta→1.0 cadence are documented in
-[PLAN.md](PLAN.md); tagged changes live in the
-[changelog](CHANGELOG.md).
-
-Alpha feedback should include the release version, distribution, desktop
-session, and reproduction steps — report it through the
-[GitHub issue tracker](https://github.com/zvirox/net-watch-pro/issues). For
-security issues, follow the private disclosure process in
-[SECURITY.md](SECURITY.md); never open a public issue for those.
+[PLAN.md](PLAN.md); tagged changes live in the [changelog](CHANGELOG.md).
 
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a change. In short:
 plan first (name the governing doc sections), keep diffs small and scoped to
-one task, ship tests with the code ([TESTING.md](TESTING.md) §8 gate), sync
-the affected docs in the same change, and use Conventional Commits. New
+one task, ship tests with the code ([TESTING.md](TESTING.md) §8 gate), sync the
+affected docs in the same change, and use Conventional Commits. New
 dependencies require maintainer approval first.
-
-### Where help is most useful
 
 | Area | Examples | Difficulty |
 |---|---|---|
@@ -182,7 +272,7 @@ dependencies require maintainer approval first.
 | Documentation | Clarify setup, specs, and workflows | Easy |
 | UI polish | Missing states, a11y fixes, keyboard shortcuts | Easy to medium |
 | Test coverage | Accounting/attribution accuracy tests (`tests/accuracy/`) | Medium |
-| Packaging | Arch, deb, rpm pipelines and verification (Phase 8) | Medium |
+| Packaging | Arch, deb, rpm pipelines and verification | Medium |
 | eBPF / kernel | Aya attach targets, kernel-version quirks | Hard |
 
 ## License
