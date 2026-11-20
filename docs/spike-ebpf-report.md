@@ -206,6 +206,38 @@ in principle. **Still to verify:** that Motrix and its `aria2c` child land in
 the same cgroup (the specific Q5 grouping question) — needs a run with Motrix
 active. Kprobe identity remains `[REFUTED]`; sock_ops is the working path.
 
+### Seventh owner run — 2026-11-20 (safety gate verified; no byte data)
+
+Pre-flight (`sudo bpftool cgroup tree`) showed the root cgroup already has
+**`bpftune_conn_tuner` attached as `cgroup_sock_ops multi` (ID 144)**. The new
+safety check works:
+
+- The runner printed the full `bpftool cgroup tree` output before attaching.
+- It found the existing sock_ops program and printed
+  `existing sock_ops program found — refusing Single attach`.
+- `AllowMultiple` failed with EINVAL (code 22), and the runner **refused to
+  fall back to Single**, exiting with a clear message. It did **not** override
+  bpftune.
+
+→ **[VERIFIED: spike-ebpf-report §Seventh owner run]** the sock_ops safety
+gate prevents silent override of an existing program on the owner's host.
+Also VERIFIED from the environment block: cgroup2 detection now lists both
+`/sys/fs/cgroup` and `/run/bpftune/cgroupv2`; default interface resolves to
+`wlan0`; `lo` ifindex is 1 and is filtered; all four capabilities are
+effective.
+
+**No byte data was collected** — the run exited at the safety gate. This does
+not count as a Q1–Q4 measurement. Byte-accuracy runs on this host must use
+`--no-sock-ops` while bpftune owns the root cgroup's sock_ops hook. Whether
+sock_ops can attach non-intrusively to a *child* cgroup (so Motrix's session
+scope could be measured without touching bpftune) is **UNMEASURED**.
+
+Build note: the owner attempted `cargo build` as root and it failed —
+`rustup` is not on root's PATH (`which(rustup)=cannot find binary path`), so
+Aya fell back to the stable toolchain without `-Z build-std=core`. **Build as
+the normal user** (where nightly + rust-src are installed), then run with
+`sudo`. The binary used in this run was the previously built one.
+
 ### Spike code update — pending owner verification (2026-11-20)
 
 The owner reviewed this report and required four changes before further
