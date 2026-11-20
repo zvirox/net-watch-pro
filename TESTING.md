@@ -200,6 +200,21 @@
 | Units | toggle `speed_unit` | Mbps ↔ MB/s without restart |
 | Zero outbound | Live/Dashboard open, socket capture | no outbound connection from the app |
 
+### F12 — Range presets (Phase D)
+
+| Scenario | Input | Expected |
+|---|---|---|
+| Preset changes all three | select `7d` on Dashboard | headline totals, timeline and top apps all use the same `7d` window |
+| Local midnight | timezone `Asia/Kolkata`, cycle day 1, `range=24h` | "today" resets at 00:00 +05:30, not 05:30 UTC |
+| Cycle day ≠ 1 | `billing_cycle_day=15`, `range=cycle` | totals start on the 15th; before it, on the previous month's 15th |
+| Short month | cycle day 31 in April | cycle ends on the 30th, no overflow |
+| Bucket per range | `1h`/`24h`, `7d`, `30d`/`cycle` | `15m`, `hour`, `day` buckets respectively; bar chart + sr-only table fallback |
+| Remembered preset | set `range_default=7d`, restart UI | Dashboard, Apps and App detail all open on `7d` |
+| Apps list | `range=30d`, sort by total | A1 rows show the 30-day `usage.range`, Unattributed row last |
+| App detail | `range=7d` on an app | A3 timeline and TODAY/MONTH headline use the 7-day window |
+| Cycle card | cycle day and budget set | bytes used, days left and budget level match the cycle setting |
+| Invalid range | `?range=13h` | 400 `QUERY_INVALID` naming `range` |
+
 ---
 
 ## 5. Edge & Negative Test Matrix (cross-feature)

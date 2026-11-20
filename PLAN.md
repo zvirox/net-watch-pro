@@ -318,7 +318,7 @@
 | L-OQ4 | Wi-Fi signal/link from local sysfs on U3 | `netwatch-api/src/interfaces_usage.rs`, Dashboard, TS types | injectable-root tests; "—" when missing | L-A1 |
 | L-B1 | eBPF spike in Aya, Motrix workloads | `spikes/ebpf-aya/`, `docs/spike-ebpf-report.md` | scaffold builds + env diagnostics verified 2026-11-19; owner-run with real root still pending; `[VERIFIED]`/`[REFUTED]` claims | L-A |
 | L-C1–C9 | Collector, identity, display names, `live.apps`, per-app speeds, sum check | `netwatch-ebpf/`, daemon, Apps/Live screens | accepted spike report | L-B1 |
-| L-D1–D5 | Range presets 1 h/24 h/7 d/30 d/cycle | usage APIs + Dashboard | timezone and cycle tests | L-A1 |
+| L-D1–D5 | Range presets 1 h/24 h/7 d/30 d/cycle, remembered via `range_default`; adds the Apps list screen and a forward-only settings migration (owner approved 2026-11-20) | usage/apps APIs, Dashboard, new `screens/apps/`, `stores/range.svelte.ts`, migration 0006 | timezone and cycle tests (F12) | L-A1 |
 
 **DoD (Phase A):** live PC speed matches a known rate within ~10%, idle ~0, stale/no-collector states honest, zero outbound, unit + contract tests green. **Stop for owner approval before L-B/L-C.**
 

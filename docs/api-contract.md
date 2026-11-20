@@ -52,3 +52,12 @@ Rate limits: 600/min reads · 5/min export create · 10/min writes & downloads �
 - Settings key `speed_unit`: enum `mbps` (default) | `mbytes`; forward-only migration 0005.
 - `GET /usage/rate-history` → `{ "samples": [{ts, down_bps, up_bps}], "in_memory": true }`; 60 one-minute samples covering the last hour, lost on restart (owner L-OQ1).
 - U3 rows may carry optional `signal_dbm` / `link_mbps` from local sysfs (`wireless/link`, `speed`); `null` means unavailable — render "—" (owner L-OQ4).
+
+## Range presets (API.md §1.4, Phase D)
+
+- `?range=1h|24h|7d|30d|cycle` on U1 `/usage/summary`, U2 `/usage/timeline`, U3 `/usage/interfaces`, A1 `/apps`, and A3 `/apps/{id}/usage`. Omission falls back to the `range_default` setting (migration 0006, default `24h`); an explicit `since`/`until` overrides it where accepted. Invalid values → 400 `QUERY_INVALID`.
+- `1h` = rolling 60 min; `24h` = current local calendar day (local midnight → next midnight); `7d`/`30d` = that many local calendar days; `cycle` = `billing_period(now, timezone, billing_cycle_day)` from `calendar.rs`.
+- Automatic buckets: `15m` for `1h`/`24h`, `hour` for `7d`, `day` for `30d`/`cycle`. U2/A3 accept `granularity=15m|hour|day`; explicit `granularity`/`since`/`until` override the preset.
+- U1 additions: `range: { preset, start, end, totals: {total, attributed, unattributed} }` and `cycle: { start, end, days_left, used_bytes }`. `top_apps` is scoped to the selected range when `range` is present; `today`/`month` remain for legacy clients. U1 also returns `budgets` and `state` (`ok|collecting`).
+- A1 additions: `usage.range: {up, down}` and sort key `usage_range`. A2 detail keeps `usage.today`/`usage.month`; the A3 timeline honours `range`.
+- Settings key `range_default`: enum `1h|24h|7d|30d|cycle`, default `24h`, shared by Dashboard, Apps and App detail.

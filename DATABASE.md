@@ -1,9 +1,9 @@
 # Net Watch Pro — DATABASE.md (Database Design)
 
-**Version:** 1.3 · **Date:** 2026-11-20
+**Version:** 1.4 · **Date:** 2026-11-20
 **Source of truth:** `PRD.md` (retention, freemium, metered interfaces) · `ARCHITECTURE.md` §5.4 (table contract) · `REAPM.md` (reference history behavior) · `docs/decisions.md` (owner decisions D2a-D4a)
 
-**Version history:** 1.1 (2026-11-15): apply plan-fix findings — `usage_rollup_15m` base grain + `usage_endpoint_day` + `usage_interface_15m` tables (F-02/D2a, F-03/D3a, F-04/D4a); `timezone` + `billing_cycle_day` settings; `apps.app_key` + `identity_kind` (F-05/D5a); size estimate tagged [HYPOTHESIS]; access rules updated for endpoint-day retention tiering. 1.2 (2026-11-19): add `speed_unit` settings key and forward-only migration 0005 for live throughput (`docs/LIVE-THROUGHPUT-PLAN.md`). 1.3 (2026-11-20): Phase C writes per-app `usage_rollup_15m` rows live from eBPF cgroup-socket byte counters (app registry `app_key = cgroup:<id>`, `identity_kind = cgroup_app`); no schema change — same tables, new writer.
+**Version history:** 1.1 (2026-11-15): apply plan-fix findings — `usage_rollup_15m` base grain + `usage_endpoint_day` + `usage_interface_15m` tables (F-02/D2a, F-03/D3a, F-04/D4a); `timezone` + `billing_cycle_day` settings; `apps.app_key` + `identity_kind` (F-05/D5a); size estimate tagged [HYPOTHESIS]; access rules updated for endpoint-day retention tiering. 1.2 (2026-11-19): add `speed_unit` settings key and forward-only migration 0005 for live throughput (`docs/LIVE-THROUGHPUT-PLAN.md`). 1.3 (2026-11-20): Phase C writes per-app `usage_rollup_15m` rows live from eBPF cgroup-socket byte counters (app registry `app_key = cgroup:<id>`, `identity_kind = cgroup_app`); no schema change — same tables, new writer. 1.4 (2026-11-20): Phase D adds the `range_default` settings key via forward-only migration 0006 (`1h|24h|7d|30d|cycle`, default `24h`); no new tables.
 **Engine:** SQLite ≥ 3.40, **WAL mode**, `synchronous=NORMAL`, single file at `$NETWATCH_DATA_DIR/netwatch.db`
 
 > **Binding rules:** This file is the single source of truth for schema. DDL lives only in forward-only sqlx migrations (`crates/netwatchd/src/db/migrations/*.sql`) and must match this file exactly. Changes require a version bump here + a new migration — never edit an applied migration (ARCHITECTURE.md §8.2).
@@ -167,6 +167,7 @@ Daemon-side settings mirror (PRD §6.1 #8; UI edits via API `settings.set`).
 - `timezone`: IANA tz string, default system local; day/week/month boundaries computed at query time in this tz (D4a)
 - `billing_cycle_day`: int 1–31, default `1`; "this month" = current billing cycle at query time (D4a)
 - `speed_unit`: enum (`mbps|mbytes`), default `mbps`; display unit for the `net.rates` live-speed card. Rates are always stored and sent as integer bits per second; this key changes presentation only.
+- `range_default`: enum (`1h|24h|7d|30d|cycle`), default `24h`; the remembered usage range preset (Phase D). `24h` resolves to the current local calendar day; `cycle` uses `billing_cycle_day`. Shared by Dashboard, Apps and App detail through the UI; the API accepts an explicit `range` on U1/U2/U3/A1/A3 and only falls back to this setting when the parameter is omitted.
 
 No soft delete (settings keys are fixed enum; removal is a migration concern).
 
@@ -386,6 +387,7 @@ INSERT INTO settings (key, value, created_at, updated_at) VALUES
   ('timezone',         'local', strftime('%s','now'), strftime('%s','now')),
   ('billing_cycle_day','1',   strftime('%s','now'), strftime('%s','now'));
 -- speed_unit is added by forward-only migration 0005 (not in the 0001 seed)
+-- range_default is added by forward-only migration 0006 (Phase D; default '24h')
 
 -- license singleton (§2.7) — free tier until activated
 INSERT INTO license (id, tier, created_at, updated_at)
@@ -432,7 +434,8 @@ Forward-only, numbered sqlx migrations; each runs in one transaction (SQLite DDL
 | 0003 | `0003_rollups.sql` | `usage_rollup_15m`, `usage_endpoint_day`, `usage_interface_15m` (composite PKs, FKs + per-table indexes), `idx_connections_remote_host` |
 | 0004 | `0004_daemon_events.sql` | `daemon_events` + `idx_daemon_events_occurred` |
 | 0005 | `0005_speed_unit.sql` | insert `speed_unit` = `mbps` into `settings` (live throughput, Phase A) |
-| 0006+ | future | forward-only additive changes; destructive changes only via expand→migrate→contract with a documented release gap |
+| 0006 | `0006_range_default.sql` | insert `range_default` = `24h` into `settings` (Phase D) |
+| 0007+ | future | forward-only additive changes; destructive changes only via expand→migrate→contract with a documented release gap |
 
 Runtime rules (from ARCHITECTURE.md §5.4/§8.2): `PRAGMA foreign_keys=ON`, `journal_mode=WAL`, `synchronous=NORMAL` set on every connection open; migrations embedded in the binary; the daemon refuses to start on an unknown/newer schema (honest degraded state, not silent best-effort).
 

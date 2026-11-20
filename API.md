@@ -1,9 +1,9 @@
 # Net Watch Pro — API.md (Local API Reference)
 
-**Version:** 1.7 · **Date:** 2026-11-20
+**Version:** 1.8 · **Date:** 2026-11-20
 **Source of truth:** `PRD.md` (features, freemium gating) · `ARCHITECTURE.md` §5.3 (transport contract) · `DATABASE.md` (tables) · `docs/decisions.md` (owner decisions D1a–D5a)
 
-**Version history:** 1.3.1 (2026-11-17): reference the offline license key wire format in `AUTH_SECURITY.md` §2.4. 1.3.0 (2026-11-17): document the A2 icon resource endpoint and the `deleted_at` field on app details for soft-deleted history views. 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a). 1.4 (2026-11-19): add the `net.rates` 1 Hz stream, the `speed_unit` setting and the honest `no_collector` status value (`docs/LIVE-THROUGHPUT-PLAN.md` Phase A). 1.5 (2026-11-19): add the in-memory 1-minute rate history endpoint and optional Wi-Fi signal/link fields on U3 (owner decisions L-OQ1/L-OQ4). 1.6 (2026-11-20): finalize the `live.apps` channel contract for Phase C (cgroup-id key, confidence, unattributed remainder). 1.7 (2026-11-20): expand S2 `drops` with real eBPF STATS counters; `live.apps` remainder computed from the same raw per-tick total as `net.rates`.
+**Version history:** 1.3.1 (2026-11-17): reference the offline license key wire format in `AUTH_SECURITY.md` §2.4. 1.3.0 (2026-11-17): document the A2 icon resource endpoint and the `deleted_at` field on app details for soft-deleted history views. 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a). 1.4 (2026-11-19): add the `net.rates` 1 Hz stream, the `speed_unit` setting and the honest `no_collector` status value (`docs/LIVE-THROUGHPUT-PLAN.md` Phase A). 1.5 (2026-11-19): add the in-memory 1-minute rate history endpoint and optional Wi-Fi signal/link fields on U3 (owner decisions L-OQ1/L-OQ4). 1.6 (2026-11-20): finalize the `live.apps` channel contract for Phase C (cgroup-id key, confidence, unattributed remainder). 1.7 (2026-11-20): expand S2 `drops` with real eBPF STATS counters; `live.apps` remainder computed from the same raw per-tick total as `net.rates`. 1.8 (2026-11-20): Phase D — `range` preset on U1/U2/U3/A1/A3, `15m` granularity, additive `range`/`cycle` data on U1, range-aware A1 usage, and the `range_default` setting; also documents the previously undocumented `budgets`/`state` fields on U1.
 
 > **Binding:** every endpoint below maps to a PRD feature and a DATABASE.md table (§10 traceability matrix). Anything flagged as not doing so is explicitly justified there. Implementation of this file lives in `docs/api-contract.md` (ARCHITECTURE.md §4) and must not drift.
 
@@ -68,6 +68,7 @@ All responses are JSON (`application/json; charset=utf-8`) unless downloading ex
 - **Pagination:** keyset cursor for high-volume resources (`connections`, `events`): `?limit=&cursor=` — response envelope `{ "data": [...], "next_cursor": "…", "has_more": true }`. `limit` default **50**, max **500**; `next_cursor` is opaque, pass back verbatim; omit when `has_more=false`. Small resources (`apps`, `interfaces`, `settings`, `exports`) return plain arrays — they never paginate (bounded in practice).
 - **Filtering:** query params per endpoint (whitelist). Unknown or malformed params → `400 QUERY_INVALID` naming the offending key. Basic filters (app name/id, open-only) are free-tier; the *combined* advanced filter set (date range + remote host + port + protocol) is Pro-gated per PRD §6.1 #9 → `403 EXPORT_PRO_REQUIRED`.
 - **Sorting:** `?sort=<field>&order=asc|desc` (default `desc` where sensible). Only fields from the endpoint's whitelist; anything else → 400.
+- **Usage range preset:** U1/U2/U3/A1/A3 accept `?range=1h|24h|7d|30d|cycle` (Phase D). `1h` is a rolling 60 minutes; `24h` is the **current local calendar day** (local midnight → next midnight, so `Asia/Kolkata` resets at 00:00 +05:30, not 05:30 UTC); `7d`/`30d` span that many local calendar days; `cycle` uses the configured `billing_cycle_day`. Boundaries are computed at query time from the `timezone` and `billing_cycle_day` settings (`calendar.rs`, D4a). Omission falls back to the `range_default` setting. An explicit `since`/`until` pair on U2/A3/U3 overrides the preset. Invalid values → `400 QUERY_INVALID`.
 
 ### 1.5 Rate limits
 
@@ -183,11 +184,12 @@ Errors: 400 (empty/invalid filters), 401, 403 `EXPORT_PRO_REQUIRED`, 429, 500.
 | A3 | `GET /api/v1/apps/{id}/usage` | yes | §6.1 #4 per-app usage over time | `usage_rollup_15m`, `connections` (raw window) |
 | A4 | `GET /api/v1/apps/{id}/endpoints` | yes | §6.1 #4 endpoint summary | `connections` (aggregate) |
 
-**A1 `GET /apps`** — ranked list. Query: `?sort=usage_month|usage_today|last_seen_at&order=`, `?limit=` (max 200), `?include_deleted=true` (history joins after soft delete). Success 200:
+**A1 `GET /apps`** — ranked list. Query: `?sort=usage_month|usage_today|usage_range|last_seen_at&order=`, `?limit=` (max 200), `?include_deleted=true` (history joins after soft delete), `?range=` (Phase D; scopes the `usage.range` totals). Success 200:
 ```json
 [ { "id": 1, "name": "Firefox", "icon": "ic:1", "attribution_confidence": "exact",
     "first_seen_at": 1731567000, "last_seen_at": 1731570600,
-    "usage": { "today": {"up":240000,"down":1980000}, "month": {"up":52428800,"down":934000000} } } ]
+    "usage": { "today": {"up":240000,"down":1980000}, "month": {"up":52428800,"down":934000000},
+               "range": {"up":120000,"down":990000} } } ]
 ```
 Errors: 400, 401, 429, 500.
 
@@ -199,7 +201,7 @@ active). The A1 `icon` handle `ic:{id}` resolves to
 accepted from the request. Errors: 404 (not found, no icon, unsupported type,
 or unreadable icon — UI uses its fallback), 401, 429.
 
-**A3 `GET /apps/{id}/usage`** — series for the App-detail chart. Query: `?granularity=hour|day&since=&until=&limit=` (day default 90; hour default 168). Rows come from `usage_rollup_15m`; the raw window (< 7 days) is aggregated live from `connections`. Boundaries computed at query time in the configured timezone (`DATABASE.md §2.6`). Success 200:
+**A3 `GET /apps/{id}/usage`** — series for the App-detail chart. Query: `?granularity=15m|hour|day&since=&until=&limit=&range=` (day default 90; hour default 168; 15m default 4). `range` supplies `since`/`until` and the automatic bucket unless they are given explicitly (Phase D). Rows come from `usage_rollup_15m`; the raw window (< 7 days) is aggregated live from `connections`. Boundaries computed at query time in the configured timezone (`DATABASE.md §2.6`). Success 200:
 ```json
 { "granularity": "day", "data": [
     { "bucket_start": 1731504000, "up": 1048576, "down": 31457280, "connections": 412 } ] }
@@ -222,20 +224,26 @@ Errors: 400, 401, 404, 429.
 | U3 | `GET /api/v1/usage/interfaces` | yes | §6.1 #3 per-interface breakdown | `usage_interface_15m`, `interfaces` |
 | U4 | `GET /api/v1/usage/rate-history` | yes | §6.1 #11 last-hour live-rate view | in-memory ring (flagged §10) |
 
-**U1 `GET /usage/summary`** — totals + top-talker list. Query: `?top_limit=` (default 5, max 10). Success 200:
+**U1 `GET /usage/summary`** — totals + top-talker list. Query: `?top_limit=` (default 5, max 10), `?range=` (Phase D). Success 200:
 ```json
 { "today": {"total": 986432000, "attributed": 912345600, "unattributed": 74086400},
   "month": {"total": 9864320000, "attributed": 9123456000, "unattributed": 740864000},
-  "top_apps": [ {"id":1,"name":"Firefox","bytes_total":986432000} ] }
+  "range": { "preset": "24h", "start": 1731561600, "end": 1731648000,
+             "totals": {"total": 986432000, "attributed": 912345600, "unattributed": 74086400} },
+  "cycle": { "start": 1730419200, "end": 1733011200, "days_left": 8, "used_bytes": 9864320000 },
+  "top_apps": [ {"id":1,"name":"Firefox","bytes_total":986432000} ],
+  "budgets": { "total_daily": {"used_bytes":0,"limit_bytes":0,"level":"ok"} },
+  "state": "ok" }
 ```
+`today`/`month` keep their historical meaning (local day / billing cycle) for clients that omit `range`. With `range` set, `range.totals` and `top_apps` reflect the selected preset together; `cycle` always describes the current billing cycle for the D5 card.
 **`total`** comes from `usage_interface_15m` (interface kernel counters — ISP-billed bytes). **`attributed`** is the sum of per-app rollups; **`unattributed`** = total − attributed (headers, ACKs, retransmits, kernel-handled/VPN traffic — shown as the "Unattributed / system" row in DESIGN.md §8.3). Soft-deleted apps are excluded from `top_apps` so the ranking matches `GET /apps`.
 
 The additive `budgets` field reports D6a budget state (free tier): `total_daily` / `total_monthly` each carry `{used_bytes, limit_bytes, level}` with `level` in `ok|warning|breach`; `per_app_daily` / `per_app_monthly` carry the same plus `app_id` and `name` (top 10 by usage). A zero limit means disabled. When any interface is marked metered, `used_bytes` for total budgets counts only metered, non-excluded interfaces; otherwise the full total is used. The UI turns a level change into a desktop notification.
 Errors: 401, 429, 500, 503 (no data yet → 200 with zeroed totals + `"state":"collecting"`, DESIGN.md §8.3 empty state).
 
-**U2 `GET /usage/timeline`** — dashboard chart series. Query: `?granularity=hour|day&since=&until=&interface_id=`. Shape identical to A3 minus `app_id` (system-wide). Errors: 400, 401, 429, 500.
+**U2 `GET /usage/timeline`** — dashboard chart series. Query: `?granularity=15m|hour|day&since=&until=&interface_id=&range=` (Phase D). `range` picks the automatic bucket: `15m` for `1h` and `24h`, `hour` for `7d`, `day` for `30d` and `cycle`; an explicit `granularity` overrides it. Shape identical to A3 minus `app_id` (system-wide). Errors: 400, 401, 429, 500.
 
-**U3 `GET /usage/interfaces`** — per-interface totals for the dashboard card; excludes `is_excluded=1` interfaces. Query: `?since=&until=`. Success 200:
+**U3 `GET /usage/interfaces`** — per-interface totals for the dashboard card; excludes `is_excluded=1` interfaces. Query: `?since=&until=&range=` (Phase D; the preset supplies the window when `since`/`until` are omitted). Success 200:
 ```json
 [ { "id": 2, "name": "wlan0", "kind": "wifi", "is_metered": true,
     "bytes": {"up": 41943040, "down": 734003200},
@@ -286,6 +294,7 @@ Success 200: full updated row. Errors: 400 (`QUERY_INVALID` — no other fields 
   { "key": "theme_default", "value": "system", "type": "enum", "values": ["system","light","dark"] },
    { "key": "speed_unit", "value": "mbps", "type": "enum", "values": ["mbps","mbytes"] } ]
 ```
+`range_default` (`enum`, `1h|24h|7d|30d|cycle`, default `24h`) is the remembered usage range preset (Phase D). `24h` is the current local calendar day, not a rolling window; `cycle` uses `billing_cycle_day`. It is the fallback for U1/U2/U3/A1/A3 when `?range=` is omitted, and is shared across Dashboard, Apps and App detail.
 Budget keys (free tier, whole MB, `0` = off): `budget_total_daily_mb`, `budget_total_monthly_mb`, `budget_per_app_daily_mb`, `budget_per_app_monthly_mb` (`int`, 0–1,000,000) and `budget_warn_pct` (`int`, 50–100, default 80). They feed the additive `budgets` data on U1 (§2.5) and are metered-aware (D6a). `speed_unit` (`enum`, `mbps` default or `mbytes`) controls the live-rate display; changing it applies to the next `net.rates` frame without a restart. Note `max` vs `pro_max` — the server reports the tier ceiling; the pruner enforces it (DATABASE.md §6). Errors: 401, 429.
 
 **T2** — set one key. Request body: `{"value": 120}` (JSON-typed per `type`). Success 200: updated entry (T1 shape). Errors: 400 (wrong type / out of range / unknown key / **retention > 90 on free tier** → `403 EXPORT_PRO_REQUIRED`), 401, 429. Rejected writes never partially apply (single-row transaction).

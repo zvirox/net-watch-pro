@@ -23,7 +23,7 @@ snake_case · plural tables · `INTEGER` UTC epoch seconds (`*_at`) · `created_
 | `usage_rollup_15m` | composite PK `(app_id, bucket_start)` | 15-min base grain; FK RESTRICT; `interfaces_mask` denormalized (documented) |
 | `usage_endpoint_day` | composite PK `(app_id, bucket_start, remote_ip, remote_port, protocol)` | endpoint aggregates beyond raw window; cardinality cap N=50 (top N by bytes; rest → `other` row) |
 | `usage_interface_15m` | composite PK `(interface_id, bucket_start)` | interface counters for headline totals; `lo` excluded |
-| `settings` | PK `key` | value typed at application layer; incl. `timezone`, `billing_cycle_day` |
+| `settings` | PK `key` | value typed at application layer; incl. `timezone`, `billing_cycle_day`, `speed_unit`, `range_default` |
 | `license` | PK `id` with `CHECK (id = 1)` | `tier free/pro`; fingerprint only — raw key never stored |
 | `daemon_events` | PK `id`; immutexcept | ring: newest 5,000; no `updated_at` (immutable) |
 
@@ -33,4 +33,4 @@ snake_case · plural tables · `INTEGER` UTC epoch seconds (`*_at`) · `created_
 
 ## Migration order
 
-0001 init core (+seeds: settings defaults incl. `timezone`/`billing_cycle_day`, license singleton, `lo` interface) → 0002 apps+connections (+indexes; `apps.app_key` UK) → 0003 rollups (`usage_rollup_15m`, `usage_endpoint_day`, `usage_interface_15m` + indexes) → 0004 daemon_events → forward-only after. Unknown/newer schema → daemon refuses to start.
+0001 init core (+seeds: settings defaults incl. `timezone`/`billing_cycle_day`, license singleton, `lo` interface) → 0002 apps+connections (+indexes; `apps.app_key` UK) → 0003 rollups (`usage_rollup_15m`, `usage_endpoint_day`, `usage_interface_15m` + indexes) → 0004 daemon_events → 0005 `speed_unit` = `mbps` → 0006 `range_default` = `24h` → forward-only after. Unknown/newer schema → daemon refuses to start.

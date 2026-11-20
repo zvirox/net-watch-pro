@@ -1,9 +1,9 @@
 # Net Watch Pro — DESIGN.md (UI Design System)
 
-**Version:** 1.3 · **Date:** 2026-11-19
+**Version:** 1.4 · **Date:** 2026-11-20
 **Source of truth:** `PRD.md` (scope, screens, flows) · `REAPM.md` (reference teardown) · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a). 1.2 (2026-11-19): add the "Network now" live-rate card with 60-second sparkline, Apps live-speed columns, `speed_unit` selector, and stale/no-collector states (live throughput plan, Phase A). 1.3 (2026-11-19): interfaces card shows Wi-Fi signal/link from local sysfs with "—" for missing values; last-hour rate history is labelled in-memory.
+**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a). 1.2 (2026-11-19): add the "Network now" live-rate card with 60-second sparkline, Apps live-speed columns, `speed_unit` selector, and stale/no-collector states (live throughput plan, Phase A). 1.3 (2026-11-19): interfaces card shows Wi-Fi signal/link from local sysfs with "—" for missing values; last-hour rate history is labelled in-memory. 1.4 (2026-11-20): Phase D — range selector (§7.13), range-driven Dashboard totals and bar timeline plus billing-cycle card (§8.3), and the new Apps list screen (§8.10).
 **Stack context:** Tauri 2 shell · Svelte 5 · shadcn-svelte components · ECharts · localhost WS data
 
 > **STRICT RULES — every UI built later must follow this file.**
@@ -386,6 +386,8 @@ Centered in content area: Lucide icon 24px `text-disabled` in a 48px `surface-2`
 
 **Tabs (used in App detail, Settings sections):** underline style — 36px row, `label` text; inactive `text-secondary`, hover `text`, active `text` + 2px underline `primary`; focus ring on tab; `role="tablist"` full keyboard nav (§9.3).
 
+**Range selector (Phase D):** the same segmented pattern as §7.13 tabs, placed once above the Dashboard totals, timeline and top-apps so a single choice drives all three. Five presets: `1 h`, `24 h`, `7 d`, `30 d`, `Cycle`. `24 h` means the current **local calendar day** (local midnight → next midnight) so the Asia/Kolkata reset test is meaningful; `Cycle` uses `billing_cycle_day`. The chosen preset is persisted in the `range_default` setting and therefore shared by Dashboard, Apps, and App detail. A short caption beside the selector names the automatic bucket (`15 min`, `Hour`, `Day`) and the timezone label; never show raw UTC. Active state uses `primary-soft` fill + `primary` text + 600 weight, with `aria-pressed` on each button and a 100ms colour transition (§6.1). Keyboard: left/right arrows move between presets, `Home`/`End` jump to first/last (§9.3).
+
 ### 7.14 Progress / data-specific widgets
 
 - **Usage bar** (budgets, top-app lists): 8px track `radius-full` `surface-2`, fill `primary` (or `warning` > 80%, `error` > 95% — always paired with a text % in mono).
@@ -442,9 +444,12 @@ Failure state: card below button swaps to error-soft banner with reason + "View 
 ├─────────────────────────────────────────────┤
 │ NETWORK NOW  ↓ 10.0 Mbps  ↑ 1.0 Mbps  ▁▃▂▅  │  new live card + 60 s sparkline
 ├─────────────────────────────────────────────┤
-│ TODAY 12.4 GiB ▂sparkline  │ MONTH 231 GiB │  data-lg mono headline cards
+│ RANGE [1h][24h][7d][30d][Cycle]  15 min · UTC│  §7.13, one choice drives all below
 ├─────────────────────────────────────────────┤
-│ ┌ Usage timeline (ECharts) [Day|Hour] ────┐ │
+│ RANGE TOTAL 12.4 GiB │ ATTRIBUTED 11.1 GiB  │  range-driven headline cards
+│ UNATTRIBUTED 1.3 GiB │ CYCLE 8 d left · 61% │  D5 cycle card = used/days/budget
+├─────────────────────────────────────────────┤
+│ ┌ Usage timeline (ECharts bars) [bucket] ─┐ │
 │ │   download ▔▔▔ upload ▂▂▂ (series 1/2)  │ │
 │ └─────────────────────────────────────────┘ │
 │ ┌ Top apps (ECharts bars) ┐ ┌ Interfaces ┐  │
@@ -546,6 +551,23 @@ Diagnostics modal (lg):
  journal excerpt (mono, scrollable, last 40 lines)
  [■ Copy report] [■ Restart daemon] [Close]
 ```
+
+### 8.10 Apps list (Phase D)
+
+```
+┌ TOPBAR: Apps                 ◈ Monitoring ● ┐
+├─────────────────────────────────────────────┤
+│ RANGE [1h][24h][7d][30d][Cycle]  same pref │  §7.13 — shared with Dashboard/detail
+├─────────────────────────────────────────────┤
+│ [Search apps…]  SORT [Speed|Total|Name]     │  §7.2 input + §7.13 segmented
+├─────────────────────────────────────────────┤
+│ APP              LIVE ↓ / ↑      RANGE TOTAL│  §7.6 table, mono right-aligned
+│ ◉ Motrix         10.0/1.0 Mbps   4.2 GiB    │  low confidence → caption badge
+│ ◉ Firefox          0.4/0.1 Mbps  2.0 GiB    │  row click → #apps/{id}
+│ Unattributed / system          1.3 GiB      │  always last, status-soft tint
+└─────────────────────────────────────────────┘
+```
+Loading: skeleton rows at final height (§7.10). Empty: §7.11 — "No attributed apps yet". No collector: the table keeps the Unattributed row and shows an in-page banner explaining that live per-app speeds need a collector (L-C9); total column still works from rollups. Default sort is live speed, then range total. Columns follow §7.6: app left, numbers `font-mono` tabular + right-aligned, sticky header, compact breakpoint hides nothing critical (there is no PID column here).
 ---
 
 ## 9. Accessibility Rules

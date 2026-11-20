@@ -476,6 +476,14 @@ N/A for UI beyond About/onboarding captions; failure states live in F6's paths.
 
 **Acceptance:** known download matches within ~10% after 3 s warm-up; idle reads ~0 with no negative values; stale after 3 s without a frame; daemon restart recovers in ≤5 s; chip is not green with no collector; zero outbound traffic.
 
+### 10b. F11 Phase D — usage over time and the data cycle
+
+**Goal:** one remembered range preset (`1h`/`24h`/`7d`/`30d`/`cycle`) drives the Dashboard totals, timeline and top apps together, the per-app Apps list and detail, and a billing-cycle card with bytes used, days left and budget state. Full scope: `docs/LIVE-THROUGHPUT-PLAN.md` §7.
+
+**Data contracts:** `?range=` on U1/U2/U3/A1/A3; automatic `15m`/`hour`/`day` buckets; `range_default` setting (migration 0006); U1 `range`/`cycle` fields. No new stream channels.
+
+**Build order:** docs first (DESIGN.md 1.4 with §8.10 Apps wireframe, ARCHITECTURE.md 1.7, DATABASE.md 1.4, API.md 1.8 + api-contract) → range resolver + timezone/cycle tests in `calendar.rs` → range-aware endpoints → shared `range.svelte.ts` store → Dashboard selector/cards/bar chart/cycle card → new Apps screen and range-aware App detail → F12 tests.
+
 ---
 
 ## 11. Build Order & Confirmation Gates

@@ -1,9 +1,9 @@
 # Net Watch Pro — ARCHITECTURE.md (Technical Architecture)
 
-**Version:** 1.6 · **Date:** 2026-11-20
+**Version:** 1.7 · **Date:** 2026-11-20
 **Source of truth:** `PRD.md` (scope, contracts, non-goals) · `DESIGN.md` (UI system) · `REAPM.md` (reference teardown) · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.3 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential transport (F-06/D1a), cgroup-first app identity (F-05/D5a), interface-counter sampler + Unattributed row (F-03/D3a), 15-minute rollup grain + timezone/cycle (F-04/D4a), daily endpoint rollups (F-02/D2a), in-memory episode state + checkpoint cadence (F-09), VM-based kernel matrix not containers (F-08), separate netwatch-ebpf build (F-01/F-11), [HYPOTHESIS] tags on unmeasured kernel claims. 1.4 (2026-11-19): Phase A of `docs/LIVE-THROUGHPUT-PLAN.md` — 1 Hz rate engine and `net.rates` stream beside the existing 15 s history sampler, `speed_unit` setting, and honest `no_collector` status. 1.5 (2026-11-19): 60-sample in-memory rate history for the last-hour view (lost on restart, `in_memory:true`) and optional Wi-Fi signal/link fields on U3 from local sysfs (owner L-OQ1/L-OQ4). 1.6 (2026-11-20): Phase C eBPF collector — `NETWATCH_EBPF_OBJECT` runtime object path; attach reads per-socket bytes by cgroup id (`bpf_skb_cgroup_id`, spike-verified), not `current`.
+**Version history:** 1.3 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential transport (F-06/D1a), cgroup-first app identity (F-05/D5a), interface-counter sampler + Unattributed row (F-03/D3a), 15-minute rollup grain + timezone/cycle (F-04/D4a), daily endpoint rollups (F-02/D2a), in-memory episode state + checkpoint cadence (F-09), VM-based kernel matrix not containers (F-08), separate netwatch-ebpf build (F-01/F-11), [HYPOTHESIS] tags on unmeasured kernel claims. 1.4 (2026-11-19): Phase A of `docs/LIVE-THROUGHPUT-PLAN.md` — 1 Hz rate engine and `net.rates` stream beside the existing 15 s history sampler, `speed_unit` setting, and honest `no_collector` status. 1.5 (2026-11-19): 60-sample in-memory rate history for the last-hour view (lost on restart, `in_memory:true`) and optional Wi-Fi signal/link fields on U3 from local sysfs (owner L-OQ1/L-OQ4). 1.6 (2026-11-20): Phase C eBPF collector — `NETWATCH_EBPF_OBJECT` runtime object path; attach reads per-socket bytes by cgroup id (`bpf_skb_cgroup_id`, spike-verified), not `current`. 1.7 (2026-11-20): Phase D — new `screens/apps/` and `stores/apps.svelte.ts`, shared `stores/range.svelte.ts`, `range_default` setting, and `range` query parameter on the usage/apps APIs.
 **Rule:** This file defines structure and contracts only. **No application code is written as part of this document.**
 
 > **Strict rules:** Every implementation decision must trace to this file. Stack, folder layout, data flow, naming, and env vars below are binding. Deviations require updating this file first (version bump), like DESIGN.md §11.
@@ -99,12 +99,14 @@ net-watch-pro/
 │       ├── lib/
 │       │   ├── api/                 # Unix-socket client, typed endpoint wrappers, reconnect logic
 │       │   ├── stores/              # runes-based shared state (§7)
+│       │   │   ├── range.svelte.ts  # shared range preset + auto bucket (Phase D)
+│       │   │   └── apps.svelte.ts   # A1 ranking screen data (Phase D)
 │       │   ├── components/          # shadcn-svelte vendored + adapted per DESIGN.md §7
 │       │   │   ├── ui/              # primitives (button, input, table, toast, …)
 │       │   │   └── charts/          # ECharts wrappers (theme-registered)
 │       │   ├── theme/               # token CSS (DESIGN.md §3–6 generated vars)
 │       │   ├── screens/             # one folder per DESIGN.md §8 page
-│       │   │   ├── onboarding/ · dashboard/ · live/ · app-detail/
+│       │   │   ├── onboarding/ · dashboard/ · live/ · apps/ · app-detail/
 │       │   │   ├── history/ · settings/ · upgrade/ · diagnostics/
 │       │   └── utils/               # formatters (bytes/rates per DESIGN.md §4.3)
 │       └── tests/
