@@ -206,6 +206,31 @@ in principle. **Still to verify:** that Motrix and its `aria2c` child land in
 the same cgroup (the specific Q5 grouping question) — needs a run with Motrix
 active. Kprobe identity remains `[REFUTED]`; sock_ops is the working path.
 
+### Twelfth owner run — 2026-11-20 (60 s, leaf scope, NEW download after attach)
+
+A brand-new Motrix download was started after the spike attached. sock_ops
+attached (Single) and **fired 16 times** (`identity_hits = 16`), so the hook
+does run for new connections. But the captured identity was
+**pid 559, cgroup_id 1** — checked locally: PID 559 is
+`irq/160-rtw88_pci`, the WiFi driver interrupt thread, whose cgroup is `0::/`.
+All 18 cookies therefore satisfied the "cgroup_id=1 → UNIDENTIFIED" rule, and
+the final table correctly showed one UNIDENTIFIED row.
+
+→ **[VERIFIED: spike-ebpf-report §Twelfth owner run]** sock_ops fires for
+new connections, but `bpf_get_current_pid_tgid()` / `bpf_get_current_cgroup_id()`
+in `*_ESTABLISHED_CB` returned the softirq/IRQ thread rather than the socket
+owning process on this kernel. This **confirms the owner's [HYPOTHESIS]** from
+the original review: identity cannot be taken from "current" in packet or
+establishment context here. **eBPF per-app identity remains UNMEASURED** — no
+app name was captured. A process-context hook (e.g. a `cgroup_sock_addr`
+connect callback or a tracepoint/fentry keyed by socket pointer) is the next
+candidate, not yet implemented.
+
+Byte accounting in this run: rx 96.6% (3.4% error, PASS), tx 66.6% (33.4%
+error, same reproducible gap), loopback 194,798/194,798 B attributed vs
+208,942/208,942 B sysfs, CPU 0.0%, RSS 4,192 KiB, 474,012 events, 0 bad,
+clean detach. **[VERIFIED]** for these numbers.
+
 ### Eleventh owner run — 2026-11-20 (60 s, leaf-scope attach, sock_ops attached)
 
 Attached cgroup_skb + sock_ops to the Motrix leaf scope
