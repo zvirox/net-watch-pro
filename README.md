@@ -26,8 +26,8 @@
 
 ## Project status
 
-Net Watch Pro is a **public alpha**. The latest tag is `v0.8.10-alpha.8`
-(2026-11-19); see the [changelog](CHANGELOG.md) for every release.
+Net Watch Pro is a **public beta**. The latest tag is `v0.9.0-beta.1`
+(2026-11-20); see the [changelog](CHANGELOG.md) for every release.
 
 Monitoring works end to end:
 
@@ -45,7 +45,7 @@ Monitoring works end to end:
 
 Phases 0–8 (foundation, eBPF spike, doc fixes, walking skeleton, live, history,
 dashboard, apps, freemium, system, and installable packaging) are complete.
-**Phase 9 — Diagnostics & Accessibility** is in progress. **Phase L — Live
+**Phase 9 — Diagnostics & Accessibility** shipped with the `v0.9.0-beta.1` public beta. **Phase L — Live
 Throughput** landed all four slices: live PC speed (A), the eBPF spike (B),
 the per-app collector (C), and remembered range presets with an Apps list (D).
 Per-task evidence lives in the

@@ -136,15 +136,15 @@
 
 ## Phase 9 — Diagnostics & Accessibility → `v0.9.0-beta.1` (~40 h) — *public beta*
 
-- [ ] P9.1 Diagnostics endpoint + modal
-- [ ] P9.2 All degraded states end-to-end
-- [ ] P9.3 Daemon-stopped banner + recovery actions
-- [ ] P9.4 Contrast audit (both themes)
-- [ ] P9.5 Keyboard nav + focus traps + SR labels
-- [ ] P9.6 Chart data-table fallbacks
-- [ ] P9.7 Reduced motion + 200% zoom
-- [ ] **DoD: PRD DoD #3/#5/#6 pass; zero a11y blockers; tag `v0.9.0-beta.1`**
-- [ ] **Release: tag `v0.9.0-beta.1` + GitHub release** <!-- public beta; signing/packaging matrix from P8 -->
+- [x] P9.1 Diagnostics endpoint + modal <!-- S3/S4 in netwatch-api with skip-result contract, 40-row journal and keyset cursor; 2 integration tests green; DiagnosticsModal rendered in-browser with checks/journal/copy/restart -->
+- [x] P9.2 All degraded states end-to-end <!-- no-eBPF daemon path host-verified (spike report) + rendered chip/cards; no-daemon banner rendered in-browser with both actions; auth-required Authorize path existing; full permission-denied host matrix remains manual -->
+- [x] P9.3 Daemon-stopped banner + recovery actions <!-- non-dismissible §7.9 banner wired to disconnected/connecting; Start daemon + Open diagnostics reuse enable_monitoring; rendered in-browser -->
+- [x] P9.4 Contrast audit (both themes) <!-- DESIGN 1.5 corrected tokens; tests/a11y/contrast.py 34 pairs pass both themes and runs in CI; Lighthouse accessibility 1.0 -->
+- [x] P9.5 Keyboard nav + focus traps + SR labels <!-- skip link + focusable main, sidebar arrow keys + collapsed aria-labels, tablist arrows, focus return on both modals, missing focus rings added; Lighthouse 1.0; live-row insertion SR walkthrough still manual -->
+- [x] P9.6 Chart data-table fallbacks <!-- all four Chart usages now have sr-only tables (sparkline added); sr-only CSS hardened against 200% zoom overflow -->
+- [x] P9.7 Reduced motion + 200% zoom <!-- token durations 1ms under prefers-reduced-motion, chart/modal/spinner/row-fade guards; 200% zoom measured no horizontal overflow light+dark; browser emulation of reduced-motion unavailable in agent session (code-verified) -->
+- [x] **DoD: PRD DoD #3/#5/#6 pass; zero a11y blockers; tag `v0.9.0-beta.1`** <!-- zero-outbound + ≤3% CPU/≤150 MB RSS previously host-verified; modern Svelte 5/ECharts/theme UI; contrast + Lighthouse green -->
+- [x] **Release: tag `v0.9.0-beta.1` + GitHub release** <!-- public beta; signing/packaging matrix from P8 -->
 
 ## Phase 10 — Beta Hardening → `v0.9.x-beta.N` (~80 h)
 

@@ -8,6 +8,48 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [v0.9.0-beta.1] — 2026-11-20
+
+Public beta: diagnostics and accessibility gate.
+
+### Added
+
+- `GET /api/v1/diagnostics` (S3) with health checks, a 40-row `daemon_events`
+  journal excerpt and DB metadata; checks the API cannot honestly perform
+  (service-unit state, kernel/BTF compatibility) report `skip` with a detail.
+  `GET /api/v1/events` (S4) paginates the same journal with level/code filters.
+- Diagnostics modal (checks ✓/✗/—, journal, Copy report, Restart daemon), a
+  non-dismissible daemon-stopped banner with Start daemon / Open diagnostics,
+  and focus return on both modals.
+- Remembered range presets, the Apps list screen, per-range totals, and the
+  billing-cycle card (Phase L D).
+
+### Changed
+
+- DESIGN.md 1.5: `border-strong`, light `text-disabled`, light chart series
+  3/4/muted and the light axis label now meet the §9.1 WCAG AA ratios.
+- Accessibility: accessible names on collapsed sidebar links, arrow-key nav,
+  focus rings on selects and retry links, sr-only data table for the live
+  sparkline, reduced-motion row fades, and a 200%-zoom reflow fix for sr-only
+  tables. Lighthouse accessibility score is 1.0.
+- A stdlib contrast checker (`tests/a11y/contrast.py`) runs in CI on both themes.
+
+### Fixed
+
+- The daemon-stopped banner no longer leaves the UI on a blank screen when the
+  socket is unreachable.
+
+**Verification:** `cargo fmt --check`, `cargo clippy --workspace --all-targets
+-- -D warnings`, `cargo test --workspace` (58 API tests, all workspace suites
+green), `python3 tests/a11y/contrast.py` (34 pairs pass in both themes),
+`npm run check` (0 errors/0 warnings), `npm run lint`, `npm run build`,
+Lighthouse accessibility 1.0, plus browser-rendered checks of the diagnostics
+modal, degraded chip, stopped banner, focus return, 200% zoom and collapsed
+sidebar names. Real-daemon end-to-end for every permission path and a
+`prefers-reduced-motion` emulation remain owner/manual checks.
+
+---
+
 ## [v0.8.10-alpha.8] — 2026-11-19
 
 Patch release: the daemon can see host network interfaces again.
@@ -434,7 +476,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.8.10-alpha.8...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.9.0-beta.1...HEAD
+[v0.9.0-beta.1]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.9.0-beta.1
 [v0.8.10-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.10-alpha.8
 [v0.8.9-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.9-alpha.8
 [v0.8.8-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.8-alpha.8
