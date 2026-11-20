@@ -240,6 +240,40 @@ Motrix was the only bulk workload. The final table shows:
 - Loopback 202,371/202,959 B vs sysfs 203,271/203,271 B (~0.5%);
   CPU 0.0%, RSS 4,384 KiB; 431,500 events, 0 bad; clean detach. **[VERIFIED]**
 
+### Phase C product collector — real-host verification (2026-11-20)
+
+Ran `spikes/ebpf-aya/verify_host.sh` on the owner's CachyOS host with the
+**product** daemon (`target/debug/netwatchd` + `target/netwatch_ebpf.o`). Three
+earlier attempts found and fixed real loader bugs: (1) `take_map(CONFIG)` closed
+the map fd before program load → `fd not pointing to valid bpf_map`; (2)
+`AllowMultiple` attach fails EINVAL at the root cgroup → `Single` fallback
+(coexists with systemd's multi-attached firewall programs, never replaces
+them); (3) the `Ebpf` object was dropped on return from `start()`, detaching the
+programs while status still said "attached" → object held in the collector task.
+
+Final run evidence:
+- `/status`: `"ebpf":"attached"`, `"recording":true`. `bpftool cgroup tree`
+  lists our `ingress`/`egress` at `/sys/fs/cgroup`.
+- `live.apps` stream: 95 frames in 20 s, with a **`motrix`** row (`high`
+  confidence) at ~87–100 Mbps tracking the PC `net.rates` ~90–98 Mbps;
+  `Unattributed` remainder small and non-negative. **[VERIFIED:
+  spike-ebpf-report §Phase C product verification]** per-app live rates work
+  with the product collector on this host.
+- Collector diagnostics: `cgroup_entries=5–6`, BPF STATS
+  `[packets_seen, loopback, map_errors]` rising to `[578466, 1221, 0]` —
+  **map_errors = 0**, no dropped map inserts. **[VERIFIED]**
+- Rollups after the 60 s checkpoint: `Motrix | cgroup:227402 | 694,808,684 B
+  down | 16,981,508 B up`, plus small rows for systemd-resolved, OpenCode,
+  NetworkManager, avahi-daemon, and a root-cgroup `cgroup:1` row.
+  **[VERIFIED: spike-ebpf-report §Phase C product verification]** per-app bytes
+  persist into `usage_rollup_15m`.
+- Q5 in the product: the `motrix` row groups Motrix + aria2c bytes (same
+  cgroup id), matching the spike. **[VERIFIED]**
+
+**Still not verified on the product:** `drops` in `/status` is hardcoded 0;
+sum-check timing across two independent 1 Hz streams; CPU/RSS at 50/500
+connections; disabled-attach UI end-to-end; Q6 VMs (skipped).
+
 ### Fourteenth owner run — 2026-11-20 (60 s, --root-attach, two curls)
 
 First run of the new cgroup-id-keyed build, attached at the root cgroup with
