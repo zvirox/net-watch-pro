@@ -149,24 +149,40 @@ fn main() -> Result<()> {
     let mut kprobe_links = Vec::new();
     if !args.no_kprobes {
         println!("attaching Design 2 identity kprobe (hybrid):");
+        // The verifier may reject bpf_get_socket_cookie in a kprobe. That is a
+        // real measurement for Q1/Q5, not a fatal error: keep the cgroup_skb
+        // byte counters (Design 1) running so the accuracy workload still
+        // produces data. Record the result in the report either way.
+        let mut identity_available = false;
         {
-            let prog: &mut KProbe = bpf
-                .program_mut("kprobe_identity")
-                .ok_or_else(|| anyhow!("kprobe_identity program missing"))?
-                .try_into()?;
-            prog.load().context("loading kprobe_identity")?;
-        }
-        for symbol in ["tcp_sendmsg", "tcp_recvmsg", "udp_sendmsg", "udp_recvmsg"] {
-            let prog: &mut KProbe = bpf
-                .program_mut("kprobe_identity")
-                .ok_or_else(|| anyhow!("kprobe_identity program missing"))?
-                .try_into()?;
-            match prog.attach(symbol, 0) {
-                Ok(link) => {
-                    println!("  {symbol}: attached");
-                    kprobe_links.push(link);
+            if let Some(program) = bpf.program_mut("kprobe_identity") {
+                match TryInto::<&mut KProbe>::try_into(program) {
+                    Ok(prog) => match prog.load() {
+                        Ok(()) => identity_available = true,
+                        Err(error) => println!(
+                            "  kprobe_identity load REJECTED by verifier: {error}\n  \
+                             -> continuing with Design 1 byte counters only; record this for Q1/Q5"
+                        ),
+                    },
+                    Err(error) => println!("  kprobe_identity wrong program type: {error}"),
                 }
-                Err(error) => println!("  {symbol}: FAILED ({error}) — record this"),
+            } else {
+                println!("  kprobe_identity program missing from object");
+            }
+        }
+        if identity_available {
+            for symbol in ["tcp_sendmsg", "tcp_recvmsg", "udp_sendmsg", "udp_recvmsg"] {
+                if let Some(program) = bpf.program_mut("kprobe_identity") {
+                    if let Ok(prog) = TryInto::<&mut KProbe>::try_into(program) {
+                        match prog.attach(symbol, 0) {
+                            Ok(link) => {
+                                println!("  {symbol}: attached");
+                                kprobe_links.push(link);
+                            }
+                            Err(error) => println!("  {symbol}: FAILED ({error}) — record this"),
+                        }
+                    }
+                }
             }
         }
     } else {

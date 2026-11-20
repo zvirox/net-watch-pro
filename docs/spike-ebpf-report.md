@@ -10,11 +10,44 @@ attempt documented under "Historical" is retained for diagnosis only.
 
 ## Phase B (Aya rebuild) — PENDING OWNER RUN (2026-11-19)
 
-**This section contains no measurements yet.** The throwaway Aya spike is at
-`spikes/ebpf-aya/`; follow its README on your real PC with real root. Paste the
-runner's environment block and final table here, then re-tag the docs' kernel
-claims `[VERIFIED: spike-ebpf-report §n]` or `[REFUTED]`. Do not start Phase C
-until the owner accepts this report (`docs/LIVE-THROUGHPUT-PLAN.md` §5/§6).
+The throwaway Aya spike is at `spikes/ebpf-aya/`; follow its README on your
+real PC with real root. Paste the runner's final table here, then re-tag the
+docs' kernel claims `[VERIFIED: spike-ebpf-report §n]` or `[REFUTED]`. Do not
+start Phase C until the owner accepts this report
+(`docs/LIVE-THROUGHPUT-PLAN.md` §5/§6).
+
+### First owner run — 2026-11-20 (partial, real root on CachyOS)
+
+Environment block: `CAP_{BPF,PERFMON,NET_ADMIN,SYS_ADMIN} effective=true`,
+BTF present, `cgroup.controllers` present at `/sys/fs/cgroup` (so **the old
+`-EPERM` blocker is resolved** — the earlier failure was the restricted
+environment, now confirmed `[REFUTED]` for a real root shell).
+
+**Design 1 (cgroup_skb counters) attaches successfully:**
+```
+attaching cgroup_skb ingress/egress to "/sys/fs/cgroup"
+  ingress: attached
+  egress: attached
+```
+→ **[VERIFIED: spike-ebpf-report §First owner run]** cgroup_skb ingress and
+egress attach to cgroup v2 with the bounded capability set on this kernel.
+
+**Design 2 as first written is REFUTED by the verifier:**
+```
+Error: loading kprobe_identity — Invalid argument (os error 22)
+  program of this type cannot use helper bpf_get_socket_cookie#46
+  Verification failed: Policy: Operation is not allowed
+```
+→ **[REFUTED: spike-ebpf-report §First owner run]** calling
+`bpf_get_socket_cookie` from a kprobe is not permitted (kprobe program type
+cannot use that helper). Cookie→identity capture must move to a program type
+that allows it — the documented candidate is `sock_ops` at
+`ACTIVE_ESTABLISHED_CB`/`PASSIVE_ESTABLISHED_CB`, which runs in process context
+and permits both `bpf_get_socket_cookie` and `bpf_get_current_pid_tgid`.
+This is a finding for Phase C design, **not** a blocker: the runner now
+degrades gracefully and continues with Design 1 byte counters, so the accuracy
+workload (Q1/Q2) can still be measured. No Q1–Q3 numbers were captured on this
+first attempt — the run aborted at the kprobe load before the old fix.
 
 | # | Question | Measurement / evidence | Status |
 |---|---|---|---|

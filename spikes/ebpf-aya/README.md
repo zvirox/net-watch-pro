@@ -91,6 +91,16 @@ If `--cgroup /sys/fs/cgroup` fails, find the real cgroup2 mount from step 3
 (or `stat -fc %T /sys/fs/cgroup`) and pass that path. Do **not** attach to a
 bpffs mount.
 
+> **Known finding (first owner run, 2026-11-20):** cgroup_skb ingress/egress
+> attach fine, but the kernel verifier **rejects `bpf_get_socket_cookie` in a
+> kprobe program** (`program of this type cannot use helper #46`). The runner
+> now detects this and **continues with Design 1 byte counters only** — you
+> will see `kprobe_identity load REJECTED by verifier` and then the normal
+> per-second lines. That is expected; record it for Q1/Q5. For the Design 1 vs
+> hybrid comparison use `--no-kprobes` as the baseline (both runs then have
+> identity = 0 until a `sock_ops`-based identity probe is implemented).
+> See `docs/spike-ebpf-report.md` "First owner run".
+
 ## 5. Workloads — Motrix first
 
 Run each separately; record interface delta, attributed total, per-app split,
