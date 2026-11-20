@@ -271,18 +271,24 @@ Final run evidence:
   cgroup id), matching the spike. **[VERIFIED]**
 
 **Follow-ups to the four verification gaps (2026-11-20):**
-- `drops` in `/status` now reports real BPF counters —
-  `bpf_packets_seen`, `bpf_loopback_skipped`, `bpf_map_full` (API.md 1.7).
-  `[VERIFIED]` by contract test; re-check on host with `verify_host.sh`.
+- `drops` in `/status` reports real BPF counters — owner re-ran
+  `verify_host.sh`: start `bpf_packets_seen=8`, rising during the download,
+  `bpf_loopback_skipped=0`, `bpf_map_full=0`; `ring_buffer_dropped=0`.
+  **[VERIFIED: spike-ebpf-report §Final verification]** on the host.
 - Sum check is atomic: the collector publishes app rows and the raw PC total
   from the same tick (`AppUsageFrame`); `live.apps` computes the remainder
-  from that one frame. `[VERIFIED]` by a test that injects a conflicting
-  smoothed rates channel and confirms the remainder uses the frame.
-- CPU/RSS at 50/500 connections: owner ran `verify_load.sh` — daemon stayed
-  `attached`, `bpf_packets_seen` rose 2→19 and loopback 3.8M→17M over the two
-  windows, but the run used a **stale binary** (no `bpf_*` drops fields) and
-  the daemon did not log CPU/RSS then. Those bugs are fixed (`cpu_pct`/`rss_kib`
-  now in the diagnostic log, daemon rebuilt). **[NOT VERIFIED]** until re-run.
+  from that one frame. Host re-run showed a `motrix` row (~65–108 Mbps, `high`)
+  with a small non-negative remainder (~2–3 Mbps down, ~1–1.6 Mbps up) and
+  the rollup `Motrix | cgroup:227402 | 659,821,357 B down | 12,282,952 B up`.
+  **[VERIFIED: spike-ebpf-report §Final verification]** by contract test and
+  on the host.
+- CPU/RSS at 50/500 connections: owner re-ran `verify_load.sh` with the fresh
+  daemon. At 50 connections `bpf_packets_seen` reached 23,255; at 500 it rose
+  to 23,297 (the local listener is single-threaded, so the connection count
+  is bounded, but load was sustained). Self-measured `cpu_pct` stayed
+  **0.18–0.60%** and `rss_kib` **19,828–20,268** (~20 MB), `map_full=0`.
+  Both are far inside the ≤3% / ≤150 MB budget.
+  **[VERIFIED: spike-ebpf-report §Final verification]**
 - Disabled path: owner ran `verify_degraded.sh` — daemon logged
   `state=Disabled`, `/status` returned `ebpf=no_collector`, `recording=false`
   with zero drops. **[VERIFIED]** for the daemon status path. The UI states
