@@ -179,8 +179,16 @@
 - [x] **Stop for owner approval after Phase A** <!-- owner answered L-OQ1..L-OQ4 on 2026-11-19 -->
 - [x] L-OQ1 60-sample one-minute in-memory history + `GET /usage/rate-history` (`in_memory:true`, lost-on-restart label) <!-- bounded VecDeque in netwatch-common, one point per minute fed by the 1 Hz task, 3 unit + 2 contract tests -->
 - [x] L-OQ4 Wi-Fi signal/link on U3 from local sysfs + Dashboard display ("—" when missing) <!-- injectable-root sysfs reader, wifi-only, 3 unit tests; TS types + demo fixture updated -->
-- [ ] L-B1 Owner-run Aya eBPF spike with Motrix; accept `docs/spike-ebpf-report.md` <!-- Arch/CachyOS runs done (§Fourth/Sixth): rx attribution ~96% and stable; tx gaps 101.2%/68.1% UNEXPLAINED (old cause withdrawn as assumption); kprobe identity REFUTED; sock_ops captured pid/cgroup but several rows cgroup_id=1 (root, UNIDENTIFIED by owner rule) and Motrix was NOT active, so Motrix/aria2c grouping UNMEASURED. Pending: loopback-filtered run, safe sock_ops run, Motrix cgroup-path run, Q6 VM matrix, owner sign-off. Checklist stays open until evidence exists. -->
-- [ ] L-C1–C9 Collector, identity, display names, `live.apps`, per-app speeds, sum check
+- [x] L-B1 Owner-run Aya eBPF spike with Motrix; accept `docs/spike-ebpf-report.md` <!-- owner ACCEPTED 2026-11-20 with known gaps: rx 95.8-97% PASS; tx gap 42 B/pkt measured (14 B header alone REFUTED, composition HYPOTHESIS); Q5 Motrix+aria2c grouping VERIFIED via cgroup id; kprobe identity REFUTED; loopback filter, safety gate, clean detach verified; Q6 VM matrix SKIPPED, 50/500-conn overhead unmeasured. Phase C unblocked. -->
+- [ ] L-C1 eBPF loader in `netwatch-ebpf` crate, attaches at daemon start with bounded caps; failed attach -> degraded, not crash
+- [ ] L-C2 Per-socket byte counters read each second + drop counters in Diagnostics
+- [ ] L-C3 Identity resolution cgroup-first (confirmed: socket cgroup via bpf_skb_cgroup_id, not `current`)
+- [ ] L-C4 Display names from `.desktop` entries + low-confidence fallback
+- [ ] L-C5 `live.apps` stream with per-second smoothed per-app rates
+- [ ] L-C6 Feed attributed bytes into episode store + rollups so Unattributed row shrinks
+- [ ] L-C7 Apps list live speed columns, sorted with ~2 s hold
+- [ ] L-C8 Live Connections screen shows real rows; empty state only when idle
+- [ ] L-C9 Degraded path: `NETWATCH_DISABLE_EBPF` + failed attach honest everywhere
 - [ ] L-D1–D5 Range presets 1 h/24 h/7 d/30 d/billing cycle
 
 ---

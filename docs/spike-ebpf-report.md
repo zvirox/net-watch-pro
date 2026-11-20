@@ -3,8 +3,11 @@
 **Date:** 2026-11-15  
 **Environment:** Arch/CachyOS, kernel 7.3.4-1-cachyos, cgroup v2, WebKit2GTK 2.54.2  
 **Toolchain:** Rust nightly 1.102.0, clang 23.1.5, bpf-linker v0.13.0, libbpf 1.x  
-**Status:** Phase B (Aya rebuild) pending owner run — see below. The C/libbpf
-attempt documented under "Historical" is retained for diagnosis only.
+**Status:** Phase B COMPLETE — owner accepted the report on 2026-11-20 with
+known gaps (tx accuracy fails the 5% threshold with a measured 42 B/pkt gap
+of unconfirmed composition; Q6 VM matrix skipped; 50/500-connection overhead
+unmeasured). Phase C is unblocked. The C/libbpf attempt under "Historical" is
+retained for diagnosis only.
 
 ---
 
