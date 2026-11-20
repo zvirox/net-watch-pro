@@ -11,7 +11,6 @@
 // assertions is standard and expected.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
-pub mod app_names;
 pub mod apps;
 pub mod auth;
 pub mod budgets;

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use netwatch_common::LiveAppRate;
+use crate::LiveAppRate;
 
 const CGROUP_ROOT: &str = "/sys/fs/cgroup";
 const RESCAN_INTERVAL: Duration = Duration::from_secs(1);

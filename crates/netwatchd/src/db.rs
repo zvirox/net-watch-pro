@@ -160,6 +160,70 @@ pub async fn persist_episodes(
     Ok(())
 }
 
+/// Persist per-app byte deltas from the eBPF cgroup collector (Phase C C6).
+///
+/// Each row is `(cgroup_id, bytes_down, bytes_up, name, confidence)`. The app
+/// registry uses `app_key = "cgroup:<id>"` so cgroup identities never collide
+/// with exe/flatpak/snap rows; rollups use the current 15-minute UTC bucket.
+/// No connection-level rows are invented (the collector sees only bytes).
+/// Atomic in one transaction; a failure rolls everything back (§7.1).
+pub async fn persist_app_bytes(
+    pool: &SqlitePool,
+    rows: &[(u64, u64, u64, String, String)],
+    now: i64,
+) -> Result<(), DbError> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let bucket = (now / 900) * 900;
+    let mut tx = pool.begin().await?;
+    for (cgroup_id, down, up, name, confidence) in rows {
+        let app_key = format!("cgroup:{cgroup_id}");
+        let identity_kind = "cgroup_app";
+        let attr_confidence = if confidence == "high" {
+            "exact"
+        } else {
+            "heuristic"
+        };
+        sqlx::query(
+            "INSERT INTO apps (name, app_key, identity_kind, exe_path, attribution_confidence, first_seen_at, last_seen_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+             ON CONFLICT(app_key) DO UPDATE SET
+                name = excluded.name,
+                last_seen_at = excluded.last_seen_at,
+                updated_at = strftime('%s','now')",
+        )
+        .bind(name)
+        .bind(&app_key)
+        .bind(identity_kind)
+        .bind(name)
+        .bind(attr_confidence)
+        .bind(now)
+        .execute(&mut *tx)
+        .await?;
+        let app_id: i64 = sqlx::query_scalar("SELECT id FROM apps WHERE app_key = ?1")
+            .bind(&app_key)
+            .fetch_one(&mut *tx)
+            .await?;
+        sqlx::query(
+            "INSERT INTO usage_rollup_15m (app_id, bucket_start, bytes_down, bytes_up, connection_count)
+             VALUES (?1, ?2, ?3, ?4, 0)
+             ON CONFLICT(app_id, bucket_start) DO UPDATE SET
+                bytes_down = usage_rollup_15m.bytes_down + excluded.bytes_down,
+                bytes_up = usage_rollup_15m.bytes_up + excluded.bytes_up,
+                updated_at = strftime('%s','now')",
+        )
+        .bind(app_id)
+        .bind(bucket)
+        .bind(i64::try_from(*down).unwrap_or(i64::MAX))
+        .bind(i64::try_from(*up).unwrap_or(i64::MAX))
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
 /// Soft-delete apps whose last activity predates `stale_before`
 /// (DATABASE.md §2.2: `deleted_at` is set when pruning removes the last
 /// activity; the row is never deleted so history still resolves names).
@@ -788,6 +852,48 @@ mod tests {
 
     /// P2.5: episode flush persists a row and later batches upsert absolute
     /// totals (never accumulate). FK requires a seeded app row — the real
+    /// Phase C C6: cgroup app registry + rollup accumulate across checkpoints.
+    #[tokio::test]
+    async fn persist_app_bytes_creates_cgroup_app_and_accumulates_rollup() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(SqliteConnectOptions::new().in_memory(true))
+            .await
+            .unwrap();
+        migrate(&pool).await.unwrap();
+        let rows = vec![(
+            143_335_u64,
+            1000u64,
+            200u64,
+            "Motrix".to_string(),
+            "high".to_string(),
+        )];
+
+        persist_app_bytes(&pool, &rows, 1_700_000_000)
+            .await
+            .unwrap();
+        persist_app_bytes(&pool, &rows, 1_700_000_010)
+            .await
+            .unwrap();
+
+        let key: String = sqlx::query_scalar("SELECT app_key FROM apps")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(key, "cgroup:143335");
+        let kind: String = sqlx::query_scalar("SELECT identity_kind FROM apps")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(kind, "cgroup_app");
+        let (down, up): (i64, i64) =
+            sqlx::query_as("SELECT bytes_down, bytes_up FROM usage_rollup_15m")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!((down, up), (2000, 400));
+    }
+
     /// app upsert path lands with attribution (P2.3).
     #[tokio::test]
     async fn persist_episodes_upserts_absolute_totals() {

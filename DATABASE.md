@@ -1,9 +1,9 @@
 # Net Watch Pro — DATABASE.md (Database Design)
 
-**Version:** 1.2 · **Date:** 2026-11-19
+**Version:** 1.3 · **Date:** 2026-11-20
 **Source of truth:** `PRD.md` (retention, freemium, metered interfaces) · `ARCHITECTURE.md` §5.4 (table contract) · `REAPM.md` (reference history behavior) · `docs/decisions.md` (owner decisions D2a-D4a)
 
-**Version history:** 1.1 (2026-11-15): apply plan-fix findings — `usage_rollup_15m` base grain + `usage_endpoint_day` + `usage_interface_15m` tables (F-02/D2a, F-03/D3a, F-04/D4a); `timezone` + `billing_cycle_day` settings; `apps.app_key` + `identity_kind` (F-05/D5a); size estimate tagged [HYPOTHESIS]; access rules updated for endpoint-day retention tiering. 1.2 (2026-11-19): add `speed_unit` settings key and forward-only migration 0005 for live throughput (`docs/LIVE-THROUGHPUT-PLAN.md`).
+**Version history:** 1.1 (2026-11-15): apply plan-fix findings — `usage_rollup_15m` base grain + `usage_endpoint_day` + `usage_interface_15m` tables (F-02/D2a, F-03/D3a, F-04/D4a); `timezone` + `billing_cycle_day` settings; `apps.app_key` + `identity_kind` (F-05/D5a); size estimate tagged [HYPOTHESIS]; access rules updated for endpoint-day retention tiering. 1.2 (2026-11-19): add `speed_unit` settings key and forward-only migration 0005 for live throughput (`docs/LIVE-THROUGHPUT-PLAN.md`). 1.3 (2026-11-20): Phase C writes per-app `usage_rollup_15m` rows live from eBPF cgroup-socket byte counters (app registry `app_key = cgroup:<id>`, `identity_kind = cgroup_app`); no schema change — same tables, new writer.
 **Engine:** SQLite ≥ 3.40, **WAL mode**, `synchronous=NORMAL`, single file at `$NETWATCH_DATA_DIR/netwatch.db`
 
 > **Binding rules:** This file is the single source of truth for schema. DDL lives only in forward-only sqlx migrations (`crates/netwatchd/src/db/migrations/*.sql`) and must match this file exactly. Changes require a version bump here + a new migration — never edit an applied migration (ARCHITECTURE.md §8.2).
@@ -111,6 +111,8 @@ Per-app aggregated usage in **15-minute buckets** (base grain per D4a). Day/week
 | `created_at` / `updated_at` | INTEGER | | now | NOT NULL |
 
 PK = composite `(app_id, bucket_start)` — no surrogate id; the grain *is* the key, atomic upserts. System-wide totals are `SUM` over apps at query time.
+
+**Phase C (C6) writer:** in addition to raw-episode compaction, per-app byte deltas from the eBPF cgroup collector are upserted into this table at checkpoint cadence (~60 s), so the dashboard `attributed` total and `Unattributed` gap fill in without waiting for raw rows to age out. The app registry rows use `app_key = "cgroup:<cgroup_id>"` and `identity_kind = "cgroup_app"`; the display name comes from the cgroup scope / `.desktop` resolver. No connection-level detail is invented (egress/direction only), so `connection_count` stays 0 for these rows.
 
 ### 2.5a `usage_endpoint_day`
 

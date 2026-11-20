@@ -13,9 +13,9 @@ use sqlx::SqlitePool;
 use tokio::sync::watch;
 
 use crate::LiveFeed;
-use crate::app_names::AppNames;
 use crate::exports::ExportRegistry;
 use crate::ratelimit::RateLimiter;
+use netwatch_common::app_names::AppNames;
 
 /// Whole-process state shared with all routes/extractors.
 pub struct AppState {

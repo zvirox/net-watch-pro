@@ -12,6 +12,7 @@
 // assertions is standard and expected.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+mod app_usage;
 mod config;
 mod db;
 mod ebpf;
@@ -228,8 +229,13 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
         tracing::info!("writer task stopped");
     });
 
-    // Phase C (C1): start the collector; failures are degraded, never fatal.
+    // Phase C (C1/C6): start the collector; failures are degraded, never fatal.
     let (ebpf_state, app_usage_rx, collector_task) = start_collector(&pool).await;
+    let app_usage_task = app_usage::spawn(
+        pool.clone(),
+        app_usage_rx.clone(),
+        Arc::new(netwatch_common::app_names::AppNames::default()),
+    );
 
     let (status_tx, _status_rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
@@ -269,6 +275,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     if let Some(task) = collector_task {
         task.abort();
     }
+    app_usage_task.abort();
     sampler_abort.abort();
     totals_abort.abort();
     rates_abort.abort();

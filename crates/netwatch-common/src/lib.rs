@@ -8,6 +8,8 @@
 // assertions is standard and expected.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod app_names;
+
 use serde::{Deserialize, Serialize};
 
 /// Stable error codes over the API (API.md §1.3 / ARCHITECTURE.md §7.2).
