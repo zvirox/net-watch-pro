@@ -11,7 +11,7 @@ DATA=/tmp/nwp-load
 OBJ=/home/zvirox/Projects/Linux/net-watch-pro/target/netwatch_ebpf.o
 
 mkdir -p "$DATA"
-rm -f "$SOCK"
+rm -f "$SOCK" "$DATA/netwatch.db"
 
 echo "=== starting daemon ==="
 NETWATCH_DATA_DIR="$DATA" \
@@ -66,8 +66,9 @@ PY
   wait "$LOAD_PID" || true
   curl --unix-socket "$SOCK" http://localhost/api/v1/status; echo
   echo "--- daemon self-measured CPU/RSS during this window ---"
-  grep -E 'Q3 self-measured|collector map diagnostic' /tmp/nwp-load/daemon.log | tail -n 25 || true
+  grep -E 'eBPF collector map diagnostic' /tmp/nwp-load/daemon.log | tail -n 25 || true
 done
 
 kill "$LISTENER_PID" 2>/dev/null || true
-echo "=== budget: CPU <= 3%, RSS <= 150 MB (from the log lines above) ==="
+echo "=== budget: cpu_pct <= 3, rss_kib <= 153600 (see diagnostic lines above) ==="
+echo "PASS requires bpf_packets_seen to rise with 50 then 500 connections and map_full=0."

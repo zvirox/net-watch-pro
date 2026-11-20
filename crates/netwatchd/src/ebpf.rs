@@ -171,6 +171,11 @@ async fn sample_loop(
     let mut tick = tokio::time::interval(SAMPLE_INTERVAL);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut log_at = std::time::Instant::now();
+    // Self-measured CPU/RSS from /proc (no sysstat dependency), reported in
+    // the diagnostic log so load tests can check the ≤3% / ≤150 MB budget.
+    let mut proc_prev = sample_proc();
+    let mut cpu_pct = 0.0f64;
+    let mut rss_kib = 0u64;
     loop {
         tick.tick().await;
         let mut current = BTreeMap::new();
@@ -188,11 +193,24 @@ async fn sample_loop(
         // Periodic diagnostic (every 10 s) — proves the BPF program is writing
         // bytes into the map. Values are also published every tick for /status.
         if log_at.elapsed() >= Duration::from_secs(10) {
+            let window_s = log_at.elapsed().as_secs_f64();
+            let now_proc = sample_proc();
+            if let (Some(prev), Some(now)) = (proc_prev.as_ref(), now_proc.as_ref()) {
+                // Linux x86_64: USER_HZ=100; RSS pages are 4 KiB.
+                let ticks = now.ticks.saturating_sub(prev.ticks);
+                #[allow(clippy::cast_precision_loss)] // tick counts here are tiny
+                let cpu_pct_value = (ticks as f64 / 100.0) / window_s.max(1.0) * 100.0;
+                cpu_pct = cpu_pct_value;
+                rss_kib = now.rss_pages.saturating_mul(4);
+            }
+            proc_prev = now_proc;
             tracing::info!(
                 cgroup_entries = current.len(),
                 packets = collector_stats.bpf_packets_seen,
                 loopback = collector_stats.bpf_loopback_skipped,
                 map_full = collector_stats.bpf_map_full,
+                cpu_pct,
+                rss_kib,
                 "eBPF collector map diagnostic"
             );
             log_at = std::time::Instant::now();
@@ -226,6 +244,28 @@ async fn sample_loop(
             stats: collector_stats,
         }));
     }
+}
+
+/// /proc/self CPU ticks + RSS pages sample (avoids a sysstat dependency).
+struct ProcSample {
+    ticks: u64,
+    rss_pages: u64,
+}
+
+fn sample_proc() -> Option<ProcSample> {
+    let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
+    // comm may contain spaces/parens; fields after the final ')' start at
+    // state (field 3); utime/stime are fields 14/15 -> indexes 11/12.
+    let rest = stat.rsplit_once(')')?.1;
+    let fields: Vec<&str> = rest.split_whitespace().collect();
+    let utime: u64 = fields.get(11)?.parse().ok()?;
+    let stime: u64 = fields.get(12)?.parse().ok()?;
+    let statm = std::fs::read_to_string("/proc/self/statm").ok()?;
+    let rss_pages: u64 = statm.split_whitespace().nth(1)?.parse().ok()?;
+    Some(ProcSample {
+        ticks: utime.saturating_add(stime),
+        rss_pages,
+    })
 }
 
 fn lo_ifindex() -> Option<u32> {

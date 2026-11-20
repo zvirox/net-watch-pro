@@ -11,7 +11,7 @@ DATA=/tmp/nwp-verify-run
 OBJ=/home/zvirox/Projects/Linux/net-watch-pro/target/netwatch_ebpf.o
 
 mkdir -p "$DATA"
-rm -f "$SOCK"
+rm -f "$SOCK" "$DATA/netwatch.db"
 
 echo "=== starting daemon (object: $OBJ) ==="
 NETWATCH_DATA_DIR="$DATA" \
@@ -33,7 +33,7 @@ echo
 echo "=== bpftool: our programs ==="
 bpftool cgroup tree | grep -E 'cgroup_inet_(ingress|egress)' | grep -E ' (ingress|egress)[[:space:]]*$' || true
 echo
-echo "=== live.apps verifier (start Motrix download first!) ==="
+echo "=== live.apps verifier (start a Motrix HTTP download NOW, keep it running ~70s) ==="
 python3 spikes/ebpf-aya/verify_product.py "$SOCK" 20
 echo "=== waiting for the 60 s app-usage checkpoint (keep traffic flowing) ==="
 sleep 45
