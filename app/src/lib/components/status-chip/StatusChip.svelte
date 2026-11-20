@@ -1,5 +1,6 @@
 <script lang="ts">
   import { daemonStore } from '$lib/stores/daemon.svelte';
+  import { diagnosticsStore } from '$lib/stores/diagnostics.svelte';
 
   const state = $derived(daemonStore.chipState);
   const labels = {
@@ -34,6 +35,8 @@
   onclick={() => {
     if (daemonStore.connection === 'auth-required' || daemonStore.connection === 'auth-invalid') {
       void daemonStore.authorize();
+    } else {
+      diagnosticsStore.openModal();
     }
   }}
 >

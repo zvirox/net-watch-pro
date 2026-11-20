@@ -6,6 +6,7 @@
   import { Button, Input, Switch } from '$lib/components/ui';
   import { budgetsStore, type BudgetLevel, type BudgetState } from '$lib/stores/budgets.svelte';
   import { daemonStore } from '$lib/stores/daemon.svelte';
+  import { diagnosticsStore } from '$lib/stores/diagnostics.svelte';
   import { interfacesStore } from '$lib/stores/interfaces.svelte';
   import { licenseStore } from '$lib/stores/license.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
@@ -453,8 +454,14 @@
             }}
           />
           <div class="daemon-actions">
-            <Button variant="ghost" size="sm" disabled>Open diagnostics</Button>
-            <span class="hint">Diagnostics lands with P9.1.</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onclick={() => {
+                diagnosticsStore.openModal();
+              }}>Open diagnostics</Button
+            >
+            <span class="hint">Local health checks and the recent event journal.</span>
           </div>
         </div>
       {:else if active === 'License'}

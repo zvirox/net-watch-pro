@@ -210,6 +210,7 @@
           <label class="panel-field">
             <span>Protocol</span>
             <select
+              class="filter-protocol"
               aria-label="Filter by protocol"
               value={historyStore.proFilters.protocol}
               onchange={onProtocol}
@@ -355,6 +356,10 @@
     min-block-size: 0;
   }
 
+  .filter-protocol:focus-visible {
+    outline: 2px solid var(--nwp-primary);
+    outline-offset: 2px;
+  }
   .filter-row {
     display: flex;
     align-items: center;
@@ -591,8 +596,11 @@
 
   .sr-only {
     position: absolute;
+    display: block;
     inline-size: 1px;
     block-size: 1px;
+    max-inline-size: 1px;
+    max-block-size: 1px;
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;

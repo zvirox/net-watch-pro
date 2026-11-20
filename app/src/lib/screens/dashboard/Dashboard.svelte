@@ -186,6 +186,20 @@
         {/if}
       </div>
     </div>
+    <!-- §9.4: the decorative sparkline needs an equivalent data table. -->
+    <table class="sr-only">
+      <caption>Last 60 seconds of download and upload speed</caption>
+      <thead><tr><th>Second</th><th>Download</th><th>Upload</th></tr></thead>
+      <tbody>
+        {#each rateHistory as point, index (index)}
+          <tr>
+            <td>-{String(rateHistory.length - index)} s</td>
+            <td>{ratesStore.display(point.down)}</td>
+            <td>{ratesStore.display(point.up)}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
     {#if noCollector}
       <p class="network-now__note">
         PC speed works without eBPF; per-app live rates need a collector.
@@ -720,8 +734,11 @@
   }
   .sr-only {
     position: absolute;
+    display: block;
     width: 1px;
     height: 1px;
+    max-width: 1px;
+    max-height: 1px;
     overflow: hidden;
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;

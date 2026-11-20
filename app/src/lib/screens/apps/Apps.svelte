@@ -272,6 +272,10 @@
     border-color: var(--nwp-error);
     background: var(--nwp-error-soft);
   }
+  .state-card--error button:focus-visible {
+    outline: 2px solid var(--nwp-primary);
+    outline-offset: 2px;
+  }
   .state-card--error button {
     border: 0;
     background: transparent;
@@ -301,8 +305,11 @@
   }
   .sr-only {
     position: absolute;
+    display: block;
     width: 1px;
     height: 1px;
+    max-width: 1px;
+    max-height: 1px;
     overflow: hidden;
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;

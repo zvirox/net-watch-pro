@@ -14,11 +14,20 @@
   const enterMs = reduceMotion ? 0 : 240;
   const exitMs = reduceMotion ? 0 : 160;
 
-  // Focus the key field when the dialog opens; a new opening starts clean.
+  // §9.3: remember the trigger, focus the first field, and restore focus on
+  // close (including Escape) so keyboard users continue where they left off.
+  let trigger: HTMLElement | null = null;
   $effect(() => {
-    if (!licenseStore.upgradeOpen || !modalEl) return;
-    key = '';
-    modalEl.querySelector<HTMLInputElement>('input')?.focus();
+    if (licenseStore.upgradeOpen) {
+      if (trigger === null) {
+        trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      }
+      modalEl?.querySelector<HTMLInputElement>('input')?.focus();
+      key = '';
+    } else if (trigger !== null) {
+      if (trigger.isConnected) trigger.focus();
+      trigger = null;
+    }
   });
 
   async function submit(event: SubmitEvent): Promise<void> {
@@ -303,8 +312,11 @@
   }
   .sr-only {
     position: absolute;
+    display: block;
     width: 1px;
     height: 1px;
+    max-width: 1px;
+    max-height: 1px;
     overflow: hidden;
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;

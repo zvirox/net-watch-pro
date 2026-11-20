@@ -168,6 +168,10 @@
     color: var(--nwp-text-secondary);
     font-size: var(--nwp-size-label);
   }
+  .failure__actions a:focus-visible {
+    outline: 2px solid var(--nwp-primary);
+    outline-offset: 2px;
+  }
   .actions {
     display: flex;
     align-items: center;
@@ -175,7 +179,7 @@
   }
   .note {
     margin: var(--nwp-space-4) 0 0;
-    color: var(--nwp-text-disabled);
+    color: var(--nwp-text-secondary);
     font-size: var(--nwp-size-caption);
   }
 </style>

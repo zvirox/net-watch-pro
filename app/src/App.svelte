@@ -8,6 +8,7 @@
   import Dashboard from '$lib/screens/dashboard/Dashboard.svelte';
   import AppDetail from '$lib/screens/app-detail/AppDetail.svelte';
   import UpgradeModal from '$lib/screens/upgrade/UpgradeModal.svelte';
+  import DiagnosticsModal from '$lib/screens/diagnostics/DiagnosticsModal.svelte';
   import ExportMenu from '$lib/screens/history/ExportMenu.svelte';
   import Settings from '$lib/screens/settings/Settings.svelte';
   import Onboarding from '$lib/screens/onboarding/Onboarding.svelte';
@@ -16,6 +17,7 @@
   import { licenseStore } from '$lib/stores/license.svelte';
   import { onboardingStore } from '$lib/stores/onboarding.svelte';
   import { demoStore } from '$lib/stores/demo.svelte';
+  import { diagnosticsStore } from '$lib/stores/diagnostics.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import '$lib/stores/settings-ui.svelte';
 
@@ -48,6 +50,21 @@
       ? (appDetailStore.detail?.name ?? 'App detail')
       : (routes.find((route) => route.key === activeRoute)?.label ?? 'Dashboard'),
   );
+
+  /** §9.3: roving arrow-key navigation across the sidebar links. */
+  function onNavKeydown(event: KeyboardEvent, index: number): void {
+    const keys = ['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End'];
+    if (!keys.includes(event.key)) return;
+    event.preventDefault();
+    const links = document.querySelectorAll<HTMLAnchorElement>('.sidebar nav a');
+    let next = index;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = (index + 1) % links.length;
+    if (event.key === 'ArrowUp' || event.key === 'ArrowLeft')
+      next = (index - 1 + links.length) % links.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = links.length - 1;
+    links[next]?.focus();
+  }
 
   onMount(() => {
     const unlisten = daemonStore.onConnection((state) => {
@@ -103,8 +120,12 @@
           <a
             class:active={navRoute === route.key}
             href="#{route.key}"
+            aria-label={route.label}
             aria-current={navRoute === route.key ? 'page' : undefined}
             onclick={() => (activeRoute = route.key)}
+            onkeydown={(event: KeyboardEvent) => {
+              onNavKeydown(event, index);
+            }}
           >
             <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
               {#each navigationIcons[index] as path, pathIndex (pathIndex)}
@@ -117,9 +138,13 @@
         <p class="nav-heading nav-heading--lower">ACCOUNT</p>
         <a
           href="#upgrade"
+          aria-label="Upgrade to Pro"
           onclick={(event) => {
             event.preventDefault();
             licenseStore.openUpgrade();
+          }}
+          onkeydown={(event: KeyboardEvent) => {
+            onNavKeydown(event, routes.length);
           }}
         >
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -170,7 +195,7 @@
           <StatusChip /><span class="avatar" aria-label="Local user">L</span>
         </div>
       </header>
-      <main class="content" id="main-content">
+      <main class="content" id="main-content" tabindex="-1">
         {#if activeRoute !== 'dashboard' && activeRoute !== 'live' && activeRoute !== 'apps' && activeRoute !== 'history' && activeRoute !== 'app-detail' && activeRoute !== 'settings'}
           <section class="notice" role="status">
             <div>
@@ -187,6 +212,30 @@
             </div>
             <Button variant="primary" onclick={() => void daemonStore.authorize()}>Authorize</Button
             >
+          </section>
+        {/if}
+        {#if daemonStore.connection === 'disconnected' || daemonStore.connection === 'connecting'}
+          <section class="stopped-banner" role="status" aria-label="Daemon stopped">
+            <div>
+              <strong>Monitoring stopped — daemon not running.</strong>
+              <p>Local-only monitoring resumes as soon as the daemon is linked again.</p>
+            </div>
+            <div class="banner-actions">
+              <Button
+                variant="primary"
+                size="sm"
+                onclick={() => {
+                  void diagnosticsStore.startDaemon();
+                }}>Start daemon</Button
+              >
+              <Button
+                variant="ghost"
+                size="sm"
+                onclick={() => {
+                  diagnosticsStore.openModal();
+                }}>Open diagnostics</Button
+              >
+            </div>
           </section>
         {/if}
         {#if activeRoute === 'live'}
@@ -218,6 +267,7 @@
 {/if}
 
 <UpgradeModal />
+<DiagnosticsModal />
 
 <style>
   :global(*) {
@@ -441,6 +491,31 @@
     border-radius: var(--nwp-radius-md);
     background: var(--nwp-warning-soft);
     padding: var(--nwp-space-4);
+  }
+  /* §7.9: non-dismissible daemon-stopped banner. */
+  .stopped-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nwp-space-4);
+    margin-bottom: var(--nwp-space-6);
+    border: 1px solid var(--nwp-warning);
+    border-radius: var(--nwp-radius-md);
+    background: var(--nwp-warning-soft);
+    padding: var(--nwp-space-3) var(--nwp-space-4);
+  }
+  .stopped-banner strong {
+    font-weight: 600;
+  }
+  .stopped-banner p {
+    margin: 4px 0 0;
+    color: var(--nwp-text-secondary);
+    font-size: var(--nwp-size-label);
+  }
+  .banner-actions {
+    display: flex;
+    flex: none;
+    gap: var(--nwp-space-2);
   }
   .notice strong {
     font-weight: 600;

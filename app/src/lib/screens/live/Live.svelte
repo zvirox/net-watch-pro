@@ -22,6 +22,10 @@
   // stable so window shifts never move the scroll position.
   const ROW_H = 44;
   const OVERSCAN = 4;
+  // §6.1/§7.6: 120ms fade, disabled entirely under reduced motion.
+  const reduceMotion =
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const rowFadeMs = reduceMotion ? 0 : 120;
 
   let search = $state('');
   let protocol = $state<'all' | 'tcp' | 'udp' | 'icmp' | 'other'>('all');
@@ -209,7 +213,7 @@
                 role="link"
                 tabindex="0"
                 aria-label="Open details for {displayAppName(row)}"
-                in:fade={{ duration: 200 }}
+                in:fade={{ duration: rowFadeMs }}
                 style="height:{ROW_H}px"
                 onclick={() => {
                   openApp(row.app.id);
@@ -304,6 +308,10 @@
     background: var(--nwp-surface);
     border: 1px solid var(--nwp-border);
     border-radius: var(--nwp-radius-md);
+  }
+  .filter-protocol:focus-visible {
+    outline: 2px solid var(--nwp-primary);
+    outline-offset: 2px;
   }
   .live-total {
     margin-inline-start: auto;
@@ -452,8 +460,11 @@
 
   .sr-only {
     position: absolute;
+    display: block;
     inline-size: 1px;
     block-size: 1px;
+    max-inline-size: 1px;
+    max-block-size: 1px;
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;

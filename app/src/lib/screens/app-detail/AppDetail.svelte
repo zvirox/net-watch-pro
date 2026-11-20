@@ -495,8 +495,11 @@
   }
   .sr-only {
     position: absolute;
+    display: block;
     width: 1px;
     height: 1px;
+    max-width: 1px;
+    max-height: 1px;
     overflow: hidden;
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
