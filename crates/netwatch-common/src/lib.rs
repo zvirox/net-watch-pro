@@ -162,6 +162,35 @@ pub struct RatePair {
     pub up_bps: u64,
 }
 
+/// Real eBPF collector counters, from the BPF `STATS` map (API.md S2 `drops`).
+/// All zero when no collector runs — honest diagnostics, not guesses.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CollectorStats {
+    /// Non-loopback packets the BPF program counted.
+    pub bpf_packets_seen: u64,
+    /// Loopback packets skipped by ifindex.
+    pub bpf_loopback_skipped: u64,
+    /// Map inserts that failed (map pressure).
+    pub bpf_map_full: u64,
+}
+
+/// One collector sample: app rows + the PC total from the SAME tick, so the
+/// `live.apps` sum check is atomic (no cross-task timing skew). Internal to
+/// the daemon/API; the wire frame is `LiveAppRatesFrame`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppUsageFrame {
+    /// Sample timestamp (epoch seconds).
+    pub ts: u64,
+    /// Per-app rows sorted by current rate.
+    pub apps: Vec<AppUsage>,
+    /// Raw (unsmoothed) PC download bits/second for this tick.
+    pub pc_down_bps: u64,
+    /// Raw PC upload bits/second for this tick.
+    pub pc_up_bps: u64,
+    /// Real BPF counters for `/status` diagnostics.
+    pub stats: CollectorStats,
+}
+
 /// Payload of the `live.apps` WS channel (API.md §3).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LiveAppRatesFrame {
@@ -180,10 +209,17 @@ pub struct LiveAppRatesFrame {
 pub struct RateSnapshot {
     /// Sample timestamp (epoch seconds).
     pub ts: u64,
-    /// Total download bits per second across non-excluded interfaces.
+    /// Total download bits per second across non-excluded interfaces (EMA-smoothed).
     pub down_bps: u64,
-    /// Total upload bits per second across non-excluded interfaces.
+    /// Total upload bits per second across non-excluded interfaces (EMA-smoothed).
     pub up_bps: u64,
+    /// Raw (unsmoothed) download bits/second from THIS tick — the same sample
+    /// used for the `live.apps` sum check (Phase C). Not wire-documented.
+    #[serde(skip_serializing)]
+    pub raw_down_bps: u64,
+    /// Raw upload bits/second from this tick (sum-check counterpart).
+    #[serde(skip_serializing)]
+    pub raw_up_bps: u64,
     /// Per-interface rates (only interfaces seen in the latest sample).
     pub interfaces: Vec<InterfaceRate>,
 }

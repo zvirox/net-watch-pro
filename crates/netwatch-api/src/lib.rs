@@ -32,7 +32,7 @@ pub mod usage;
 use std::path::Path;
 use std::sync::Arc;
 
-use netwatch_common::{AppUsage, RateHistory, RateSnapshot, StatusSnapshot, UsageTotals};
+use netwatch_common::{AppUsageFrame, RateHistory, RateSnapshot, StatusSnapshot, UsageTotals};
 use tokio::net::UnixListener;
 use tokio::sync::{broadcast, watch};
 
@@ -51,8 +51,9 @@ pub struct LiveFeed {
     pub totals: watch::Receiver<Arc<UsageTotals>>,
     /// Latest live PC rates, replaced once per second (API.md §3 `net.rates`).
     pub rates: watch::Receiver<Arc<RateSnapshot>>,
-    /// Latest per-app bytes/rates from the eBPF collector (API.md §3 `live.apps`).
-    pub apps: watch::Receiver<Arc<Vec<AppUsage>>>,
+    /// Latest per-app frame (rows + same-tick PC total + BPF stats), from the
+    /// eBPF collector (API.md §3 `live.apps`, S2 `drops`).
+    pub apps: watch::Receiver<Arc<AppUsageFrame>>,
     /// Bounded last-hour rate ring filled by the daemon's 1 Hz task (API.md
     /// U4, owner L-OQ1). Process memory only; lost on restart.
     pub rate_history: Arc<RateHistory>,

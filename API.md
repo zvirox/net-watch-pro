@@ -1,9 +1,9 @@
 # Net Watch Pro — API.md (Local API Reference)
 
-**Version:** 1.6 · **Date:** 2026-11-20
+**Version:** 1.7 · **Date:** 2026-11-20
 **Source of truth:** `PRD.md` (features, freemium gating) · `ARCHITECTURE.md` §5.3 (transport contract) · `DATABASE.md` (tables) · `docs/decisions.md` (owner decisions D1a–D5a)
 
-**Version history:** 1.3.1 (2026-11-17): reference the offline license key wire format in `AUTH_SECURITY.md` §2.4. 1.3.0 (2026-11-17): document the A2 icon resource endpoint and the `deleted_at` field on app details for soft-deleted history views. 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a). 1.4 (2026-11-19): add the `net.rates` 1 Hz stream, the `speed_unit` setting and the honest `no_collector` status value (`docs/LIVE-THROUGHPUT-PLAN.md` Phase A). 1.5 (2026-11-19): add the in-memory 1-minute rate history endpoint and optional Wi-Fi signal/link fields on U3 (owner decisions L-OQ1/L-OQ4). 1.6 (2026-11-20): finalize the `live.apps` channel contract for Phase C (cgroup-id key, confidence, unattributed remainder).
+**Version history:** 1.3.1 (2026-11-17): reference the offline license key wire format in `AUTH_SECURITY.md` §2.4. 1.3.0 (2026-11-17): document the A2 icon resource endpoint and the `deleted_at` field on app details for soft-deleted history views. 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a). 1.4 (2026-11-19): add the `net.rates` 1 Hz stream, the `speed_unit` setting and the honest `no_collector` status value (`docs/LIVE-THROUGHPUT-PLAN.md` Phase A). 1.5 (2026-11-19): add the in-memory 1-minute rate history endpoint and optional Wi-Fi signal/link fields on U3 (owner decisions L-OQ1/L-OQ4). 1.6 (2026-11-20): finalize the `live.apps` channel contract for Phase C (cgroup-id key, confidence, unattributed remainder). 1.7 (2026-11-20): expand S2 `drops` with real eBPF STATS counters; `live.apps` remainder computed from the same raw per-tick total as `net.rates`.
 
 > **Binding:** every endpoint below maps to a PRD feature and a DATABASE.md table (§10 traceability matrix). Anything flagged as not doing so is explicitly justified there. Implementation of this file lives in `docs/api-contract.md` (ARCHITECTURE.md §4) and must not drift.
 
@@ -106,9 +106,10 @@ Single trusted local client over a Unix socket, so limits are minimal and exist 
 **S2 `GET /status`** — drives the status chip + banners. Success 200:
 ```json
 { "daemon": "monitoring", "ebpf": "attached", "recording": true,
-  "ws_clients": 1, "uptime_s": 3600, "drops": { "ring_buffer_dropped": 0 } }
+  "ws_clients": 1, "uptime_s": 3600,
+  "drops": { "ring_buffer_dropped": 0, "bpf_packets_seen": 0, "bpf_loopback_skipped": 0, "bpf_map_full": 0 } }
 ```
-`daemon`: `monitoring | degraded | stopped | starting` (maps 1:1 to DESIGN.md §7.5 chip states). `ebpf`: `attached | failed | unsupported | no_collector` — `no_collector` is the honest value while no eBPF collector is running; the PC rate sampler still works and the UI chip must not appear green for this state. Errors: 503 `EBPF_ATTACH_FAILED`/`EBPF_UNSUPPORTED_KERNEL` (degraded, body still returned with state), 401.
+`drops` is additive diagnostics: `ring_buffer_dropped` stays `0` in Phase C (the collector uses a map, not a ring buffer); `bpf_packets_seen`, `bpf_loopback_skipped` and `bpf_map_full` come from the eBPF `STATS` map (zero when no collector runs). `daemon`: `monitoring | degraded | stopped | starting` (maps 1:1 to DESIGN.md §7.5 chip states). `ebpf`: `attached | failed | unsupported | no_collector` — `no_collector` is the honest value while no eBPF collector is running; the PC rate sampler still works and the UI chip must not appear green for this state. Errors: 503 `EBPF_ATTACH_FAILED`/`EBPF_UNSUPPORTED_KERNEL` (degraded, body still returned with state), 401.
 
 **S3 `GET /diagnostics`** — one payload for the Diagnostics modal. Success 200:
 ```json

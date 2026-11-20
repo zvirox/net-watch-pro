@@ -105,6 +105,8 @@ impl RateMeter {
             ts: 0,
             down_bps: to_bps(self.ema_down),
             up_bps: to_bps(self.ema_up),
+            raw_down_bps: to_bps(down_total),
+            raw_up_bps: to_bps(up_total),
             interfaces,
         }
     }

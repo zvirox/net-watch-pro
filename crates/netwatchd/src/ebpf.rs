@@ -19,7 +19,7 @@ use aya::{Ebpf, Pod};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
-use netwatch_common::AppUsage;
+use netwatch_common::{AppUsage, AppUsageFrame, CollectorStats, RateSnapshot};
 
 const DEFAULT_OBJECT: &str = "/usr/lib/netwatch-pro/netwatch_ebpf.o";
 const ROOT_CGROUP: &str = "/sys/fs/cgroup";
@@ -38,7 +38,7 @@ struct Counts {
 unsafe impl Pod for Counts {}
 
 /// Receiver of the latest per-app rows (fed to the `live.apps` stream).
-pub type AppUsageRx = watch::Receiver<std::sync::Arc<Vec<AppUsage>>>;
+pub type AppUsageRx = watch::Receiver<std::sync::Arc<AppUsageFrame>>;
 
 /// Outcome of the loader, used to set the honest status snapshot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,8 +56,10 @@ pub enum CollectorState {
 pub fn start(
     disabled: bool,
     object_override: Option<PathBuf>,
+    rates: watch::Receiver<std::sync::Arc<RateSnapshot>>,
 ) -> (CollectorState, AppUsageRx, Option<JoinHandle<()>>) {
-    let (tx, rx) = watch::channel(std::sync::Arc::new(Vec::new()));
+    let empty = std::sync::Arc::new(AppUsageFrame::default());
+    let (tx, rx) = watch::channel(empty);
     if disabled {
         tracing::info!("NETWATCH_DISABLE_EBPF set: collector disabled");
         return (CollectorState::Disabled, rx, None);
@@ -154,7 +156,7 @@ pub fn start(
         // programs (the link fds live in ProgramData). The map wrappers moved
         // into the task keep the kernel maps open independently.
         let _bpf = bpf;
-        sample_loop(bytes_map, stats_map, tx).await;
+        sample_loop(bytes_map, stats_map, rates, tx).await;
     });
     (CollectorState::Attached, rx, Some(handle))
 }
@@ -162,7 +164,8 @@ pub fn start(
 async fn sample_loop(
     map: AyaHashMap<MapData, u64, Counts>,
     stats: Option<Array<MapData, u64>>,
-    tx: watch::Sender<std::sync::Arc<Vec<AppUsage>>>,
+    rates: watch::Receiver<std::sync::Arc<RateSnapshot>>,
+    tx: watch::Sender<std::sync::Arc<AppUsageFrame>>,
 ) {
     let mut previous: BTreeMap<u64, Counts> = BTreeMap::new();
     let mut tick = tokio::time::interval(SAMPLE_INTERVAL);
@@ -174,32 +177,40 @@ async fn sample_loop(
         for item in map.iter().flatten() {
             current.insert(item.0, item.1);
         }
-        // Periodic diagnostic (every 10 s): proves whether the BPF program is
-        // writing bytes into the map. STATS: 0=packets seen, 1=loopback,
-        // 2=map insert failures (crates/netwatch-ebpf/src/main.rs).
-        if log_at.elapsed() >= Duration::from_secs(10) {
-            let counters = stats
+        let collector_stats =
+            stats
                 .as_ref()
-                .map(|s| [0u32, 1, 2].map(|i| s.get(&i, 0).unwrap_or(0)));
+                .map_or_else(CollectorStats::default, |s| CollectorStats {
+                    bpf_packets_seen: s.get(&0, 0).unwrap_or(0),
+                    bpf_loopback_skipped: s.get(&1, 0).unwrap_or(0),
+                    bpf_map_full: s.get(&2, 0).unwrap_or(0),
+                });
+        // Periodic diagnostic (every 10 s) — proves the BPF program is writing
+        // bytes into the map. Values are also published every tick for /status.
+        if log_at.elapsed() >= Duration::from_secs(10) {
             tracing::info!(
                 cgroup_entries = current.len(),
-                ?counters,
+                packets = collector_stats.bpf_packets_seen,
+                loopback = collector_stats.bpf_loopback_skipped,
+                map_full = collector_stats.bpf_map_full,
                 "eBPF collector map diagnostic"
             );
             log_at = std::time::Instant::now();
         }
+
+        // PC total from THIS tick's rate sample. `raw_*` is the unsmoothed
+        // per-tick total, the correct base for the per-app sum check.
+        let rate = rates.borrow().clone();
         let now = u64::try_from(crate::epoch_now()).unwrap_or(0);
         let mut rows = Vec::with_capacity(current.len());
         for (cgroup_id, counts) in &current {
             let prev = previous.get(cgroup_id).copied().unwrap_or_default();
-            let rx = counts.rx_bytes.saturating_sub(prev.rx_bytes);
-            let tx = counts.tx_bytes.saturating_sub(prev.tx_bytes);
-            let down_bps = rx.saturating_mul(8); // per 1 s interval, decimal bits/s
-            let up_bps = tx.saturating_mul(8);
+            let down = counts.rx_bytes.saturating_sub(prev.rx_bytes);
+            let up = counts.tx_bytes.saturating_sub(prev.tx_bytes);
             rows.push(AppUsage {
                 cgroup_id: *cgroup_id,
-                down_bps,
-                up_bps,
+                down_bps: down.saturating_mul(8),
+                up_bps: up.saturating_mul(8),
                 bytes_down: counts.rx_bytes,
                 bytes_up: counts.tx_bytes,
                 ts: now,
@@ -207,7 +218,13 @@ async fn sample_loop(
         }
         previous = current;
         rows.sort_by_key(|row| std::cmp::Reverse(row.down_bps + row.up_bps));
-        let _ = tx.send(std::sync::Arc::new(rows));
+        let _ = tx.send(std::sync::Arc::new(AppUsageFrame {
+            ts: now,
+            apps: rows,
+            pc_down_bps: rate.raw_down_bps,
+            pc_up_bps: rate.raw_up_bps,
+            stats: collector_stats,
+        }));
     }
 }
 

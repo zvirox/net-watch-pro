@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use netwatch_common::AppUsage;
+use netwatch_common::AppUsageFrame;
 use netwatch_common::app_names::AppNames;
 use sqlx::SqlitePool;
 use tokio::sync::watch;
@@ -21,7 +21,7 @@ const CHECKPOINT: Duration = Duration::from_secs(60);
 /// `names` is the shared cgroup-id -> display-name resolver.
 pub fn spawn(
     pool: SqlitePool,
-    mut rx: watch::Receiver<Arc<Vec<AppUsage>>>,
+    mut rx: watch::Receiver<Arc<AppUsageFrame>>,
     names: Arc<AppNames>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -35,7 +35,8 @@ pub fn spawn(
                         tracing::info!("app-usage feed closed; checkpoint writer stopping");
                         break;
                     }
-                    for row in rx.borrow_and_update().iter() {
+                    let frame = rx.borrow_and_update().clone();
+                    for row in &frame.apps {
                         // AppUsage.down_bps is bytes-per-second * 8 for the
                         // 1 s collector interval; convert back to bytes.
                         let down = row.down_bps / 8;

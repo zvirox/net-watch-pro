@@ -78,14 +78,14 @@ fn rates_obj(rates: &RateSnapshot) -> serde_json::Value {
 }
 
 /// Build a `live.apps` frame: resolve cgroup ids to names and compute the
-/// unattributed remainder against the PC total from `net.rates` (API.md §3).
+/// unattributed remainder against the PC total from the SAME collector tick
+/// (API.md §3). Using one frame removes the cross-task 1 Hz timing skew.
 fn apps_obj(state: &AppState) -> serde_json::Value {
-    let rates = state.live.rates.borrow();
-    let rows = state.live.apps.borrow();
+    let frame_data = state.live.apps.borrow();
     let mut attributed_down = 0u64;
     let mut attributed_up = 0u64;
-    let mut apps = Vec::with_capacity(rows.len());
-    for row in rows.iter() {
+    let mut apps = Vec::with_capacity(frame_data.apps.len());
+    for row in &frame_data.apps {
         attributed_down = attributed_down.saturating_add(row.down_bps);
         attributed_up = attributed_up.saturating_add(row.up_bps);
         apps.push(
@@ -95,11 +95,11 @@ fn apps_obj(state: &AppState) -> serde_json::Value {
         );
     }
     let frame = LiveAppRatesFrame {
-        ts: rates.ts,
+        ts: frame_data.ts,
         apps,
         unattributed: netwatch_common::RatePair {
-            down_bps: rates.down_bps.saturating_sub(attributed_down),
-            up_bps: rates.up_bps.saturating_sub(attributed_up),
+            down_bps: frame_data.pc_down_bps.saturating_sub(attributed_down),
+            up_bps: frame_data.pc_up_bps.saturating_sub(attributed_up),
         },
     };
     json!({

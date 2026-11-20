@@ -54,7 +54,7 @@ fn live_feed_with_totals() -> (
             deltas: delta_tx.clone(),
             totals: totals_rx,
             rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
-            apps: watch::channel(Arc::new(Vec::new())).1,
+            apps: watch::channel(Arc::new(netwatch_common::AppUsageFrame::default())).1,
             rate_history: Arc::new(netwatch_common::RateHistory::default()),
         },
         delta_tx,
@@ -352,7 +352,7 @@ async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
         deltas: delta_tx.clone(),
         totals: totals_rx,
         rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
-        apps: watch::channel(Arc::new(Vec::new())).1,
+        apps: watch::channel(Arc::new(netwatch_common::AppUsageFrame::default())).1,
         rate_history: Arc::new(netwatch_common::RateHistory::default()),
     };
 
@@ -456,7 +456,7 @@ async fn connections_live_rest_matches_ws_snapshot() {
         deltas: delta_tx.clone(),
         totals: totals_rx,
         rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
-        apps: watch::channel(Arc::new(Vec::new())).1,
+        apps: watch::channel(Arc::new(netwatch_common::AppUsageFrame::default())).1,
         rate_history: Arc::new(netwatch_common::RateHistory::default()),
     };
 
@@ -747,6 +747,11 @@ async fn status_over_socket_returns_contract_shape() {
     assert_eq!(v["ws_clients"], 0);
     assert!(v["uptime_s"].is_u64());
     assert_eq!(v["drops"]["ring_buffer_dropped"], 0);
+    // Phase C: real BPF counters are additive diagnostics; zero with no
+    // collector feeding the apps frame in this test harness.
+    assert_eq!(v["drops"]["bpf_packets_seen"], 0);
+    assert_eq!(v["drops"]["bpf_loopback_skipped"], 0);
+    assert_eq!(v["drops"]["bpf_map_full"], 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -2234,6 +2239,71 @@ async fn subscribe_live_apps_delivers_empty_snapshot_without_collector() {
         json!({ "op": "unsubscribe", "channel": "live.apps" }),
     )
     .await;
+}
+
+// ------------------------------------------------ §3 live.apps sum check (Phase C)
+
+#[tokio::test(flavor = "multi_thread")]
+async fn live_apps_remainder_uses_same_tick_pc_total_and_reports_bpf_stats() {
+    let db = test_db().await;
+    let (_, _, totals_tx) = live_feed_with_totals();
+    let mut feed = live_feed().0;
+    // rates channel deliberately has a DIFFERENT total from the apps frame:
+    // if apps_obj used it, the assertions below would fail (timing skew).
+    let rates = Arc::new(netwatch_common::RateSnapshot {
+        ts: 99,
+        down_bps: 999,
+        up_bps: 888,
+        raw_down_bps: 999,
+        raw_up_bps: 888,
+        ..Default::default()
+    });
+    let frame = Arc::new(netwatch_common::AppUsageFrame {
+        ts: 100,
+        apps: vec![netwatch_common::AppUsage {
+            cgroup_id: 42,
+            down_bps: 80_000_000,
+            up_bps: 2_000_000,
+            ts: 100,
+            ..Default::default()
+        }],
+        pc_down_bps: 100_000_000,
+        pc_up_bps: 3_000_000,
+        stats: netwatch_common::CollectorStats {
+            bpf_packets_seen: 1234,
+            bpf_loopback_skipped: 5,
+            bpf_map_full: 0,
+        },
+    });
+    feed.rates = watch::channel(rates).1;
+    feed.apps = watch::channel(frame).1;
+
+    let (sock, _tx) = spawn_server_with_feed(db, feed).await;
+    // /status reports the real BPF counters from the same frame.
+    let (status, body) = http_get(&sock, "/api/v1/status").await;
+    assert_eq!(status, 200);
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["drops"]["bpf_packets_seen"], 1234);
+    assert_eq!(v["drops"]["bpf_loopback_skipped"], 5);
+    assert_eq!(v["drops"]["bpf_map_full"], 0);
+
+    // live.apps remainder = frame PC total - app rate, NOT the rates channel.
+    let mut ws = ws_connect(&sock).await;
+    ws_send(
+        &mut ws,
+        json!({ "op": "subscribe", "channel": "live.apps" }),
+    )
+    .await;
+    let f = ws_next(&mut ws).await;
+    assert_eq!(f["channel"], "live.apps", "frame: {f}");
+    assert_eq!(f["data"]["ts"], 100, "must use the collector frame's ts");
+    assert_eq!(
+        f["data"]["unattributed"]["down_bps"], 20_000_000,
+        "frame: {f}"
+    );
+    assert_eq!(f["data"]["unattributed"]["up_bps"], 1_000_000, "frame: {f}");
+    assert_eq!(f["data"]["apps"].as_array().unwrap().len(), 1);
+    let _ = totals_tx;
 }
 
 // ------------------------------------------------ §2.5 U4 rate history (L-OQ1)

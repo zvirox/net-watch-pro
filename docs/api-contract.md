@@ -39,6 +39,8 @@ Status mapping: 400 QUERY_INVALID · 401 AUTH_INVALID · 403 PERMISSION_DENIED/E
 | License | `GET /license` · `POST /license/activate` · `DELETE /license` |
 | Stream | socket frame stream → channels `live.connections`, `status`, `usage.totals`, `net.rates`, `live.apps` |
 
+`GET /status` `drops`: `{ ring_buffer_dropped: 0, bpf_packets_seen, bpf_loopback_skipped, bpf_map_full }` — the three `bpf_*` counters mirror the eBPF `STATS` map (zeros with no collector); `ring_buffer_dropped` is `0` in Phase C because the collector uses a map, not a ring buffer.
+
 Rate limits: 600/min reads · 5/min export create · 10/min writes & downloads → 429 + `Retry-After`.
 
 ## Live throughput (API.md §3, Phase A)

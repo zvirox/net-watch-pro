@@ -23,7 +23,9 @@ mod sampler;
 mod service;
 mod usage;
 
-use netwatch_common::{DaemonEvent, DaemonState, EbpfState, EventLevel, StatusSnapshot};
+use netwatch_common::{
+    DaemonEvent, DaemonState, EbpfState, EventLevel, RateSnapshot, StatusSnapshot,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -135,14 +137,15 @@ async fn boot_compaction(pool: &sqlx::SqlitePool, now: i64) {
 /// the channel alive until that wiring lands.
 async fn start_collector(
     pool: &sqlx::SqlitePool,
+    rates: watch::Receiver<std::sync::Arc<RateSnapshot>>,
 ) -> (
     EbpfState,
-    watch::Receiver<std::sync::Arc<Vec<netwatch_common::AppUsage>>>,
+    ebpf::AppUsageRx,
     Option<tokio::task::JoinHandle<()>>,
 ) {
     let disabled = std::env::var_os("NETWATCH_DISABLE_EBPF").is_some();
     let object_override = std::env::var_os("NETWATCH_EBPF_OBJECT").map(PathBuf::from);
-    let (state, rx, task) = ebpf::start(disabled, object_override);
+    let (state, rx, task) = ebpf::start(disabled, object_override, rates);
     let ebpf_state = match state {
         ebpf::CollectorState::Attached => EbpfState::Attached,
         ebpf::CollectorState::Disabled => EbpfState::NoCollector,
@@ -181,7 +184,9 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     let (totals_tx, totals_abort) = usage::spawn(pool.clone());
     // A3: 1 Hz rate task for live PC speed (net.rates). The same task also
     // fills the bounded last-hour ring served by U4 (owner L-OQ1).
-    let (rates_tx, rates_rx) = watch::channel(Arc::new(netwatch_common::RateSnapshot::default()));
+    let (rates_tx, rates_rx) = watch::channel(Arc::new(RateSnapshot::default()));
+    // The collector needs this tick's raw PC total for the atomic sum check.
+    let collector_rates_rx = rates_tx.subscribe();
     let rate_history = Arc::new(netwatch_common::RateHistory::default());
     let rates_abort = rates::spawn(pool.clone(), rates_tx, Arc::clone(&rate_history));
     // P7.1: recurring tier-aware retention pruning, with a first pass at boot.
@@ -230,7 +235,8 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     });
 
     // Phase C (C1/C6): start the collector; failures are degraded, never fatal.
-    let (ebpf_state, app_usage_rx, collector_task) = start_collector(&pool).await;
+    let (ebpf_state, app_usage_rx, collector_task) =
+        start_collector(&pool, collector_rates_rx).await;
     let app_usage_task = app_usage::spawn(
         pool.clone(),
         app_usage_rx.clone(),

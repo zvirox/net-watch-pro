@@ -27,13 +27,22 @@ pub async fn health() -> Json<serde_json::Value> {
 /// states (ARCHITECTURE.md §10 honest-status principle).
 pub async fn status(State(state): State<Arc<AppState>>) -> Response {
     let snap = state.status.borrow().clone();
+    // Real eBPF counters from the collector's latest frame; all zero when no
+    // collector runs (honest). ring_buffer_dropped stays 0 in Phase C: the
+    // collector uses a map, not a ring buffer (API.md §2.1 S2).
+    let bpf_stats = state.live.apps.borrow().stats;
     Json(json!({
         "daemon": snap.daemon,
         "ebpf": snap.ebpf,
         "recording": snap.recording,
         "ws_clients": state.client_count(),
         "uptime_s": state.started_at.elapsed().as_secs(),
-        "drops": { "ring_buffer_dropped": 0 },
+        "drops": {
+            "ring_buffer_dropped": 0,
+            "bpf_packets_seen": bpf_stats.bpf_packets_seen,
+            "bpf_loopback_skipped": bpf_stats.bpf_loopback_skipped,
+            "bpf_map_full": bpf_stats.bpf_map_full,
+        },
     }))
     .into_response()
 }
