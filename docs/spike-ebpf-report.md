@@ -41,10 +41,14 @@ Error: loading kprobe_identity — Invalid argument (os error 22)
 → **[REFUTED: spike-ebpf-report §First owner run]** calling
 `bpf_get_socket_cookie` from a kprobe is not permitted (kprobe program type
 cannot use that helper). Cookie→identity capture must move to a program type
-that allows it — the documented candidate is `sock_ops` at
-`ACTIVE_ESTABLISHED_CB`/`PASSIVE_ESTABLISHED_CB`, which runs in process context
-and permits both `bpf_get_socket_cookie` and `bpf_get_current_pid_tgid`.
-This is a finding for Phase C design, **not** a blocker: the runner now
+that allows it. `sock_ops` at
+`ACTIVE_ESTABLISHED_CB`/`PASSIVE_ESTABLISHED_CB` was tried as that candidate,
+but see §Twelfth owner run: **[REFUTED]** as an identity source because
+`bpf_get_current_pid_tgid()` there returned the softirq/IRQ thread, not the
+socket owner. The earlier claim that these callbacks run "in process context"
+was **wrong** and is withdrawn. The correct fix is to read the cgroup from
+the socket itself with `bpf_sk_cgroup_id` / `bpf_skb_cgroup_id`, not from
+`current`. This is a finding for Phase C design, **not** a blocker: the runner now
 degrades gracefully and continues with Design 1 byte counters, so the accuracy
 workload (Q1/Q2) can still be measured.
 
@@ -169,9 +173,9 @@ curl workload. Results:
   helpers are permitted for sock_ops; the problem is the link attach. The
   runner now prints the underlying errno and falls back to `Single` mode on
   the next run. A second, zero-attach identity experiment was also added:
-  capture `bpf_get_current_pid_tgid` in cgroup_skb egress (process context),
-  so the next final table can reveal whether identity is obtainable without
-  a separate attach.
+  capture `bpf_get_current_pid_tgid` in cgroup_skb egress. That used an
+  incorrect "process context" assumption — **[REFUTED]** by §Twelfth run; the
+  correct source is the socket cgroup via `bpf_skb_cgroup_id`.
 
 → **[VERIFIED: spike-ebpf-report §Fifth owner run]** cgroup_skb byte
 accounting handles concurrent Motrix + curl traffic within the 5% threshold
@@ -429,11 +433,15 @@ is ticked on the strength of these code changes.
 
 ### Q5 follow-up — sock_ops identity probe (added 2026-11-20, owner run pending)
 
-To resolve Q5, the spike now includes a `sock_ops` program (`identity`) that
-captures cookie → (pid, cgroup_id) in the process context of
-`ACTIVE_ESTABLISHED_CB` / `PASSIVE_ESTABLISHED_CB`, where the verifier permits
-both `bpf_get_socket_cookie` and `bpf_get_current_pid_tgid` (unlike kprobes,
-§First owner run). It is attached with `CgroupAttachMode::AllowMultiple` so it
+To resolve Q5, the spike includes a `sock_ops` program (`identity`) that
+captures cookie → (pid, cgroup_id) at `ACTIVE_ESTABLISHED_CB` /
+`PASSIVE_ESTABLISHED_CB`, where the verifier permits both
+`bpf_get_socket_cookie` and `bpf_get_current_pid_tgid` (unlike kprobes,
+§First owner run). **Correction:** the earlier claim that these callbacks run
+"in process context" was **wrong** — §Twelfth owner run measured the captured
+task as the WiFi IRQ thread (`irq/160-rtw88_pci`), so `current` is softirq
+context there. Identity must come from the socket (`bpf_sk_cgroup_id` /
+`bpf_skb_cgroup_id`), not `current`. It is attached with `CgroupAttachMode::AllowMultiple` so it
 never replaces an existing system program, and it never calls `set_reply` —
 observe-only. The compiled object contains a `sockops` section with all four
 expected helper calls (46 / 14 / 80 / ringbuf output). The runner counts its

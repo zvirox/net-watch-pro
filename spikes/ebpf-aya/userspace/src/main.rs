@@ -4,7 +4,7 @@
 //! Throwaway code: outside the product workspace, never imported by netwatchd.
 //! See README.md in this directory for the exact runbook.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
@@ -19,6 +19,7 @@ use aya::Ebpf;
 use clap::Parser;
 
 const INTERFACE_ROOT: &str = "/sys/class/net";
+const ROOT_CGROUP: &str = "/sys/fs/cgroup";
 const SRC_CGROUP_SKB: u32 = 1;
 const SRC_SOCK_OPS: u32 = 3;
 const SRC_LOOPBACK: u32 = 4;
@@ -28,8 +29,13 @@ const LOOPBACK_ROUTE_DEST: &str = "00000000";
 #[command(name = "netwatch-spike", about = "Phase B eBPF accounting spike (Aya)")]
 struct Args {
     /// cgroup v2 directory to attach cgroup_skb programs to
-    #[arg(long, default_value = "/sys/fs/cgroup")]
+    #[arg(long, default_value = ROOT_CGROUP)]
     cgroup: PathBuf,
+
+    /// Attach at the cgroup v2 ROOT (/sys/fs/cgroup) regardless of --cgroup,
+    /// and print an Unattributed row (interface delta minus attributed bytes).
+    #[arg(long)]
+    root_attach: bool,
 
     /// Seconds to collect after attach
     #[arg(long, default_value_t = 30)]
@@ -66,15 +72,15 @@ struct Args {
 }
 
 /// Identical layout to `Delta` in the eBPF program (`#[repr(C)]`,
-/// little-endian): cookie u64@0, pid u32@8, tid u32@12, cgroup u64@16,
+/// little-endian): cookie u64@0, cgroup_id u64@8, pid u32@16, tid u32@20,
 /// bytes u64@24, direction u32@32, source u32@36, comm [u8;16]@40 (56 bytes).
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 struct Delta {
     cookie: u64,
+    cgroup_id: u64,
     pid: u32,
     tid: u32,
-    cgroup_id: u64,
     delta_bytes: u64,
     direction: u32,
     source: u32,
@@ -97,9 +103,9 @@ impl Delta {
         comm.copy_from_slice(&bytes[40..56]);
         Some(Self {
             cookie: u64_at(0),
-            pid: u32_at(8),
-            tid: u32_at(12),
-            cgroup_id: u64_at(16),
+            cgroup_id: u64_at(8),
+            pid: u32_at(16),
+            tid: u32_at(20),
             delta_bytes: u64_at(24),
             direction: u32_at(32),
             source: u32_at(36),
@@ -110,16 +116,187 @@ impl Delta {
 
 #[derive(Default, Debug)]
 struct AppAgg {
-    pid: u32,
-    cgroup_id: u64,
-    comm: String,
+    /// Debug only: 'current' in softirq, not an identity.
+    debug_pid: u32,
+    debug_comm: String,
     cgroup_path: String,
+    display: String,
+    confidence: String,
     rx: u64,
     tx: u64,
     loopback_rx: u64,
     loopback_tx: u64,
     identity_hits: u32,
     events: u64,
+}
+
+/// cgroupfs inode -> path index, with throttled rescan for unknown ids.
+struct CgroupIndex {
+    paths: HashMap<u64, String>,
+    last_scan: Instant,
+}
+
+impl CgroupIndex {
+    fn new() -> Self {
+        let mut me = Self {
+            paths: HashMap::new(),
+            last_scan: Instant::now() - Duration::from_secs(60),
+        };
+        me.scan();
+        me
+    }
+
+    fn scan(&mut self) {
+        fn walk(dir: &Path, out: &mut HashMap<u64, String>, depth: u32) {
+            if depth > 8 {
+                return;
+            }
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                if let Ok(meta) = entry.metadata() {
+                    out.insert(meta.ino(), path.to_string_lossy().into_owned());
+                }
+                walk(&path, out, depth + 1);
+            }
+        }
+        let mut found = HashMap::new();
+        walk(Path::new(ROOT_CGROUP), &mut found, 0);
+        self.paths = found;
+        self.last_scan = Instant::now();
+    }
+
+    fn path(&mut self, cgroup_id: u64) -> Option<String> {
+        if cgroup_id <= 1 {
+            return None;
+        }
+        if let Some(path) = self.paths.get(&cgroup_id) {
+            return Some(path.clone());
+        }
+        // Unknown id: rescan at most once per second, then retry once.
+        if self.last_scan.elapsed() >= Duration::from_secs(1) {
+            self.scan();
+            return self.paths.get(&cgroup_id).cloned();
+        }
+        None
+    }
+}
+
+/// Derive (display name, confidence) from a cgroup path.
+/// - app-<name>-<pid>.scope / app-<name>@<hash>.service -> <name> (high)
+/// - match a .desktop file by Exec/stem -> the desktop Name (high)
+/// - session-* / vte-spawn-* -> debug exe name with confidence "low"
+fn display_for(path: &str, debug_comm: &str, desktop: &[(String, String)]) -> (String, String) {
+    if path.is_empty() || path == "/" {
+        return ("UNIDENTIFIED".to_string(), "none".to_string());
+    }
+    let leaf = Path::new(path)
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string());
+
+    // systemd app scope: app-motrix-31433.scope or app-motrix@<hash>.service
+    if let Some(rest) = leaf.strip_prefix("app-") {
+        let mut name = rest.to_string();
+        for suffix in [".scope", ".service"] {
+            if let Some(stripped) = name.strip_suffix(suffix) {
+                name = stripped.to_string();
+            }
+        }
+        // strip a trailing -<pid> or @<hash>
+        if let Some(idx) = name.rfind(|c: char| c == '-' || c == '@') {
+            let tail = &name[idx + 1..];
+            if tail
+                .chars()
+                .all(|c| c.is_ascii_hexdigit() || c.is_ascii_digit())
+            {
+                name = name[..idx].to_string();
+            }
+        }
+        if !name.is_empty() {
+            // Prefer a .desktop display name when one matches.
+            for (hint, desktop_name) in desktop {
+                if name.eq_ignore_ascii_case(hint) {
+                    return (desktop_name.clone(), "high".to_string());
+                }
+            }
+            return (name, "high".to_string());
+        }
+    }
+
+    // .desktop match directly on the leaf name.
+    for (hint, desktop_name) in desktop {
+        if leaf.eq_ignore_ascii_case(hint) {
+            return (desktop_name.clone(), "high".to_string());
+        }
+    }
+
+    // session-*/vte-spawn-* shells: no app identity; fall back to exe/comm.
+    if leaf.starts_with("session-") || leaf.starts_with("vte-spawn-") {
+        let fallback = if debug_comm.is_empty() {
+            "unknown-shell".to_string()
+        } else {
+            debug_comm.to_string()
+        };
+        return (fallback, "low".to_string());
+    }
+
+    (leaf, "low".to_string())
+}
+
+/// Collect (hint, Name) pairs from .desktop files for app display names.
+fn desktop_names() -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut dirs = vec![PathBuf::from("/usr/share/applications")];
+    if let Ok(home) = std::env::var("HOME") {
+        dirs.push(Path::new(&home).join(".local/share/applications"));
+    }
+    for dir in dirs {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("desktop") {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let mut name = None;
+            let mut exec = None;
+            for line in text.lines() {
+                if line.starts_with("Name=") && name.is_none() {
+                    name = Some(line[5..].trim().to_string());
+                } else if line.starts_with("Exec=") && exec.is_none() {
+                    exec = Some(line[5..].trim().to_string());
+                }
+            }
+            let stem = path
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if let Some(exe) = exec {
+                let first = exe.split_whitespace().next().unwrap_or("");
+                let exe_hint = Path::new(first)
+                    .file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| first.to_string());
+                if let Some(display) = &name {
+                    out.push((exe_hint, display.clone()));
+                }
+            }
+            if let Some(display) = name {
+                out.push((stem, display));
+            }
+        }
+    }
+    out
 }
 
 fn comm_string(bytes: &[u8; 16]) -> String {
@@ -129,9 +306,16 @@ fn comm_string(bytes: &[u8; 16]) -> String {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    print_environment(&args.cgroup);
+    let attach_path = if args.root_attach {
+        PathBuf::from(ROOT_CGROUP)
+    } else {
+        args.cgroup.clone()
+    };
+    if args.root_attach {
+        println!("--root-attach: attaching at {ROOT_CGROUP} (per-app rows + Unattributed)");
+    }
+    print_environment(&attach_path);
 
-    // Resolve the interface to compare against before touching eBPF.
     let iface = match &args.iface {
         Some(name) => name.clone(),
         None => default_route_iface()?
@@ -147,8 +331,6 @@ fn main() -> Result<()> {
     let bytes = include_bytes_aligned!(concat!(env!("OUT_DIR"), "/netwatch-spike-ebpf"));
     let mut bpf = Ebpf::load(bytes).context("loading eBPF object (is this real root with BTF?)")?;
 
-    // Write the loopback ifindex into CONFIG so the BPF side can filter by
-    // number, not by name.
     let lo_ifindex = if_nametoindex("lo")?;
     let config_map = bpf
         .take_map("CONFIG")
@@ -164,22 +346,15 @@ fn main() -> Result<()> {
         .ok_or_else(|| anyhow!("EVENTS ring buffer map missing from object"))?;
     let mut events: RingBuf<_> = map.try_into().context("opening EVENTS ring buffer")?;
 
-    let cgroup = File::open(&args.cgroup).with_context(|| {
-        format!(
-            "opening cgroup {:?} — use --cgroup to point at a cgroup2 mount",
-            args.cgroup
-        )
+    let cgroup = File::open(&attach_path).with_context(|| {
+        format!("opening cgroup {attach_path:?} — use --cgroup to point at a cgroup2 mount")
     })?;
 
-    // Hold every link to the end of main so programs stay attached, then
-    // drop them explicitly for a clean detach.
-    // Declared uninitialized: attach failure calls bail!(), so every path
-    // reaching the final drop has assigned them.
     let ingress_link;
     let egress_link;
     let mut sock_ops_link = None;
 
-    println!("attaching cgroup_skb ingress/egress to {:?}", args.cgroup);
+    println!("attaching cgroup_skb ingress/egress to {attach_path:?}");
     {
         let ingress: &mut CgroupSkb = bpf
             .program_mut("ingress")
@@ -223,14 +398,10 @@ fn main() -> Result<()> {
             match TryInto::<&mut SockOps>::try_into(program) {
                 Ok(prog) => match prog.load() {
                     Ok(()) => {
-                        // Pre-flight: always print the cgroup tree and check
-                        // for an existing sock_ops program BEFORE attaching.
-                        let existing = cgroup_tree_sock_ops(&args.cgroup)?;
+                        let existing = cgroup_tree_sock_ops(&attach_path)?;
                         if existing {
                             println!("  existing sock_ops program found — refusing Single attach");
                         }
-                        // AllowMultiple is the only non-intrusive mode. If it
-                        // fails and another program exists, never override it.
                         match prog.attach(&cgroup, CgroupAttachMode::AllowMultiple) {
                             Ok(link) => {
                                 println!("  sockops: attached (AllowMultiple)");
@@ -241,17 +412,13 @@ fn main() -> Result<()> {
                                 if existing {
                                     bail!(
                                         "REFUSING to attach sock_ops with Single: another \
-                                         sock_ops program is already attached at {:?}. \
-                                         Detach it first or run with --no-sock-ops; the spike \
-                                         must not override it.",
-                                        args.cgroup
+                                         sock_ops program is already attached at {attach_path:?}. \
+                                         Detach it first or run with --no-sock-ops."
                                     );
                                 }
                                 match prog.attach(&cgroup, CgroupAttachMode::Single) {
                                     Ok(link) => {
-                                        println!(
-                                            "  sockops: attached (Single; no existing program found)"
-                                        );
+                                        println!("  sockops: attached (Single; no existing program found)");
                                         sock_ops_link = Some(link);
                                     }
                                     Err(single_error) => println!(
@@ -304,7 +471,6 @@ fn main() -> Result<()> {
     if let Some(handle) = workload_handle {
         let _ = handle.join();
     }
-    // Explicit clean detach: dropping the links detaches the programs.
     drop(sock_ops_link);
     drop(egress_link);
     drop(ingress_link);
@@ -313,10 +479,6 @@ fn main() -> Result<()> {
     result
 }
 
-/// Print the `bpftool cgroup tree` output for this cgroup and report whether
-/// a sock_ops program is already attached. This is the equivalent of the
-/// owner's `sudo bpftool cgroup tree` pre-flight, run automatically before we
-/// attach anything. If bpftool fails we refuse to continue (conservative).
 fn cgroup_tree_sock_ops(cgroup: &Path) -> Result<bool> {
     let path = cgroup.to_string_lossy();
     println!("  bpftool cgroup tree {path}:");
@@ -337,7 +499,6 @@ fn cgroup_tree_sock_ops(cgroup: &Path) -> Result<bool> {
     Ok(text.lines().any(|line| line.contains("sock_ops")))
 }
 
-/// Interface of the default route from /proc/net/route (destination 00000000).
 fn default_route_iface() -> Result<Option<String>> {
     let raw = std::fs::read_to_string("/proc/net/route")?;
     for line in raw.lines().skip(1) {
@@ -349,7 +510,6 @@ fn default_route_iface() -> Result<Option<String>> {
     Ok(None)
 }
 
-/// Resolve the ifindex of an interface by sysfs (avoids a libc dependency).
 fn if_nametoindex(name: &str) -> Result<u32> {
     let path = Path::new(INTERFACE_ROOT).join(name).join("ifindex");
     read_u64(&path)
@@ -358,7 +518,6 @@ fn if_nametoindex(name: &str) -> Result<u32> {
         .context("ifindex does not fit u32")
 }
 
-/// Sum rx/tx bytes of ONE interface from sysfs (the comparison interface).
 fn interface_totals(iface: &str) -> Result<(u64, u64)> {
     let dir = Path::new(INTERFACE_ROOT).join(iface).join("statistics");
     Ok((
@@ -367,7 +526,6 @@ fn interface_totals(iface: &str) -> Result<(u64, u64)> {
     ))
 }
 
-/// Loopback counters, reported separately (never compared with the NIC).
 fn loopback_totals() -> Result<(u64, u64)> {
     interface_totals("lo")
 }
@@ -432,49 +590,6 @@ fn sample_proc() -> Option<ProcSample> {
     })
 }
 
-/// Read the cgroup v2 path for a PID from /proc/<pid>/cgroup. This is the
-/// authoritative source for "which app scope is this socket in", better than
-/// the inode walk because it names the systemd scope directly.
-fn cgroup_path_for_pid(pid: u32) -> Option<String> {
-    let raw = std::fs::read_to_string(format!("/proc/{pid}/cgroup")).ok()?;
-    for line in raw.lines() {
-        let mut fields = line.split(':');
-        let hierarchy = fields.next()?;
-        let path = fields.nth(1)?; // fields: hierarchy : controllers : path
-        if hierarchy == "0" && !path.is_empty() && path != "/" {
-            return Some(path.to_string());
-        }
-    }
-    None
-}
-
-/// Resolve a cgroup v2 id (inode number) to its path under the cgroup mount.
-fn resolve_cgroup_path(cgroup_id: u64) -> Option<String> {
-    if cgroup_id == 0 || cgroup_id == 1 {
-        return None;
-    }
-    fn walk(dir: &Path, target: u64, depth: u32) -> Option<String> {
-        if depth > 5 {
-            return None;
-        }
-        let entries = std::fs::read_dir(dir).ok()?;
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_dir() {
-                continue;
-            }
-            if entry.metadata().ok()?.ino() == target {
-                return Some(path.to_string_lossy().into_owned());
-            }
-            if let Some(found) = walk(&path, target, depth + 1) {
-                return Some(found);
-            }
-        }
-        None
-    }
-    walk(Path::new("/sys/fs/cgroup"), cgroup_id, 0)
-}
-
 #[allow(clippy::too_many_arguments)]
 fn collect(
     events: &mut RingBuf<aya::maps::MapData>,
@@ -485,7 +600,10 @@ fn collect(
 ) -> Result<()> {
     let started = Instant::now();
     let mut next_print = started + Duration::from_secs(args.interval);
+    // AGGREGATION KEY = socket cgroup id (NOT pid, NOT cookie).
     let mut apps: BTreeMap<u64, AppAgg> = BTreeMap::new();
+    let mut cgroups = CgroupIndex::new();
+    let desktop = desktop_names();
     let mut total_events: u64 = 0;
     let mut ignored_events: u64 = 0;
     let (base_rx, base_tx) = interface_totals(iface)?;
@@ -512,25 +630,15 @@ fn collect(
                 continue;
             };
             total_events += 1;
-            let app = apps.entry(delta.cookie).or_default();
+            let key = delta.cgroup_id;
+            let app = apps.entry(key).or_default();
+            if delta.pid != 0 && app.debug_pid == 0 {
+                app.debug_pid = delta.pid;
+                app.debug_comm = comm_string(&delta.comm);
+            }
             if delta.source == SRC_SOCK_OPS {
-                // Authoritative identity from connect()/accept().
-                app.pid = delta.pid;
-                app.cgroup_id = delta.cgroup_id;
-                app.comm = comm_string(&delta.comm);
-                app.cgroup_path = cgroup_path_for_pid(delta.pid)
-                    .or_else(|| resolve_cgroup_path(delta.cgroup_id))
-                    .unwrap_or_default();
                 app.identity_hits += 1;
             } else if delta.source == SRC_CGROUP_SKB {
-                if delta.pid != 0 && app.pid == 0 {
-                    app.pid = delta.pid;
-                    app.cgroup_id = delta.cgroup_id;
-                    app.comm = comm_string(&delta.comm);
-                    app.cgroup_path = cgroup_path_for_pid(delta.pid)
-                        .or_else(|| resolve_cgroup_path(delta.cgroup_id))
-                        .unwrap_or_default();
-                }
                 if delta.direction == 0 {
                     app.rx += delta.delta_bytes;
                     interval_rx += delta.delta_bytes;
@@ -548,6 +656,17 @@ fn collect(
                 ignored_events += 1;
             }
             app.events += 1;
+
+            // Resolve path + display name lazily (with rescan for unknown ids).
+            if app.display.is_empty() {
+                if let Some(path) = cgroups.path(key) {
+                    app.cgroup_path = path;
+                }
+                let (display, confidence) =
+                    display_for(&app.cgroup_path, &app.debug_comm, &desktop);
+                app.display = display;
+                app.confidence = confidence;
+            }
         }
 
         if Instant::now() >= next_print {
@@ -556,10 +675,6 @@ fn collect(
             let iface_tx = tx.saturating_sub(prev_tx);
             prev_rx = rx;
             prev_tx = tx;
-            let identified = apps
-                .values()
-                .filter(|a| a.pid != 0 && a.cgroup_id != 1)
-                .count();
             let now_proc = sample_proc();
             if let (Some(prev), Some(now)) = (proc_prev.as_ref(), now_proc.as_ref()) {
                 let delta_ticks = now.ticks.saturating_sub(prev.ticks);
@@ -570,7 +685,7 @@ fn collect(
             proc_prev = now_proc;
             println!(
                 "[+{:>3}s] rx: app {} / iface({}) {} ({:5.1}%)  tx: app {} / iface {} ({:5.1}%)  \
-                 identified {}/{}  ring {} (bad {})  cpu {:4.1}% rss {} KiB",
+                 cgroups {}  ring {} (bad {})  cpu {:4.1}% rss {} KiB",
                 started.elapsed().as_secs(),
                 human(interval_rx),
                 iface,
@@ -579,7 +694,6 @@ fn collect(
                 human(interval_tx),
                 human(iface_tx),
                 pct(interval_tx, iface_tx),
-                identified,
                 apps.len(),
                 total_events,
                 ignored_events,
@@ -599,64 +713,43 @@ fn collect(
 
     // ---- final measurement ----
     println!("\n--- final measurement (paste into docs/spike-ebpf-report.md) ---");
-
-    // Aggregate by app identity (pid + cgroup), not by cookie.
-    let mut by_app: BTreeMap<String, AppAgg> = BTreeMap::new();
-    for app in apps.values() {
-        // cgroup_id 1 is the root cgroup: not an app identity, so treat it
-        // as UNIDENTIFIED even though a pid was captured.
-        let is_app = app.pid != 0 && app.cgroup_id != 1;
-        let key = if is_app {
-            let name = if !app.cgroup_path.is_empty() {
-                Path::new(&app.cgroup_path)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| app.cgroup_path.clone())
-            } else if !app.comm.is_empty() {
-                app.comm.clone()
-            } else {
-                format!("pid-{}", app.pid)
-            };
-            format!("{} (pid {}, cg {})", name, app.pid, app.cgroup_id)
-        } else {
-            "UNIDENTIFIED".to_string()
-        };
-        let agg = by_app.entry(key).or_default();
-        agg.pid = agg.pid.max(app.pid);
-        agg.cgroup_id = agg.cgroup_id.max(app.cgroup_id);
-        if agg.comm.is_empty() {
-            agg.comm = app.comm.clone();
-        }
-        if agg.cgroup_path.is_empty() {
-            agg.cgroup_path = app.cgroup_path.clone();
-        }
-        agg.rx += app.rx;
-        agg.tx += app.tx;
-        agg.loopback_rx += app.loopback_rx;
-        agg.loopback_tx += app.loopback_tx;
-        agg.identity_hits += app.identity_hits;
-        agg.events += app.events;
+    println!("aggregation key: socket cgroup id (bpf_skb_cgroup_id); pid is debug only");
+    if args.root_attach {
+        println!("mode: root attach — an Unattributed row is included");
     }
 
-    let app_rx: u64 = by_app.values().map(|a| a.rx).sum();
-    let app_tx: u64 = by_app.values().map(|a| a.tx).sum();
-    let loopback_rx: u64 = by_app.values().map(|a| a.loopback_rx).sum();
-    let loopback_tx: u64 = by_app.values().map(|a| a.loopback_tx).sum();
+    let app_rx: u64 = apps.values().map(|a| a.rx).sum();
+    let app_tx: u64 = apps.values().map(|a| a.tx).sum();
+    let loopback_rx: u64 = apps.values().map(|a| a.loopback_rx).sum();
+    let loopback_tx: u64 = apps.values().map(|a| a.loopback_tx).sum();
 
     println!(
-        "| app / cgroup | pid | cgroup_id | identity_hits | rx_bytes | tx_bytes | rx share | tx share | events |"
+        "| app (display) | confidence | cgroup id | cgroup path | rx_bytes | tx_bytes | rx share | tx share | debug pid/comm | events |"
     );
-    println!("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
-    for (name, app) in &by_app {
+    println!("|---|---|---:|---|---:|---:|---:|---:|---|---:|");
+    let mut sorted: Vec<(&u64, &AppAgg)> = apps.iter().collect();
+    sorted.sort_by_key(|(_, a)| std::cmp::Reverse(a.rx + a.tx));
+    for (cgroup_id, app) in sorted {
         println!(
-            "| {name} | {} | {} | {} | {} | {} | {:5.1}% | {:5.1}% | {} |",
-            app.pid,
-            app.cgroup_id,
-            app.identity_hits,
+            "| {} | {} | {} | {} | {} | {} | {:5.1}% | {:5.1}% | {}/{} | {} |",
+            app.display,
+            app.confidence,
+            cgroup_id,
+            if app.cgroup_path.is_empty() {
+                "-"
+            } else {
+                &app.cgroup_path
+            },
             app.rx,
             app.tx,
             pct(app.rx, app_rx),
             pct(app.tx, app_tx),
+            app.debug_pid,
+            if app.debug_comm.is_empty() {
+                "-"
+            } else {
+                &app.debug_comm
+            },
             app.events
         );
     }
@@ -664,10 +757,21 @@ fn collect(
     let (iface_now_rx, iface_now_tx) = interface_totals(iface)?;
     let iface_delta_rx = iface_now_rx.saturating_sub(base_rx);
     let iface_delta_tx = iface_now_tx.saturating_sub(base_tx);
+    let unattr_rx = iface_delta_rx.saturating_sub(app_rx);
+    let unattr_tx = iface_delta_tx.saturating_sub(app_tx);
+    if args.root_attach {
+        println!(
+            "| Unattributed | - | - | interface delta minus attributed | {} | {} | {:5.1}% | {:5.1}% | - | - |",
+            unattr_rx,
+            unattr_tx,
+            pct(unattr_rx, iface_delta_rx),
+            pct(unattr_tx, iface_delta_tx)
+        );
+    }
+
     let (lo_now_rx, lo_now_tx) = loopback_totals()?;
     let lo_delta_rx = lo_now_rx.saturating_sub(base_lo_rx);
     let lo_delta_tx = lo_now_tx.saturating_sub(base_lo_tx);
-
     println!(
         "\nattributed rx/tx (non-loopback) = {app_rx}/{app_tx}; interface({iface}) delta = \
          {iface_delta_rx}/{iface_delta_tx} => {:.1}% / {:.1}% attributed (error {:.1}% / {:.1}%).",
@@ -676,19 +780,23 @@ fn collect(
         100.0 - pct(app_rx, iface_delta_rx),
         100.0 - pct(app_tx, iface_delta_tx),
     );
+    if args.root_attach {
+        println!(
+            "unattributed rx/tx = {unattr_rx}/{unattr_tx} ({:5.1}% / {:5.1}% of interface delta)",
+            pct(unattr_rx, iface_delta_rx),
+            pct(unattr_tx, iface_delta_tx)
+        );
+    }
     println!(
         "loopback (reported separately, NOT compared): cgroup_skb {loopback_rx}/{loopback_tx} B, \
          sysfs lo delta {lo_delta_rx}/{lo_delta_tx} B."
     );
     println!(
-        "identified cookies: {} / {}; ring events {}; bad {}.",
-        by_app
-            .values()
-            .filter(|a| a.pid != 0 && a.cgroup_id != 1)
-            .count(),
-        by_app.len(),
+        "cgroups {}; ring events {}; bad {}; sock_ops identity hits {}.",
+        apps.len(),
         total_events,
-        ignored_events
+        ignored_events,
+        apps.values().map(|a| a.identity_hits).sum::<u32>()
     );
 
     let workload_total = workload_bytes.load(std::sync::atomic::Ordering::Relaxed);
@@ -729,8 +837,6 @@ fn human(bytes: u64) -> String {
     format!("{value:.1}{}", UNITS[unit])
 }
 
-/// Environment report: cgroup2 detection from /proc/self/mountinfo (the
-/// previous /proc/mounts check looked at the mountpoint field by mistake).
 fn print_environment(cgroup: &Path) {
     println!("--- environment ---");
     println!("arch: {}", std::env::consts::ARCH);
@@ -747,7 +853,6 @@ fn print_environment(cgroup: &Path) {
         }
     );
 
-    // mountinfo format: ... mount point ... - fstype source superopts
     let mountinfo = std::fs::read_to_string("/proc/self/mountinfo").unwrap_or_default();
     let cgroup2: Vec<String> = mountinfo
         .lines()
