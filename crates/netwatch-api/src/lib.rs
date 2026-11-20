@@ -15,6 +15,7 @@ pub mod apps;
 pub mod auth;
 pub mod budgets;
 pub mod calendar;
+pub mod diagnostics;
 pub mod error;
 pub mod exports;
 pub mod history;

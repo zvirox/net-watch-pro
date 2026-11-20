@@ -47,6 +47,26 @@ pub async fn status(State(state): State<Arc<AppState>>) -> Response {
     .into_response()
 }
 
+/// `GET /diagnostics` — S3, one payload for the Diagnostics modal (DESIGN.md §8.9).
+pub async fn diagnostics(State(state): State<Arc<AppState>>) -> Response {
+    let ebpf = state.status.borrow().ebpf;
+    match crate::diagnostics::diagnostics(&state.db, ebpf).await {
+        Ok(payload) => Json(payload).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `GET /events` — S4, paginated `daemon_events` journal.
+pub async fn events(
+    State(state): State<Arc<AppState>>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> Response {
+    match crate::diagnostics::events(&state.db, raw.as_deref()).await {
+        Ok(page) => Json(page).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
 /// `GET /connections/live` — C1: one snapshot of the live view; the WS
 /// `live.connections` channel serves the same rows (P2.8: REST matches WS).
 pub async fn connections_live(State(state): State<Arc<AppState>>) -> Response {
@@ -439,6 +459,8 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
     axum::Router::new()
         .route("/api/v1/health", axum::routing::get(health))
         .route("/api/v1/status", axum::routing::get(status))
+        .route("/api/v1/diagnostics", axum::routing::get(diagnostics))
+        .route("/api/v1/events", axum::routing::get(events))
         .route(
             "/api/v1/connections/live",
             axum::routing::get(connections_live),

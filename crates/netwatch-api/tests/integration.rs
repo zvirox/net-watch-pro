@@ -754,6 +754,99 @@ async fn status_over_socket_returns_contract_shape() {
     assert_eq!(v["drops"]["bpf_map_full"], 0);
 }
 
+async fn seed_diagnostics_schema(pool: &sqlx::SqlitePool) {
+    sqlx::query(
+        "CREATE TABLE daemon_events (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            occurred_at INTEGER NOT NULL,
+            level TEXT NOT NULL DEFAULT 'info' CHECK (level IN ('info','warn','error')),
+            code TEXT NOT NULL,
+            message TEXT NOT NULL,
+            detail_json TEXT,
+            created_at INTEGER NOT NULL DEFAULT 0)",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO settings (key, value) VALUES ('retention_days', '90')
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for (level, code) in [("warn", "EBPF_ATTACH_FAILED"), ("error", "DB_ERROR")] {
+        sqlx::query(
+            "INSERT INTO daemon_events (occurred_at, level, code, message)
+             VALUES (1700000000, ?1, ?2, 'seeded event')",
+        )
+        .bind(level)
+        .bind(code)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn diagnostics_over_socket_returns_checks_and_journal() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_diagnostics_schema(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/diagnostics").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    let checks = v["checks"].as_array().unwrap();
+    assert_eq!(checks.len(), 4);
+    assert!(
+        checks
+            .iter()
+            .any(|c| c["name"] == "ebpf_attach" && c["result"] == "pass")
+    );
+    for name in ["service_unit", "kernel"] {
+        let check = checks.iter().find(|c| c["name"] == name).unwrap();
+        assert_eq!(check["result"], "skip");
+        assert!(check["detail"].as_str().is_some_and(|d| !d.is_empty()));
+    }
+    assert_eq!(v["journal_excerpt"].as_array().unwrap().len(), 2);
+    assert_eq!(v["journal_excerpt"][0]["code"], "DB_ERROR");
+    assert_eq!(v["data"]["retention_days"], 90);
+    assert!(v["data"]["db_size_bytes"].as_i64().is_some_and(|n| n > 0));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn events_over_socket_paginates_and_filters() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_diagnostics_schema(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/events?limit=1").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["data"].as_array().unwrap().len(), 1);
+    assert_eq!(v["has_more"], true);
+    let cursor = v["next_cursor"].as_str().unwrap();
+
+    let (status, body) = http_get(&sock, &format!("/api/v1/events?limit=1&cursor={cursor}")).await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["data"].as_array().unwrap().len(), 1);
+    assert_eq!(v["has_more"], false);
+
+    let (status, body) = http_get(&sock, "/api/v1/events?level=warn").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["data"].as_array().unwrap().len(), 1);
+
+    let (status, body) = http_get(&sock, "/api/v1/events?level=bogus").await;
+    assert_eq!(status, 400, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "QUERY_INVALID");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn unknown_route_over_socket_is_404_envelope() {
     let (sock, _tx) = spawn_server().await;
