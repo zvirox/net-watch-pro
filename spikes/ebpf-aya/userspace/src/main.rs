@@ -12,13 +12,14 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, bail, Context, Result};
 use aya::include_bytes_aligned;
 use aya::maps::RingBuf;
-use aya::programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType, KProbe};
+use aya::programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType, KProbe, SockOps};
 use aya::Ebpf;
 use clap::Parser;
 
 const INTERFACE_ROOT: &str = "/sys/class/net";
 const SRC_CGROUP_SKB: u32 = 1;
 const SRC_KPROBE: u32 = 2;
+const SRC_SOCK_OPS: u32 = 3;
 
 #[derive(Parser, Debug)]
 #[command(name = "netwatch-spike", about = "Phase B eBPF accounting spike (Aya)")]
@@ -38,6 +39,10 @@ struct Args {
     /// Skip Design 2 kprobes (measure Design 1 alone)
     #[arg(long)]
     no_kprobes: bool,
+
+    /// Skip the sock_ops identity probe (Q5 candidate). Enabled by default.
+    #[arg(long)]
+    no_sock_ops: bool,
 
     /// Generate our own known-rate download during collection, so no second
     /// terminal or external download setup is needed. Uses a ranged HTTP GET.
@@ -199,7 +204,36 @@ fn main() -> Result<()> {
             }
         }
     } else {
-        println!("--no-kprobes: Design 1 only (identity will be 0)");
+        println!("--no-kprobes: kprobe identity disabled");
+    }
+
+    // Q5 candidate: sock_ops captures cookie -> (pid, cgroup) at connect(),
+    // where both helpers are allowed. Attach with AllowMultiple so an existing
+    // system sock_ops program is not replaced (monitor-only, no set_reply).
+    // Held for its Drop: the link must stay alive through collect() or the
+    // program detaches. Never read explicitly — that is intentional.
+    let mut _sock_ops_link = None;
+    if !args.no_sock_ops {
+        println!("attaching sock_ops identity probe (Q5 candidate):");
+        if let Some(program) = bpf.program_mut("identity") {
+            match TryInto::<&mut SockOps>::try_into(program) {
+                Ok(prog) => match prog.load() {
+                    Ok(()) => match prog.attach(&cgroup, CgroupAttachMode::AllowMultiple) {
+                        Ok(link) => {
+                            println!("  sockops: attached");
+                            _sock_ops_link = Some(link);
+                        }
+                        Err(error) => println!("  sockops attach FAILED: {error} — record this"),
+                    },
+                    Err(error) => println!("  sockops load REJECTED: {error} — record this"),
+                },
+                Err(error) => println!("  identity program wrong type: {error}"),
+            }
+        } else {
+            println!("  identity program missing from object");
+        }
+    } else {
+        println!("--no-sock-ops: sock_ops identity disabled");
     }
 
     println!(
@@ -351,7 +385,7 @@ fn collect(
             let app = apps.entry(delta.cookie).or_default();
             app.pid = delta.pid;
             app.cgroup_id = delta.cgroup_id;
-            if delta.source == SRC_KPROBE {
+            if delta.source == SRC_KPROBE || delta.source == SRC_SOCK_OPS {
                 app.identity_hits += 1;
             } else if delta.source == SRC_CGROUP_SKB {
                 if delta.direction == 0 {

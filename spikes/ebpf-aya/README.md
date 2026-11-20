@@ -101,6 +101,15 @@ bpffs mount.
 > identity = 0 until a `sock_ops`-based identity probe is implemented).
 > See `docs/spike-ebpf-report.md` "First owner run".
 
+> **Q5 follow-up (added 2026-11-20):** a `sock_ops` identity probe is now
+> included and enabled by default. It runs at connection establishment, where
+> `bpf_get_socket_cookie` and `bpf_get_current_pid_tgid` are both permitted
+> (unlike kprobes), and attaches with `AllowMultiple` so it cannot replace an
+> existing system program. Run the same one-terminal command again and check
+> whether the final table shows nonzero `pid`/`cgroup_id` and `identity_hits`
+> — that answers Q5 and decides whether Phase C can show per-app rows.
+> `--no-sock-ops` reproduces the byte-only baseline.
+
 > **VALID RESULT (fourth owner run, 2026-11-20):** with a real
 > `curl` workload and the accept-verdict fix, cgroup_skb attributed **95.9%
 > of download bytes** vs interface counters (4.1% gap, inside the 5% go

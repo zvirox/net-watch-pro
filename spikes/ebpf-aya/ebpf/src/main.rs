@@ -15,12 +15,13 @@
 use core::ffi::c_void;
 
 use aya_ebpf::{
+    bindings::{BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB, BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB},
     helpers::generated::{
         bpf_get_current_cgroup_id, bpf_get_current_pid_tgid, bpf_get_socket_cookie,
     },
-    macros::{cgroup_skb, kprobe, map},
+    macros::{cgroup_skb, kprobe, map, sock_ops},
     maps::{HashMap, RingBuf},
-    programs::{ProbeContext, SkBuffContext},
+    programs::{ProbeContext, SkBuffContext, SockOpsContext},
     EbpfContext as _,
 };
 
@@ -28,6 +29,8 @@ const MAX_ENTRIES: u32 = 8192;
 const RING_BYTES: u32 = 256 * 1024;
 const SRC_CGROUP_SKB: u32 = 1;
 const SRC_KPROBE: u32 = 2;
+/// Identity captured by sock_ops at connection establishment (Q5 candidate).
+const SRC_SOCK_OPS: u32 = 3;
 /// cgroup_skb verdict: the kernel DROPS the packet when the program returns
 /// 0 and accepts it on any nonzero value. Returning 0 here dropped ALL
 /// traffic while the programs were attached (observed 2026-11-20). The
@@ -177,6 +180,46 @@ pub fn kprobe_identity(ctx: ProbeContext) -> u32 {
         0,
     );
     0
+}
+
+/// Q5 candidate: capture cookie -> (pid, cgroup) at connection establishment.
+///
+/// sock_ops runs in the process context of connect()/accept(), so unlike
+/// cgroup_skb ingress (softirq) `bpf_get_current_pid_tgid` is meaningful here,
+/// and unlike kprobes the verifier permits `bpf_get_socket_cookie` for this
+/// program type. Attach with `AllowMultiple` so we do not disturb any existing
+/// cgroup programs (observe-only; never calls set_reply).
+#[sock_ops]
+pub fn identity(ctx: SockOpsContext) -> u32 {
+    let op = ctx.op();
+    if op != BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB && op != BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB {
+        return 0;
+    }
+    let cookie = unsafe { bpf_get_socket_cookie(ctx.as_ptr()) };
+    if cookie == 0 {
+        return 0;
+    }
+    let pid_tgid = unsafe { bpf_get_current_pid_tgid() };
+    let cgroup = unsafe { bpf_get_current_cgroup_id() };
+
+    let mut meta = read_meta(cookie);
+    meta.pid = (pid_tgid >> 32) as u32;
+    meta.cgroup_id = cgroup;
+    meta.identity_hits = meta.identity_hits.saturating_add(1);
+    let _ = META.insert(&cookie, &meta, 0);
+
+    let _ = EVENTS.output(
+        &Delta {
+            cookie,
+            pid: meta.pid,
+            cgroup_id: meta.cgroup_id,
+            delta_bytes: 0,
+            direction: 0,
+            source: SRC_SOCK_OPS,
+        },
+        0,
+    );
+    0 // return value is ignored for ESTABLISHED_CB; never modify socket state
 }
 
 #[cfg(not(test))]

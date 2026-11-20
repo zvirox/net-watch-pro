@@ -133,6 +133,31 @@ accept-verdict fix and real traffic, so its Q1/Q2 numbers are valid.
   the 8,192-entry map did not fill. Short-lived socket churn is real but
   within LRU capacity at this load.
 
+### Q5 follow-up — sock_ops identity probe (added 2026-11-20, owner run pending)
+
+To resolve Q5, the spike now includes a `sock_ops` program (`identity`) that
+captures cookie → (pid, cgroup_id) in the process context of
+`ACTIVE_ESTABLISHED_CB` / `PASSIVE_ESTABLISHED_CB`, where the verifier permits
+both `bpf_get_socket_cookie` and `bpf_get_current_pid_tgid` (unlike kprobes,
+§First owner run). It is attached with `CgroupAttachMode::AllowMultiple` so it
+never replaces an existing system program, and it never calls `set_reply` —
+observe-only. The compiled object contains a `sockops` section with all four
+expected helper calls (46 / 14 / 80 / ringbuf output). The runner counts its
+events as `identity_hits`, so the next run's final table should show nonzero
+pid/cgroup for counted cookies if this works.
+
+**Not yet verified:** whether the verifier accepts these helpers for sock_ops
+on kernel 7.3.4-cachyos, and whether the captured cgroup actually groups
+Motrix + `aria2c` into one identity. Owner must run once more (one terminal):
+```
+sudo ./target/debug/netwatch-spike-userspace --workload --duration 180
+```
+and paste the final table here. If `identity_hits` and `pid`/`cgroup_id` are
+nonzero, Q5 becomes `[VERIFIED: spike-ebpf-report §Q5 follow-up]` and Phase C
+can attribute per-app bytes; if not, owner decision L-OQ3 ("TCP only" label)
+applies. `--no-sock-ops` disables the probe to reproduce the Design-1-only
+baseline.
+
 **Go/no-go for byte accounting: GO** on Arch/CachyOS for Design 1 byte counts
 (≥95% of curl traffic, ≤5% gap, cheap, stable). **Identity for per-app rows is
 a separate open item** (sock_ops candidate) — Phase C cannot show "Motrix"
@@ -146,7 +171,7 @@ Fedora VMs) is still outstanding.
 | Q2 | 1 s per-app rate stability (jitter, lag) | 94.3–95.7% rx across 12 steady download seconds | verified |
 | Q3 | CPU/RSS at load | 0.0% CPU, 4,116 KiB RSS under ~10 MB/s download | verified (partial: no 500-conn test) |
 | Q4 | Capabilities required | CAP_BPF + CAP_PERFMON + CAP_NET_ADMIN effective | verified on this host |
-| Q5 | cgroup identity for Motrix + `aria2c` | 0/91 identified; kprobe rejected | refuted (kprobe); sock_ops needed |
+| Q5 | cgroup identity for Motrix + `aria2c` | 0/91 identified; kprobe rejected; sock_ops probe added, owner run pending | refuted (kprobe); sock_ops under test |
 | Q6 | Secure Boot / lockdown on Ubuntu LTS + Fedora VMs | — | not measured |
 
 **Go/no-go inputs:** attributed vs true ≤ 5% (curl/iperf3); attributed +
