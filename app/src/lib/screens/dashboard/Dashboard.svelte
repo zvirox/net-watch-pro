@@ -6,6 +6,7 @@
   import { Button, EmptyState } from '$lib/components/ui';
   import { daemonStore } from '$lib/stores/daemon.svelte';
   import { ratesStore } from '$lib/stores/rates.svelte';
+  import { liveAppsStore } from '$lib/stores/live-apps.svelte';
   import { usageStore, type Granularity, type InterfaceUsage } from '$lib/stores/usage.svelte';
   import { formatBytes } from '$lib/utils/format';
 
@@ -13,6 +14,8 @@
   const rateHistory = $derived(ratesStore.history);
   const rateStale = $derived(ratesStore.stale);
   const noCollector = $derived(daemonStore.ebpf === 'no_collector');
+  const liveApps = $derived(liveAppsStore.sorted());
+  const liveAppsStale = $derived(liveAppsStore.stale);
 
   const today = $derived(usageStore.summary?.today ?? null);
   const month = $derived(usageStore.summary?.month ?? null);
@@ -26,9 +29,11 @@
   onMount(() => {
     void usageStore.load();
     ratesStore.start();
+    liveAppsStore.start();
   });
   onDestroy(() => {
     ratesStore.stop();
+    liveAppsStore.stop();
   });
 
   // Owner L-OQ4: Wi-Fi signal/link from local sysfs; "—" when unavailable.
@@ -286,6 +291,44 @@
           icon="◎"
         />
       {/if}
+      <!-- Phase C C7: live per-app speed from the `live.apps` stream. -->
+      <div class="live-apps" aria-label="Live per-app speed">
+        <div class="live-apps__head">
+          <p class="eyebrow">LIVE SPEED</p>
+          {#if liveAppsStale}
+            <span class="network-now__state network-now__state--stale" role="status">Stale</span>
+          {/if}
+        </div>
+        {#if noCollector}
+          <p class="live-apps__note">
+            Per-app live speed needs an eBPF collector; PC speed above still works.
+          </p>
+        {:else if liveApps.length === 0}
+          <p class="live-apps__note">Waiting for the first per-app sample…</p>
+        {:else}
+          <ul>
+            {#each liveApps as app (app.cgroup_id)}
+              <li class:live-apps__idle={app.down_bps + app.up_bps === 0}>
+                <span class="live-apps__name">
+                  {app.name}
+                  {#if app.confidence === 'low'}<span class="live-apps__confidence"
+                      >low confidence</span
+                    >{/if}
+                </span>
+                <span class="live-apps__rates mono">
+                  <span>↓ {ratesStore.display(app.down_bps)}</span>
+                  <span>↑ {ratesStore.display(app.up_bps)}</span>
+                </span>
+              </li>
+            {/each}
+          </ul>
+          <p class="live-apps__note">
+            Unattributed: ↓ {ratesStore.display(liveAppsStore.data?.unattributed.down_bps ?? 0)} · ↑ {ratesStore.display(
+              liveAppsStore.data?.unattributed.up_bps ?? 0,
+            )}
+          </p>
+        {/if}
+      </div>
       <div class="gap-row">
         <span class="gap-dot" aria-hidden="true"></span>
         <span>Unattributed / system</span>
@@ -516,6 +559,54 @@
   }
   .apps-chart {
     height: 180px;
+  }
+  .live-apps {
+    margin-top: var(--nwp-space-4);
+    border-top: 1px solid var(--nwp-border);
+    padding-top: var(--nwp-space-3);
+  }
+  .live-apps__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--nwp-space-2);
+  }
+  .live-apps ul {
+    display: grid;
+    gap: var(--nwp-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .live-apps li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nwp-space-2);
+    font-size: var(--nwp-size-label);
+  }
+  .live-apps__idle {
+    opacity: 0.6;
+  }
+  .live-apps__name {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nwp-space-2);
+  }
+  .live-apps__confidence {
+    color: var(--nwp-text-secondary);
+    font-size: var(--nwp-size-caption);
+  }
+  .live-apps__rates {
+    display: inline-flex;
+    gap: var(--nwp-space-3);
+    color: var(--nwp-text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+  .live-apps__note {
+    margin: var(--nwp-space-2) 0 0;
+    color: var(--nwp-text-secondary);
+    font-size: var(--nwp-size-caption);
   }
   .gap-row {
     display: flex;

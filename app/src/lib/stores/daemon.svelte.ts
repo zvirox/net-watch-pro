@@ -84,7 +84,9 @@ export const daemonStore = {
       frameListeners.delete(listener);
     };
   },
-  subscribe(channel: 'status' | 'live.connections' | 'usage.totals' | 'net.rates'): Promise<void> {
+  subscribe(
+    channel: 'status' | 'live.connections' | 'usage.totals' | 'net.rates' | 'live.apps',
+  ): Promise<void> {
     return client.send({ op: 'subscribe', channel });
   },
   request(method: string, path: string, body?: unknown): Promise<unknown> {

@@ -15,6 +15,7 @@
     TableCell,
   } from '$lib/components/ui';
   import { liveStore, type LiveConnectionRow } from '$lib/stores/live.svelte';
+  import { daemonStore } from '$lib/stores/daemon.svelte';
 
   // Manual windowing (~§8.4 "virtualized"): fixed row height, render only
   // the visible slice plus overscan; spacer rows keep the scroll height
@@ -162,13 +163,17 @@
         <p>Waiting for the first snapshot from the daemon.</p>
       </div>
     {:else if filtered.length === 0}
-      <!-- Empty (§7.9): honest — no traffic or nothing matches the filter -->
+      <!-- Empty (§7.9 / C8/C9): honest about a missing collector -->
       <div class="state-card" role="status">
         <strong>No active connections</strong>
         <p>
-          {search || protocol !== 'all'
-            ? 'Nothing matches the current filters.'
-            : 'No connections are active right now.'}
+          {#if search || protocol !== 'all'}
+            Nothing matches the current filters.
+          {:else if daemonStore.ebpf === 'no_collector' || daemonStore.ebpf === 'failed'}
+            No eBPF collector is running, so live connections cannot be shown. PC speed still works.
+          {:else}
+            No connections are active right now.
+          {/if}
         </p>
       </div>
     {:else}
