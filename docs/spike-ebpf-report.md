@@ -206,6 +206,29 @@ in principle. **Still to verify:** that Motrix and its `aria2c` child land in
 the same cgroup (the specific Q5 grouping question) — needs a run with Motrix
 active. Kprobe identity remains `[REFUTED]`; sock_ops is the working path.
 
+### Eleventh owner run — 2026-11-20 (60 s, leaf-scope attach, sock_ops attached)
+
+Attached cgroup_skb + sock_ops to the Motrix leaf scope
+`app-motrix-31433.scope` (no bpftune conflict there). sock_ops attached via
+Single fallback after bpftool showed no existing program.
+
+- The leaf-scope cgroup_skb counters captured **542,890,082 B rx** vs
+  `wlan0` 562,916,025 B (96.4%), tx 13,090,220 / 20,478,918 B (63.9%) —
+  same tx gap. Loopback 175,515/175,515 vs sysfs 186,859/186,859. CPU 0.0%,
+  RSS 4,204 KiB, 393,012 events, 0 bad, clean detach. **[VERIFIED]** byte
+  counting works when attached at a leaf cgroup.
+- **Identity still 0/18** — sock_ops attached but produced no identity hits.
+  **[VERIFIED]** from this run: the owner started Motrix **before** the spike
+  attached, so all download connections were already established. sock_ops
+  fires only at `ACTIVE/PASSIVE_ESTABLISHED_CB` (connection creation), so it
+  cannot identify pre-existing sockets. Also, the egress-current fallback was
+  removed per the owner's instruction.
+- → **eBPF per-app identity is still UNMEASURED.** The next run must establish
+  new connections **after** the spike attaches to see whether sock_ops
+  captures them. OS-level grouping (Motrix + aria2c in
+  `app-motrix-31433.scope`) remains verified from §Tenth run via
+  `/proc/<pid>/cgroup`.
+
 ### Tenth owner run — 2026-11-20 (60 s, Motrix active, loopback-filtered)
 
 Motrix was downloading during the 60 s window. Byte accounting:
