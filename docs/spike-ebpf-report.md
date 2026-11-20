@@ -206,6 +206,41 @@ in principle. **Still to verify:** that Motrix and its `aria2c` child land in
 the same cgroup (the specific Q5 grouping question) — needs a run with Motrix
 active. Kprobe identity remains `[REFUTED]`; sock_ops is the working path.
 
+### Eighth owner run — 2026-11-20 (30 s, single curl, loopback-filtered, byte data)
+
+Built as the normal user, run with `--no-sock-ops` (bpftune owns the root
+sock_ops hook). Workload: one `curl` of `https://proof.ovh.net/files/100Mb.dat`
+to `/dev/null`, which reported 104,857,600 B in 34.9 s — the 30 s spike
+window overlapped most of it.
+
+**Results:**
+- rx: attributed **30,673,002 B** vs `wlan0` delta **31,835,162 B** =
+  **96.3% attributed, error 3.7%** → passes the ≤5% single-transfer
+  threshold. **[VERIFIED: spike-ebpf-report §Eighth owner run]** download
+  byte accounting is within 5% on a single curl transfer with loopback
+  filtered.
+- tx: attributed **470,553 B** vs `wlan0` delta **737,955 B** =
+  **63.8% attributed, error 36.2%** → **FAILS** the 5% threshold. The cause
+  is still **[HYPOTHESIS]** — but **loopback is now REFUTED as the cause**:
+  loopback was only 10,116/10,296 B attributed, matching sysfs `lo` delta
+  10,452/10,452 B, i.e. ~10 KB against a ~267 KB tx gap. Something else on
+  the egress path is responsible; not measured yet. tx accuracy stays
+  UNVERIFIED.
+- **[VERIFIED: spike-ebpf-report §Eighth owner run]** loopback accounting is
+  correct: cgroup_skb `SRC_LOOPBACK` bytes (10,116/10,296) match the sysfs
+  `lo` delta (10,452/10,452) within ~3%.
+- **[VERIFIED: spike-ebpf-report §Eighth owner run]** overhead under this
+  load: 0.0% CPU, 4,196 KiB RSS — inside ≤3% / ≤150 MB.
+- **[VERIFIED: spike-ebpf-report §Eighth owner run]** clean detach: runner
+  printed `all eBPF programs detached.` and exited normally.
+- 18,462 ring events, 0 bad. Q2 stability: rx held 96.1–97.1% across the
+  steady download seconds (+8s to +30s). **[VERIFIED]** for this run.
+- Identity: 0/1 cookies identified — expected with `--no-sock-ops`; no new
+  Q5 evidence.
+
+**Not answered here:** tx gap cause, Motrix grouping, UDP, Q6, 500-connection
+overhead, owner sign-off. L-B1 stays open.
+
 ### Seventh owner run — 2026-11-20 (safety gate verified; no byte data)
 
 Pre-flight (`sudo bpftool cgroup tree`) showed the root cgroup already has
@@ -301,7 +336,7 @@ Fedora VMs) is still outstanding.
 
 | # | Question | Measurement / evidence | Status |
 |---|---|---|---|
-| Q1 | Per-app bytes vs interface counters; composition of the gap | rx 95.9% (§Fourth), 96.5% (§Fifth); tx 101.2% / 68.1% unexplained | rx verified; tx unmeasured |
+| Q1 | Per-app bytes vs interface counters; composition of the gap | rx 96.3% (§Eighth, error 3.7%, loopback filtered); tx 63.8% (error 36.2%, cause unknown; loopback refuted as cause) | rx verified; tx fails threshold, cause unmeasured |
 | Q2 | 1 s per-app rate stability (jitter, lag) | 94.3–95.7% rx across 12 steady download seconds | verified |
 | Q3 | CPU/RSS at load | 0.0% CPU, 4,116 KiB RSS under ~10 MB/s download | verified (partial: no 500-conn test) |
 | Q4 | Capabilities required | CAP_BPF + CAP_PERFMON + CAP_NET_ADMIN effective | verified on this host |
