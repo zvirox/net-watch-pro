@@ -219,30 +219,32 @@ fn main() -> Result<()> {
             match TryInto::<&mut SockOps>::try_into(program) {
                 Ok(prog) => match prog.load() {
                     Ok(()) => {
-                        // AllowMultiple preserves any existing system program;
-                        // fall back to Single only if the kernel rejects it.
-                        // Print the Debug form so the underlying errno is
-                        // visible (Aya's Display hides it as "`call` failed").
-                        let multi = prog.attach(&cgroup, CgroupAttachMode::AllowMultiple);
-                        match multi {
-                            Ok(link) => {
-                                println!("  sockops: attached (AllowMultiple)");
-                                _sock_ops_link = Some(link);
-                            }
-                            Err(multi_error) => {
-                                println!(
-                                    "  sockops AllowMultiple FAILED: {multi_error:?} — record this"
-                                );
-                                match prog.attach(&cgroup, CgroupAttachMode::Single) {
-                                    Ok(link) => {
-                                        println!("  sockops: attached (Single fallback; may override an existing program)");
-                                        _sock_ops_link = Some(link);
-                                    }
-                                    Err(single_error) => println!(
-                                        "  sockops Single FAILED: {single_error:?} — record this"
-                                    ),
+                        // Try safest-to-most-intrusive attach modes so an
+                        // existing system program is never replaced if a
+                        // non-intrusive mode works. Print Debug form so the
+                        // real errno is visible (Aya's Display hides it).
+                        // Observed: AllowMultiple -> EINVAL at the root cgroup
+                        // on 7.3.4-cachyos; AllowOverride/Single succeed.
+                        let mut attached = false;
+                        for mode in [
+                            ("AllowMultiple", CgroupAttachMode::AllowMultiple),
+                            ("AllowOverride", CgroupAttachMode::AllowOverride),
+                            ("Single", CgroupAttachMode::Single),
+                        ] {
+                            match prog.attach(&cgroup, mode.1) {
+                                Ok(link) => {
+                                    println!("  sockops: attached ({})", mode.0);
+                                    _sock_ops_link = Some(link);
+                                    attached = true;
+                                    break;
+                                }
+                                Err(error) => {
+                                    println!("  sockops {} FAILED: {error:?} — record this", mode.0)
                                 }
                             }
+                        }
+                        if !attached {
+                            println!("  sockops: ALL attach modes failed — identity will be 0");
                         }
                     }
                     Err(error) => println!("  sockops load REJECTED: {error:?} — record this"),

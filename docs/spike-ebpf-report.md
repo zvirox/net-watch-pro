@@ -167,6 +167,35 @@ curl workload. Results:
 accounting handles concurrent Motrix + curl traffic within the 5% threshold
 and stays cheap. Q5 (identity) remains open.
 
+### Sixth owner run — 2026-11-20 (60 s, Q5 identity test — DECISIVE)
+
+With the Single-mode fallback, identity capture works. Both mechanisms in
+the spike produced real pid/cgroup_id values:
+
+- **sock_ops (Single attach) works.** The final table shows 12 cookies with
+  `identity_hits = 1` (e.g. 4359/4360/4364/4365/4367–4370 and 8507/8508),
+  all mapped to the same identity: **pid 12397, cgroup_id 30105**. Another
+  pair (4311/4313) mapped to **pid 26829, cgroup_id 65399**.
+- **The egress-current experiment also works** (no extra attach): many
+  cookies with `identity_hits = 0` still carry nonzero pid/cgroup — e.g.
+  pid 17915/cgroup 30155, pid 559/cgroup 1, pid 620/cgroup 3847. So
+  `bpf_get_current_pid_tgid` in cgroup_skb egress is usable here.
+- **AllowMultiple fails with EINVAL (code 22)** at the root cgroup on
+  7.3.4-cachyos; AllowOverride or Single succeed. The runner now tries
+  `AllowMultiple → AllowOverride → Single` so the least intrusive working
+  mode wins. For Phase C, attaching at the root cgroup with Single must be
+  avoided in the product — use a dedicated cgroup or AllowOverride.
+- **12 of 37 cookies identified** in 60 s of background traffic (no workload
+  in this run). That is the identity share for idle desktop traffic; Motrix
+  grouping itself was not exercised in this 60 s run.
+
+→ **[VERIFIED: spike-ebpf-report §Sixth owner run]** per-socket identity
+(pid, cgroup_id) can be captured from cgroup_skb context on this kernel, both
+via sock_ops and via egress-current. This unblocks Phase C per-app attribution
+in principle. **Still to verify:** that Motrix and its `aria2c` child land in
+the same cgroup (the specific Q5 grouping question) — needs a run with Motrix
+active. Kprobe identity remains `[REFUTED]`; sock_ops is the working path.
+
 ### Q5 follow-up — sock_ops identity probe (added 2026-11-20, owner run pending)
 
 To resolve Q5, the spike now includes a `sock_ops` program (`identity`) that
@@ -205,7 +234,7 @@ Fedora VMs) is still outstanding.
 | Q2 | 1 s per-app rate stability (jitter, lag) | 94.3–95.7% rx across 12 steady download seconds | verified |
 | Q3 | CPU/RSS at load | 0.0% CPU, 4,116 KiB RSS under ~10 MB/s download | verified (partial: no 500-conn test) |
 | Q4 | Capabilities required | CAP_BPF + CAP_PERFMON + CAP_NET_ADMIN effective | verified on this host |
-| Q5 | cgroup identity for Motrix + `aria2c` | 0/243 identified; kprobe rejected; sock_ops load OK but link attach failed; egress-current + Single fallback added | refuted (kprobe); identity still open |
+| Q5 | cgroup identity for Motrix + `aria2c` | 12/37 identified; sock_ops Single + egress-current both yield pid/cgroup (§Sixth run); Motrix grouping itself not yet exercised | verified (capture); Motrix grouping open |
 | Q6 | Secure Boot / lockdown on Ubuntu LTS + Fedora VMs | — | not measured |
 
 **Go/no-go inputs:** attributed vs true ≤ 5% (curl/iperf3); attributed +

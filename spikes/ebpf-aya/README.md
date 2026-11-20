@@ -101,6 +101,15 @@ bpffs mount.
 > identity = 0 until a `sock_ops`-based identity probe is implemented).
 > See `docs/spike-ebpf-report.md` "First owner run".
 
+> **Q5 IDENTITY WORKS (sixth owner run, 2026-11-20):** 12/37 cookies were
+> identified with real pid/cgroup_id. sock_ops attach with `Single` succeeded
+> (AllowMultiple returns EINVAL code 22 at the root cgroup); the
+> egress-current capture also works without any extra attach. The runner now
+> tries `AllowMultiple → AllowOverride → Single` so the least intrusive mode
+> wins. What is **not** yet verified: whether Motrix and its `aria2c` child
+> map to the same cgroup — run once more with Motrix active and inspect the
+> final table's pid/cgroup_id columns. `docs/spike-ebpf-report.md` §Sixth run.
+
 > **Motrix verified (fifth owner run, 2026-11-20):** with Motrix downloading
 > alongside the built-in 100 MB curl, cgroup_skb counted every large cookie
 > (8–117 MB each, ~715 MB of Motrix traffic) at 96.5% of interface counters,
