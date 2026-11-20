@@ -8,6 +8,22 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- Self-contained eBPF collector: the object is embedded in `netwatchd` at build
+  time, so packaged installs attach without a separate object file (P8.9–P8.11).
+- Clean-install verification script and an eBPF dev-override contract.
+
+### Changed
+
+- `NETWATCH_EBPF_OBJECT` is now a dev-only override; packaged builds need no
+  runtime object path. AUR recipe gains `rust-src`, a pinned `bpf-linker` 0.13.0
+  build step, `pkgrel=2`, and a regenerated `.SRCINFO`.
+
+---
+
 ## [v0.9.0-beta.1] — 2026-11-20
 
 Public beta: diagnostics and accessibility gate.

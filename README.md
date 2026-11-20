@@ -128,10 +128,10 @@ paru -S net-watch-pro-git
 ### From source
 
 See [Development setup](#development-setup), then build release binaries with
-`cargo build --release` and the UI with `cd app && npm run build`. eBPF builds
-additionally require `cargo xtask bpf` (nightly Rust + `bpf-linker`) and the
-resulting object at `NETWATCH_EBPF_OBJECT`; without it the daemon degrades
-gracefully instead of crashing.
+`cargo build --release` and the UI with `cd app && npm run build`. Packaged
+builds embed the eBPF object in `netwatchd`, so there is no object file to
+install and no manual step for users. Building from source yourself still
+needs the development BPF prerequisites described below.
 
 ### Uninstall
 
@@ -173,6 +173,22 @@ npm run build
 For a live dev UI, start `npm run dev` in `app/` before launching the debug
 Tauri binary — debug builds load the Vite dev URL from `tauri.conf.json`.
 
+#### Building the eBPF object for development
+
+Packaged builds do this automatically. To build a daemon with an embedded
+collector yourself, install `rust-src` and `bpf-linker` (both available in the
+Arch `extra` repo; CI pins `bpf-linker` 0.13.0), then:
+
+~~~bash
+cargo xtask bpf                 # writes target/netwatch_ebpf.o
+cargo build --release -p netwatchd   # build.rs embeds that object
+~~~
+
+`cargo xtask bpf` uses stable Rust with `RUSTC_BOOTSTRAP=1`, `rust-src` and
+`bpf-linker`; no nightly toolchain is required. To iterate on the BPF program
+without rebuilding the daemon, set `NETWATCH_EBPF_OBJECT` to the object path.
+The object is never committed to git.
+
 ### Documentation-first rule
 
 The specs are the contract, in priority order: `PRD.md` → `DESIGN.md` →
@@ -190,7 +206,7 @@ contributors. Configuration variables are listed in
 | `NETWATCH_API_GID` | `SUDO_GID` or root GID | Group allowed to connect (socket is `0660`) |
 | `NETWATCH_RETENTION_DAYS` | `90` | Default retention (Pro can exceed) |
 | `NETWATCH_DISABLE_EBPF` | unset | Run with no collector (degraded state) |
-| `NETWATCH_EBPF_OBJECT` | `/usr/lib/netwatch-pro/netwatch_ebpf.o` | eBPF object path |
+| `NETWATCH_EBPF_OBJECT` | unset | Dev override to load the object from a file instead of the embedded bytes |
 | `NETWATCH_LOG_LEVEL` | `info` | `error` / `warn` / `info` / `debug` / `trace` |
 
 The full closed list is in [docs/env-vars.md](docs/env-vars.md).
@@ -234,10 +250,11 @@ release package. If the daemon is linked, its `/status` reports
 numeric UID to that file. Socket access also requires membership of the group
 set by `NETWATCH_API_GID` (normally `netwatch`).
 
-**Chip is Degraded / per-app speeds missing.** Check the daemon log and
-`NETWATCH_EBPF_OBJECT`; build the object with `cargo xtask bpf` if absent. A
-locked-down kernel or missing `CAP_BPF`/`CAP_PERFMON` can also prevent attach —
-the daemon degrades rather than crashing.
+**Chip is Degraded / per-app speeds missing.** Packaged builds carry the
+collector object already, so check the daemon log and Diagnostics modal for
+the attach failure. A locked-down kernel or missing `CAP_BPF`/`CAP_PERFMON`
+can prevent attach — the daemon degrades rather than crashing. A developer
+override via `NETWATCH_EBPF_OBJECT` is supported but not needed for installs.
 
 **Dashboard says "Stale" or stays empty.** Confirm the unit is enabled and
 running (`systemctl status netwatchd`) and that the daemon can see host

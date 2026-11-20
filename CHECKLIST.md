@@ -134,6 +134,12 @@
 - [x] **DoD: install → onboard → monitor via GitHub Releases + AUR `-git`; self-hosted apt/dnf repos deferred (F-10)** <!-- packages built, CI release workflow verified structurally; tag in release step -->
 - [x] **Release: tag `v0.8.0-alpha.8` + GitHub pre-release with signed `.deb`/`.rpm` artifacts** <!-- first installable/public alpha; AUR `-git` separate; CI publishes on tag push -->
 
+### Phase 8 follow-up — self-contained eBPF collector (owner-approved 2026-11-20)
+
+- [ ] P8.9 Embed the object in `netwatchd` via `aya::include_bytes_aligned!`; `NETWATCH_EBPF_OBJECT` dev override only <!-- docs-first: ARCHITECTURE 1.8, env-vars, TESTING F14, README; code pending -->
+- [ ] P8.10 Build object in CI + AUR `PKGBUILD` (stable + `RUSTC_BOOTSTRAP=1`, `rust-src`, pinned `bpf-linker` 0.13.0); no `.o` in git <!-- bootstrap build measured locally with stable 1.99.1; code pending -->
+- [ ] P8.11 Clean-install test + `.SRCINFO`/`pkgrel` fix <!-- `[VERIFIED]` only after a real `makepkg -si` → pkexec → `/status ebpf=attached` host run; PKGBUILD pkgver already current, .SRCINFO stale -->
+
 ## Phase 9 — Diagnostics & Accessibility → `v0.9.0-beta.1` (~40 h) — *public beta*
 
 - [x] P9.1 Diagnostics endpoint + modal <!-- S3/S4 in netwatch-api with skip-result contract, 40-row journal and keyset cursor; 2 integration tests green; DiagnosticsModal rendered in-browser with checks/journal/copy/restart -->

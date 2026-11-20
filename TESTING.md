@@ -231,6 +231,19 @@
 | Reduced motion | `prefers-reduced-motion: reduce` | no row fades/pulses; chart animation off; durations ≤1ms |
 | 200% zoom / 320px | narrow viewport, both themes | no horizontal page scroll, nav names present, controls reachable |
 
+### F14 — Self-contained eBPF collector (P8.9–P8.11)
+
+| Scenario | Input | Expected |
+|---|---|---|
+| Embedded object | clean `cargo build` after `cargo xtask bpf` | `netwatchd` loads the object with no runtime file and no `NETWATCH_EBPF_OBJECT` |
+| No embedded object | build without `target/netwatch_ebpf.o` | honest `ebpf=no_collector`, no crash; dev override still readable |
+| Dev override | `NETWATCH_EBPF_OBJECT=/tmp/other.o` | override bytes take precedence over embedded bytes |
+| Clean install | fresh `makepkg -si` → one onboarding pkexec → `GET /status` | `ebpf=attached`, `recording=true`, no `/usr/lib/netwatch-pro/netwatch_ebpf.o` exists, no manual steps |
+| Uninstall | `pacman -R` the package | no object residue; data removed unless `/etc/netwatch-pro/keep-data` |
+| CI smoke | `packaging/tests/test-clean-install.sh --ci` | binary carries the object; package install/uninstall residue checks pass (container may not allow attach) |
+
+`[VERIFIED]` for the clean-install row requires a real host run; containerised CI cannot be treated as proof of eBPF attach.
+
 ---
 
 ## 5. Edge & Negative Test Matrix (cross-feature)

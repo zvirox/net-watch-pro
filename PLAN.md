@@ -239,8 +239,11 @@
 | P8.6 | Failure path: actionable error card + retry + demo-mode stub decision (OQ4) | onboarding screen | blocked kernel → guidance, not a dead end | P8.5 |
 | P8.7 | Uninstall completeness: unit + data opt-in (PRD metric) | `packaging/*` | remove package → no service residue | P8.2 |
 | P8.8 | Signing: package signing + release workflow (hosted build services preferred over self-hosted repos until after beta) | `.github/workflows/release.yml` | artifacts signed; clean-VM install works | P8.2, P8.3 |
+| P8.9 | Embed the BPF object in `netwatchd` via `aya::include_bytes_aligned!`; keep `NETWATCH_EBPF_OBJECT` as a dev override only (owner-approved 2026-11-20) | `crates/netwatchd/build.rs`, `ebpf.rs`, `xtask` | no runtime object file needed; dev override still works | P8.1 |
+| P8.10 | Build the object in CI and the AUR `PKGBUILD` (stable + `RUSTC_BOOTSTRAP=1` + `rust-src` + pinned `bpf-linker` 0.13.0); no `.o` in git | `release.yml`, `ci.yml`, `packaging/arch/` | binaries carry the object from a clean build | P8.9 |
+| P8.11 | Clean-install test (fresh `makepkg -si` → one pkexec → `/status` `ebpf=attached`) and fix stale `.SRCINFO`/`pkgrel` | `packaging/tests/`, `packaging/arch/` | `[VERIFIED]` only from a real host run | P8.10 |
 
-**DoD:** install → onboard → monitor via GitHub Releases artifacts + AUR `-git`; self-hosted apt/dnf repos deferred until after beta (F-10); tag `v0.8.0-alpha.8` = first public alpha.
+**DoD:** install → onboard → monitor via GitHub Releases artifacts + AUR `-git`; self-hosted apt/dnf repos deferred until after beta (F-10); tag `v0.8.0-alpha.8` = first public alpha. P8.9–P8.11 are post-release follow-ups approved 2026-11-20, not part of that tag.
 
 ---
 
