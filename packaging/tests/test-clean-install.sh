@@ -45,6 +45,19 @@ if [ "$(systemctl is-active netwatchd.service)" != "active" ]; then
 fi
 pass "daemon unit active"
 
+# An upgrade replaces /usr/bin/netwatchd but does not necessarily restart the
+# process: without this, /status would be answered by the old binary and the
+# check would pass against stale code. Always exercise the installed binary.
+systemctl restart netwatchd.service
+for _ in $(seq 1 20); do
+  if curl -fsS --unix-socket /run/netwatch-pro/api.sock \
+       http://localhost/api/v1/health >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.5
+done
+pass "daemon restarted from the installed binary"
+
 SOCKET=/run/netwatch-pro/api.sock
 STATUS="$(curl -fsS --unix-socket "$SOCKET" http://localhost/api/v1/status)" \
   || fail "cannot read /status over $SOCKET"
