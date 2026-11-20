@@ -99,8 +99,10 @@ pub fn start(
         }
     };
 
-    // Attach cgroup_skb with AllowMultiple first: a systemd firewall or
-    // bpftune may already be attached. Never silently replace such a program.
+    // Attach cgroup_skb: try the non-intrusive AllowMultiple mode first, then
+    // Single (validated in the spike at the root cgroup on this kernel —
+    // AllowMultiple returns EINVAL there). Existing systemd firewall programs
+    // are multi-attached and coexist; we never replace or detach them.
     for (label, attach_type) in [
         ("ingress", CgroupSkbAttachType::Ingress),
         ("egress", CgroupSkbAttachType::Egress),
@@ -116,10 +118,25 @@ pub fn start(
             tracing::warn!(program = label, %error, "eBPF program load failed");
             return (CollectorState::Failed, rx, None);
         }
-        if let Err(error) = program.attach(&cgroup, attach_type, CgroupAttachMode::AllowMultiple) {
-            tracing::warn!(program = label, %error, "eBPF attach failed; collector degraded");
-            return (CollectorState::Failed, rx, None);
-        }
+        let attached = match program.attach(&cgroup, attach_type, CgroupAttachMode::AllowMultiple) {
+            Ok(link) => {
+                tracing::debug!(program = label, "attached with AllowMultiple");
+                Some(link)
+            }
+            Err(multi_error) => {
+                tracing::debug!(program = label, %multi_error, "AllowMultiple failed; trying Single");
+                match program.attach(&cgroup, attach_type, CgroupAttachMode::Single) {
+                    Ok(link) => Some(link),
+                    Err(single_error) => {
+                        tracing::warn!(program = label, %single_error, "eBPF attach failed; collector degraded");
+                        return (CollectorState::Failed, rx, None);
+                    }
+                }
+            }
+        };
+        // The link is held in Aya's ProgramData for the lifetime of `bpf`;
+        // the returned ID carries no Drop and can be discarded safely.
+        let _ = attached;
     }
 
     let Some(bytes_map) = bpf
