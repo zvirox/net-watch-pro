@@ -70,6 +70,11 @@ printf '[Service]\nEnvironment=NETWATCH_API_GID=%s\n' "$GID" \
   > %{_sysconfdir}/systemd/system/netwatchd.service.d/10-socket-group.conf
 # Deliberately NOT enabled: onboarding enables after health checks (P8.5).
 systemctl daemon-reload >/dev/null 2>&1 || :
+# $1 is 1 on install, 2+ on upgrade. Restart only an already-active unit so
+# the new binary serves the API; never enable/start a stopped unit (P8.12).
+if [ "$1" -ge 2 ] && systemctl is-active --quiet netwatchd.service >/dev/null 2>&1; then
+  systemctl restart netwatchd.service >/dev/null 2>&1 || :
+fi
 exit 0
 
 %preun

@@ -18,6 +18,11 @@ post_install() {
 
 post_upgrade() {
   systemctl daemon-reload 2>/dev/null || true
+  # The new binary must replace the running daemon; only restart a unit that
+  # was active, never enable/start a stopped one (P8.12).
+  if systemctl is-active --quiet netwatchd.service 2>/dev/null; then
+    systemctl restart netwatchd.service 2>/dev/null || true
+  fi
   update-desktop-database -q /usr/share/applications 2>/dev/null || true
 }
 

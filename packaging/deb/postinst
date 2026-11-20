@@ -22,6 +22,12 @@ Environment=NETWATCH_API_GID=${GID}
 EOF
 
     systemctl daemon-reload 2>/dev/null || true
+    # An upgrade replaces /usr/bin/netwatchd; restart only a unit that was
+    # already active so the new binary serves the API (P8.12). A fresh install
+    # has no $2 and stays disabled until onboarding.
+    if [ -n "${2:-}" ] && systemctl is-active --quiet netwatchd.service 2>/dev/null; then
+      systemctl restart netwatchd.service >/dev/null 2>&1 || true
+    fi
     # Deliberately no `systemctl enable` — P8.5 onboarding does that after
     # health checks and the single admin prompt (PRD Flow 4, D1a).
 

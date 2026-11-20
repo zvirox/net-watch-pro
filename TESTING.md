@@ -241,6 +241,7 @@
 | Clean install | fresh `makepkg -si` → one onboarding pkexec → `GET /status` | `ebpf=attached`, `recording=true`, no `/usr/lib/netwatch-pro/netwatch_ebpf.o` exists, no manual steps — **[VERIFIED 2026-11-20 owner host run]** via `packaging/tests/test-clean-install.sh --host`; the script restarts the unit first so an upgrade cannot be verified against a stale daemon |
 | Uninstall | `pacman -R` the package | no object residue; data removed unless `/etc/netwatch-pro/keep-data` |
 | CI smoke | `packaging/tests/test-clean-install.sh --ci` | binary carries the object; package install/uninstall residue checks pass (container may not allow attach) |
+| Upgrade restart | `packaging/tests/test-upgrade.sh` (fake `systemctl`) | fresh install does NOT restart; upgrade of an active unit issues exactly one `restart netwatchd.service`; upgrade of a stopped unit does not start it |
 
 `[VERIFIED]` for the clean-install row requires a real host run; containerised CI cannot be treated as proof of eBPF attach.
 

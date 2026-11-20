@@ -21,6 +21,9 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ### Changed
 
+- Package upgrades restart `netwatchd` when it is active, so a new binary
+  replaces the running one instead of serving stale API behavior. A stopped
+  unit is never enabled or started by an upgrade.
 - `NETWATCH_EBPF_OBJECT` is now a dev-only override; packaged builds need no
   runtime object path. AUR recipe gains `rust-src`, a pinned `bpf-linker` 0.13.0
   build step, `pkgrel=2`, and a regenerated `.SRCINFO`.
