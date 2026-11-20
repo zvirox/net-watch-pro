@@ -270,9 +270,20 @@ Final run evidence:
 - Q5 in the product: the `motrix` row groups Motrix + aria2c bytes (same
   cgroup id), matching the spike. **[VERIFIED]**
 
-**Still not verified on the product:** `drops` in `/status` is hardcoded 0;
-sum-check timing across two independent 1 Hz streams; CPU/RSS at 50/500
-connections; disabled-attach UI end-to-end; Q6 VMs (skipped).
+**Follow-ups to the four verification gaps (2026-11-20):**
+- `drops` in `/status` now reports real BPF counters —
+  `bpf_packets_seen`, `bpf_loopback_skipped`, `bpf_map_full` (API.md 1.7).
+  `[VERIFIED]` by contract test; re-check on host with `verify_host.sh`.
+- Sum check is atomic: the collector publishes app rows and the raw PC total
+  from the same tick (`AppUsageFrame`); `live.apps` computes the remainder
+  from that one frame. `[VERIFIED]` by a test that injects a conflicting
+  smoothed rates channel and confirms the remainder uses the frame.
+- CPU/RSS at 50/500 connections: `spikes/ebpf-aya/verify_load.sh` provided —
+  **owner run pending**, so not `[VERIFIED]`.
+- Disabled/attach-failure UI: `spikes/ebpf-aya/verify_degraded.sh` provided;
+  daemon status path is covered by tests, manual UI states **owner run
+  pending** (no vitest in the UI). Not `[VERIFIED]` end-to-end.
+- Q6 VMs remain skipped by owner.
 
 ### Fourteenth owner run — 2026-11-20 (60 s, --root-attach, two curls)
 
