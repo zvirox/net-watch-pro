@@ -1,23 +1,37 @@
 [package]
 name = "netwatch-ebpf"
 version = "0.1.0"
-edition = "2024"
-description = "eBPF programs for Net Watch Pro - per-app byte attribution"
+edition = "2021"
+description = "eBPF programs for Net Watch Pro - per-app byte attribution (ARCHITECTURE.md §4, built separately with nightly + bpf-linker)"
 
 [dependencies]
-# Aya eBPF library - added when spike results confirm hook design
-# aya = "0.20"
-# aya-log = "0.20"
-# aya-log-derive = "0.20"
+aya-ebpf = "0.3.0"
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[features]
-# Compile-time feature flags for eBPF program selection
-# ebpf-programs = ["aya", "aya-log"]
+[[bin]]
+name = "netwatch-ebpf"
+path = "src/main.rs"
 
 [workspace]
-# Intentionally NOT a member of the root workspace until eBPF attach is verified
-# (Phase S gate in PLAN.md Part 5). The skeleton compiles but does not link
-# against Aya until Q1-Q10 spike results confirm hook design.
+# Intentionally NOT a member of the root workspace (ARCHITECTURE.md §2,
+# F-01/F-11): eBPF needs nightly + -Z build-std=core + bpf-linker.
+
+# BPF targets need opt-level even in dev; panic=abort because no_std cannot unwind.
+[profile.dev]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = true
+panic = "abort"
+codegen-units = 1
+rpath = false
+
+[profile.release]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = true
+panic = "abort"
+codegen-units = 1
+rpath = false

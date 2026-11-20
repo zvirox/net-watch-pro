@@ -14,6 +14,7 @@
 
 mod config;
 mod db;
+mod ebpf;
 mod live;
 mod pruner;
 mod rates;
@@ -22,6 +23,7 @@ mod service;
 mod usage;
 
 use netwatch_common::{DaemonEvent, DaemonState, EbpfState, EventLevel, StatusSnapshot};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, mpsc, watch};
@@ -127,6 +129,37 @@ async fn boot_compaction(pool: &sqlx::SqlitePool, now: i64) {
     }
 }
 
+/// Start the eBPF collector and translate its outcome into an honest status.
+/// The returned watch receiver feeds `live.apps` in C5; holding it here keeps
+/// the channel alive until that wiring lands.
+async fn start_collector(
+    pool: &sqlx::SqlitePool,
+) -> (
+    EbpfState,
+    watch::Receiver<Vec<netwatch_common::AppUsage>>,
+    Option<tokio::task::JoinHandle<()>>,
+) {
+    let disabled = std::env::var_os("NETWATCH_DISABLE_EBPF").is_some();
+    let object_override = std::env::var_os("NETWATCH_EBPF_OBJECT").map(PathBuf::from);
+    let (state, rx, task) = ebpf::start(disabled, object_override);
+    let ebpf_state = match state {
+        ebpf::CollectorState::Attached => EbpfState::Attached,
+        ebpf::CollectorState::Disabled => EbpfState::NoCollector,
+        ebpf::CollectorState::Failed => EbpfState::Failed,
+    };
+    if ebpf_state == EbpfState::Failed {
+        record_degraded_event(
+            pool,
+            epoch_now(),
+            "EBPF_ATTACH_FAILED",
+            "eBPF collector failed to load or attach; per-app rates unavailable".to_string(),
+        )
+        .await;
+    }
+    tracing::info!(?state, "eBPF collector state");
+    (ebpf_state, rx, task)
+}
+
 async fn run(cfg: config::Config) -> Result<(), StartupError> {
     // P2.4: open SQLite and apply embedded migrations at boot (DATABASE.md
     // §8). Unwritable dir / newer schema → fail-fast with exit 4.
@@ -195,12 +228,13 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
         tracing::info!("writer task stopped");
     });
 
-    // A7: honest status — no eBPF collector is running, so the UI chip must
-    // not appear green. The 1 Hz rate sampler still provides live PC speed.
+    // Phase C (C1): start the collector; failures are degraded, never fatal.
+    let (ebpf_state, _app_usage_rx, collector_task) = start_collector(&pool).await;
+
     let (status_tx, _status_rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
-        ebpf: EbpfState::NoCollector,
-        recording: false,
+        ebpf: ebpf_state,
+        recording: ebpf_state == EbpfState::Attached,
     });
 
     // Install signal handlers up front (fail-fast on handler errors).
@@ -231,6 +265,9 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     )
     .await
     .map_err(|e| StartupError::Server(format!("api server: {e}")));
+    if let Some(task) = collector_task {
+        task.abort();
+    }
     sampler_abort.abort();
     totals_abort.abort();
     rates_abort.abort();

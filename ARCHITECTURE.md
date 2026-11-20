@@ -1,9 +1,9 @@
 # Net Watch Pro — ARCHITECTURE.md (Technical Architecture)
 
-**Version:** 1.5 · **Date:** 2026-11-19
+**Version:** 1.6 · **Date:** 2026-11-20
 **Source of truth:** `PRD.md` (scope, contracts, non-goals) · `DESIGN.md` (UI system) · `REAPM.md` (reference teardown) · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.3 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential transport (F-06/D1a), cgroup-first app identity (F-05/D5a), interface-counter sampler + Unattributed row (F-03/D3a), 15-minute rollup grain + timezone/cycle (F-04/D4a), daily endpoint rollups (F-02/D2a), in-memory episode state + checkpoint cadence (F-09), VM-based kernel matrix not containers (F-08), separate netwatch-ebpf build (F-01/F-11), [HYPOTHESIS] tags on unmeasured kernel claims. 1.4 (2026-11-19): Phase A of `docs/LIVE-THROUGHPUT-PLAN.md` — 1 Hz rate engine and `net.rates` stream beside the existing 15 s history sampler, `speed_unit` setting, and honest `no_collector` status. 1.5 (2026-11-19): 60-sample in-memory rate history for the last-hour view (lost on restart, `in_memory:true`) and optional Wi-Fi signal/link fields on U3 from local sysfs (owner L-OQ1/L-OQ4).
+**Version history:** 1.3 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential transport (F-06/D1a), cgroup-first app identity (F-05/D5a), interface-counter sampler + Unattributed row (F-03/D3a), 15-minute rollup grain + timezone/cycle (F-04/D4a), daily endpoint rollups (F-02/D2a), in-memory episode state + checkpoint cadence (F-09), VM-based kernel matrix not containers (F-08), separate netwatch-ebpf build (F-01/F-11), [HYPOTHESIS] tags on unmeasured kernel claims. 1.4 (2026-11-19): Phase A of `docs/LIVE-THROUGHPUT-PLAN.md` — 1 Hz rate engine and `net.rates` stream beside the existing 15 s history sampler, `speed_unit` setting, and honest `no_collector` status. 1.5 (2026-11-19): 60-sample in-memory rate history for the last-hour view (lost on restart, `in_memory:true`) and optional Wi-Fi signal/link fields on U3 from local sysfs (owner L-OQ1/L-OQ4). 1.6 (2026-11-20): Phase C eBPF collector — `NETWATCH_EBPF_OBJECT` runtime object path; attach reads per-socket bytes by cgroup id (`bpf_skb_cgroup_id`, spike-verified), not `current`.
 **Rule:** This file defines structure and contracts only. **No application code is written as part of this document.**
 
 > **Strict rules:** Every implementation decision must trace to this file. Stack, folder layout, data flow, naming, and env vars below are binding. Deviations require updating this file first (version bump), like DESIGN.md §11.
@@ -319,6 +319,7 @@ Retry policy: user-initiated retries everywhere except WS reconnect (automatic, 
 | `NETWATCH_API_GID` | netwatchd | `SUDO_GID` if set, else root GID | Group id allowed to connect: socket is created `0660` owned by this group (desktop user's primary group in dev, service group in packages) |
 | `NETWATCH_RETENTION_DAYS` | netwatchd | `90` | Default retention; user setting overrides (Pro > 90) |
 | `NETWATCH_DISABLE_EBPF` | netwatchd | unset | Diagnostic switch: run with empty collector (degraded chip) |
+| `NETWATCH_EBPF_OBJECT` | netwatchd | `/usr/lib/netwatch-pro/netwatch_ebpf.o` | Path to the compiled eBPF object (built by `cargo xtask bpf`); missing file is a degraded state, never a startup failure |
 | `NETWATCH_DEV_DAEMON_ADDR` | UI (dev only) | unset | Point the UI at a dev daemon socket; never read in packaged builds |
 
 **Removed:** `NETWATCH_API_ADDR`, `NETWATCH_API_TOKEN_FILE` (D1a — Unix socket + peer-credential replaces loopback TCP + bearer token).

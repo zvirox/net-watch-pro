@@ -116,6 +116,26 @@ pub struct InterfaceRate {
     pub up_bps: u64,
 }
 
+/// Live per-app byte/rate row for the `live.apps` stream (API.md §3, Phase C).
+///
+/// `cgroup_id` is the socket's cgroup id (`bpf_skb_cgroup_id`); it is the
+/// grouping key, not the PID. Display names are resolved in userspace.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppUsage {
+    /// Socket cgroup id — the app identity grouping key.
+    pub cgroup_id: u64,
+    /// Current download bits per second (decimal).
+    pub down_bps: u64,
+    /// Current upload bits per second (decimal).
+    pub up_bps: u64,
+    /// Cumulative downloaded bytes for this cgroup.
+    pub bytes_down: u64,
+    /// Cumulative uploaded bytes for this cgroup.
+    pub bytes_up: u64,
+    /// Sample timestamp (epoch seconds).
+    pub ts: u64,
+}
+
 /// Live PC rate snapshot pushed on the `net.rates` WS channel (API.md §3).
 ///
 /// Rates are decimal bits per second; `ts` is epoch seconds of the sample.
