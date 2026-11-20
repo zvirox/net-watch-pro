@@ -188,7 +188,7 @@
 - [ ] L-C6 Feed attributed bytes into episode store + rollups so Unattributed row shrinks
 - [ ] L-C7 Apps list live speed columns, sorted with ~2 s hold
 - [ ] L-C8 Live Connections screen shows real rows; empty state only when idle
-- [ ] L-C9 Degraded path: `NETWATCH_DISABLE_EBPF` + failed attach honest everywhere
+- [x] L-C9 Degraded path: `NETWATCH_DISABLE_EBPF` + failed attach honest everywhere <!-- daemon /status = no_collector, recording=false, zero drops [VERIFIED host]; rendered UI verified in-browser via mocked Tauri bridge driving real frames through actual stores: Degraded chip + tooltip, Dashboard live-speed note, Live empty state for both no_collector and failed variants; literal WebKit window not agent-verified (GL/AT-SPI/Wayland limits, pkexec prompt) -->
 - [ ] L-D1–D5 Range presets 1 h/24 h/7 d/30 d/billing cycle
 
 ---

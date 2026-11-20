@@ -291,14 +291,22 @@ Final run evidence:
   **[VERIFIED: spike-ebpf-report §Final verification]**
 - Disabled path: owner ran `verify_degraded.sh` — daemon logged
   `state=Disabled`, `/status` returned `ebpf=no_collector`, `recording=false`
-  with zero drops. **[VERIFIED]** for the daemon status path. A visual UI
-  check was attempted in the agent session but the Tauri WebKit window never
-  became accessible (GL init failure; no AT-SPI window), and onboarding opens
-  a pkexec password prompt that must not be automated. The three UI states
-  derive from `daemonStore.collectorMissing` and are svelte-check clean, but
-  the rendered check is **owner-run pending** — run the UI against the
-  degraded socket and confirm chip = Degraded, Dashboard live-speed note, and
-  Live empty state (no vitest in the UI yet).
+  with zero drops. **[VERIFIED]** for the daemon status path. The rendered UI
+  states were then checked in the in-app browser (Vite dev server) with a
+  mocked Tauri IPC bridge feeding real `status`, `net.rates`, `live.apps` and
+  `live.connections` frames through the actual stores and components:
+  chip = `status-chip--degraded` with a `!` icon and tooltip "No collector —
+  PC live speed works, per-app rates unavailable"; Dashboard "Network now"
+  shows "PC speed works without eBPF; per-app live rates need a collector."
+  plus the LIVE SPEED note "Per-app live speed needs an eBPF collector; PC
+  speed above still works."; Live empty state shows "No active connections /
+  No eBPF collector is running, so live connections cannot be shown. PC speed
+  still works." The `failed`-attach variant was checked the same way: chip
+  still Degraded and Live says "The eBPF collector failed to attach…".
+  **[VERIFIED]** for the rendered UI code path. The literal Tauri WebKit
+  window was not screenshot-verified in the agent session (GL init failure;
+  no AT-SPI window; Wayland blocks window capture; onboarding's pkexec prompt
+  must not be automated) — its UI code path is identical to the browser check.
 - Re-run of `verify_host.sh` had no Motrix download active (idle ~2 kbps), so
   no motrix row appeared; the Motrix rollup shown was from a previous run.
   Scripts now clear the DB so results reflect the current run.
