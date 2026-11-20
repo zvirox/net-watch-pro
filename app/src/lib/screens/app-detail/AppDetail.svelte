@@ -12,7 +12,8 @@
     TableHeader,
     TableRow,
   } from '$lib/components/ui';
-  import { appDetailStore, type Granularity } from '$lib/stores/app-detail.svelte';
+  import { appDetailStore } from '$lib/stores/app-detail.svelte';
+  import { rangeStore } from '$lib/stores/range.svelte';
   import { formatBytes } from '$lib/utils/format';
 
   type Tab = 'overview' | 'connections' | 'endpoints';
@@ -42,9 +43,9 @@
   const loading = $derived(appDetailStore.loading);
   const error = $derived(appDetailStore.error);
 
-  function labelFor(bucket: number, granularity: Granularity): string {
+  function labelFor(bucket: number): string {
     const date = new Date(bucket * 1000);
-    return granularity === 'day'
+    return rangeStore.granularity === 'day'
       ? date.toLocaleDateString([], { month: 'short', day: 'numeric' })
       : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
@@ -68,7 +69,7 @@
     legend: { data: ['Download', 'Upload'] },
     xAxis: {
       type: 'category',
-      data: timeline.map((point) => labelFor(point.bucket_start, appDetailStore.granularity)),
+      data: timeline.map((point) => labelFor(point.bucket_start)),
     },
     yAxis: { type: 'value', axisLabel: { formatter: formatAxis } },
     series: [
@@ -146,8 +147,8 @@
         </div>
       </div>
       <div class="headline">
-        <span>TODAY</span>
-        <strong>{formatBytes(detail.usage.today.up + detail.usage.today.down)}</strong>
+        <span>{rangeStore.label.toUpperCase()}</span>
+        <strong>{formatBytes(detail.usage.range.up + detail.usage.range.down)}</strong>
       </div>
     </header>
 
@@ -189,25 +190,12 @@
           <div class="panel">
             <div class="panel-heading">
               <h3>Usage timeline</h3>
-              <div class="granularity" role="group" aria-label="Timeline granularity">
-                {#each ['day', 'hour'] as option (option)}
-                  <button
-                    type="button"
-                    class:active={appDetailStore.granularity === option}
-                    aria-pressed={appDetailStore.granularity === option}
-                    onclick={() => {
-                      appDetailStore.setGranularity(option as Granularity);
-                    }}
-                  >
-                    {option === 'day' ? 'Day' : 'Hour'}
-                  </button>
-                {/each}
-              </div>
+              <span class="range-meta">{rangeStore.bucketLabel} · {rangeStore.label}</span>
             </div>
             {#if timeline.length > 0}
               <div class="chart-frame">
                 <Chart
-                  ariaLabel="Usage for {appName} by {appDetailStore.granularity}"
+                  ariaLabel="Usage for {appName} by {rangeStore.bucketLabel} bucket for {rangeStore.label}"
                   option={timelineOption}
                 />
               </div>
@@ -217,7 +205,7 @@
                 <tbody>
                   {#each timeline as point (point.bucket_start)}
                     <tr>
-                      <td>{labelFor(point.bucket_start, appDetailStore.granularity)}</td>
+                      <td>{labelFor(point.bucket_start)}</td>
                       <td>{formatBytes(point.down)}</td>
                       <td>{formatBytes(point.up)}</td>
                     </tr>
@@ -450,6 +438,12 @@
     outline: 2px solid var(--nwp-primary);
     outline-offset: 2px;
   }
+  .range-meta {
+    color: var(--nwp-text-secondary);
+    font-family: var(--nwp-font-mono);
+    font-size: var(--nwp-size-caption);
+    letter-spacing: 0.04em;
+  }
   .overview {
     display: grid;
     gap: var(--nwp-space-4);
@@ -490,31 +484,6 @@
   h3 {
     margin: 0;
     font-size: var(--nwp-size-title-3);
-  }
-  .granularity {
-    display: flex;
-    gap: var(--nwp-space-1);
-    border-radius: var(--nwp-radius-md);
-    background: var(--nwp-surface-2);
-    padding: 2px;
-  }
-  .granularity button {
-    border: 0;
-    border-radius: var(--nwp-radius-sm);
-    background: transparent;
-    padding: var(--nwp-space-1) var(--nwp-space-3);
-    color: var(--nwp-text-secondary);
-    font-size: var(--nwp-size-label);
-    cursor: pointer;
-  }
-  .granularity button.active {
-    background: var(--nwp-surface);
-    color: var(--nwp-primary);
-    font-weight: 600;
-  }
-  .granularity button:focus-visible {
-    outline: 2px solid var(--nwp-primary);
-    outline-offset: 2px;
   }
   .chart-frame {
     height: 240px;

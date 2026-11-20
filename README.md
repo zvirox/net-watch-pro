@@ -46,8 +46,9 @@ Monitoring works end to end:
 Phases 0–8 (foundation, eBPF spike, doc fixes, walking skeleton, live, history,
 dashboard, apps, freemium, system, and installable packaging) are complete.
 **Phase 9 — Diagnostics & Accessibility** is in progress. **Phase L — Live
-Throughput** landed its live PC speed (A), eBPF spike (B), and per-app collector
-(C) slices; range presets (D) are pending. Per-task evidence lives in the
+Throughput** landed all four slices: live PC speed (A), the eBPF spike (B),
+the per-app collector (C), and remembered range presets with an Apps list (D).
+Per-task evidence lives in the
 [progress checklist](CHECKLIST.md) and the [live-throughput plan](docs/LIVE-THROUGHPUT-PLAN.md).
 
 Firewall features are **out of scope until after v1.0** (PRD §12). This is a

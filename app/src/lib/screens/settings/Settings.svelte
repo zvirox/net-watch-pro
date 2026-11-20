@@ -40,6 +40,14 @@
     { value: 'auto', label: 'Auto' },
   ];
 
+  const rangeOptions = [
+    { value: '1h', label: '1 h' },
+    { value: '24h', label: '24 h' },
+    { value: '7d', label: '7 d' },
+    { value: '30d', label: '30 d' },
+    { value: 'cycle', label: 'Cycle' },
+  ];
+
   const dataFields = [
     { key: 'retention_days', label: 'Retention (days)' },
     { key: 'raw_window_days', label: 'Raw connection window (days)' },
@@ -243,6 +251,24 @@
                 void save('timezone', value);
               }}
             />
+            <div>
+              <p class="field-label">Default usage range</p>
+              <div class="segmented" role="group" aria-label="Default usage range">
+                {#each rangeOptions as option (option.value)}
+                  <button
+                    type="button"
+                    aria-pressed={settingsStore.value('range_default') === option.value}
+                    class:segment--active={settingsStore.value('range_default') === option.value}
+                    onclick={() => void save('range_default', option.value)}
+                  >
+                    {option.label}
+                  </button>
+                {/each}
+              </div>
+              <p class="hint">
+                Shared by Dashboard, Apps and App detail; saved in the local settings.
+              </p>
+            </div>
           </div>
           <div class="danger">
             <div>

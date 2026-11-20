@@ -3,6 +3,7 @@
   import { Button } from '$lib/components/ui';
   import StatusChip from '$lib/components/status-chip/StatusChip.svelte';
   import Live from '$lib/screens/live/Live.svelte';
+  import Apps from '$lib/screens/apps/Apps.svelte';
   import History from '$lib/screens/history/History.svelte';
   import Dashboard from '$lib/screens/dashboard/Dashboard.svelte';
   import AppDetail from '$lib/screens/app-detail/AppDetail.svelte';
@@ -170,7 +171,7 @@
         </div>
       </header>
       <main class="content" id="main-content">
-        {#if activeRoute !== 'dashboard' && activeRoute !== 'live' && activeRoute !== 'history' && activeRoute !== 'app-detail' && activeRoute !== 'settings'}
+        {#if activeRoute !== 'dashboard' && activeRoute !== 'live' && activeRoute !== 'apps' && activeRoute !== 'history' && activeRoute !== 'app-detail' && activeRoute !== 'settings'}
           <section class="notice" role="status">
             <div>
               <strong>{routes.find((route) => route.key === activeRoute)?.label}</strong>
@@ -190,6 +191,9 @@
         {/if}
         {#if activeRoute === 'live'}
           <Live />
+        {/if}
+        {#if activeRoute === 'apps'}
+          <Apps />
         {/if}
         {#if activeRoute === 'history'}
           <History />

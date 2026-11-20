@@ -5,6 +5,8 @@ import { setTrayTooltip } from '$lib/api/transport';
 import { DEMO_INTERFACES, DEMO_SUMMARY, DEMO_TIMELINE } from '$lib/fixtures/demo';
 import { formatBytes } from '$lib/utils/format';
 import { daemonStore } from './daemon.svelte';
+import { rangeStore } from './range.svelte';
+import { settingsStore } from './settings.svelte';
 
 export type Totals = {
   total: number;
@@ -12,9 +14,35 @@ export type Totals = {
   unattributed: number;
 };
 
+export type RangeInfo = {
+  preset: string;
+  start: number;
+  end: number;
+  totals: Totals;
+};
+
+export type CycleInfo = {
+  start: number;
+  end: number;
+  days_left: number;
+  used_bytes: number;
+};
+
+export type BudgetState = {
+  used_bytes: number;
+  limit_bytes: number;
+  level: 'ok' | 'warning' | 'breach';
+};
+
 export type Summary = {
   today: Totals;
   month: Totals;
+  range: RangeInfo;
+  cycle: CycleInfo;
+  budgets: {
+    total_daily: BudgetState;
+    total_monthly: BudgetState;
+  };
   top_apps: Array<{ id: number; name: string; bytes_total: number }>;
   state: 'ok' | 'collecting';
 };
@@ -38,12 +66,11 @@ export type InterfaceUsage = {
   link_mbps: number | null;
 };
 
-export type Granularity = 'hour' | 'day';
+export type Granularity = '15m' | 'hour' | 'day';
 
 let summary = $state<Summary | null>(null);
 let timeline = $state<TimelinePoint[]>([]);
 let interfaces = $state<InterfaceUsage[]>([]);
-let granularity = $state<Granularity>('day');
 let streamToday: { up: number; down: number } | null = $state(null);
 let loading = $state(false);
 let error = $state<string | null>(null);
@@ -110,10 +137,13 @@ async function load(): Promise<void> {
   loading = true;
   error = null;
   try {
+    // Phase D: one range drives all three requests. The timeline bucket is
+    // chosen by the server from the preset (D3); we only pass `range`.
+    const path = `?range=${rangeStore.preset}`;
     const [nextSummary, nextTimeline, nextInterfaces] = await Promise.all([
-      daemonStore.request('GET', '/api/v1/usage/summary'),
-      daemonStore.request('GET', `/api/v1/usage/timeline?granularity=${granularity}`),
-      daemonStore.request('GET', '/api/v1/usage/interfaces'),
+      daemonStore.request('GET', `/api/v1/usage/summary${path}`),
+      daemonStore.request('GET', `/api/v1/usage/timeline${path}`),
+      daemonStore.request('GET', `/api/v1/usage/interfaces${path}`),
     ]);
     if (generation !== requestGeneration) return;
     summary = nextSummary as Summary;
@@ -127,6 +157,14 @@ async function load(): Promise<void> {
     if (generation === requestGeneration) loading = false;
   }
 }
+
+// Changing the remembered preset reloads all three dashboard requests.
+let loadedPreset = rangeStore.preset;
+settingsStore.onChange(() => {
+  if (rangeStore.preset === loadedPreset) return;
+  loadedPreset = rangeStore.preset;
+  if (!demoActive) void load();
+});
 
 daemonStore.onFrame(handleFrame);
 
@@ -151,7 +189,7 @@ export const usageStore = {
     return interfaces;
   },
   get granularity(): Granularity {
-    return granularity;
+    return rangeStore.granularity;
   },
   get streamToday(): { up: number; down: number } | null {
     return streamToday;
@@ -171,11 +209,6 @@ export const usageStore = {
   load,
   enterDemo,
   exitDemo,
-  setGranularity(value: Granularity): void {
-    if (granularity === value) return;
-    granularity = value;
-    void load();
-  },
   retry(): void {
     void load();
   },

@@ -7,7 +7,8 @@
   import { daemonStore } from '$lib/stores/daemon.svelte';
   import { ratesStore } from '$lib/stores/rates.svelte';
   import { liveAppsStore } from '$lib/stores/live-apps.svelte';
-  import { usageStore, type Granularity, type InterfaceUsage } from '$lib/stores/usage.svelte';
+  import { usageStore, type InterfaceUsage } from '$lib/stores/usage.svelte';
+  import { rangeStore } from '$lib/stores/range.svelte';
   import { formatBytes } from '$lib/utils/format';
 
   const rates = $derived(ratesStore.snapshot);
@@ -17,8 +18,10 @@
   const liveApps = $derived(liveAppsStore.sorted());
   const liveAppsStale = $derived(liveAppsStore.stale);
 
-  const today = $derived(usageStore.summary?.today ?? null);
   const month = $derived(usageStore.summary?.month ?? null);
+  const rangeTotals = $derived(usageStore.summary?.range.totals ?? null);
+  const cycle = $derived(usageStore.summary?.cycle ?? null);
+  const cycleBudget = $derived(usageStore.summary?.budgets.total_monthly ?? null);
   const topApps = $derived(usageStore.summary?.top_apps ?? []);
   const points = $derived(usageStore.timeline);
   const interfaces = $derived(usageStore.interfaces);
@@ -44,9 +47,9 @@
     return `${signal} · ${link}`;
   }
 
-  function labelFor(bucket: number, granularity: Granularity): string {
+  function labelFor(bucket: number): string {
     const date = new Date(bucket * 1000);
-    return granularity === 'day'
+    return rangeStore.granularity === 'day'
       ? date.toLocaleDateString([], { month: 'short', day: 'numeric' })
       : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
@@ -64,7 +67,7 @@
     legend: { data: ['Download', 'Upload'] },
     xAxis: {
       type: 'category',
-      data: points.map((point) => labelFor(point.bucket_start, usageStore.granularity)),
+      data: points.map((point) => labelFor(point.bucket_start)),
     },
     yAxis: {
       type: 'value',
@@ -73,15 +76,15 @@
     series: [
       {
         name: 'Download',
-        type: 'line',
+        type: 'bar',
+        barMaxWidth: 18,
         data: points.map((point) => point.down),
-        areaStyle: {},
       },
       {
         name: 'Upload',
-        type: 'line',
+        type: 'bar',
+        barMaxWidth: 18,
         data: points.map((point) => point.up),
-        areaStyle: {},
       },
     ],
   });
@@ -115,6 +118,21 @@
       { name: 'Upload', type: 'line', showSymbol: false, data: rateHistory.map((p) => p.up) },
     ],
   });
+
+  /** §7.13: arrows move between presets, Home/End jump to the ends. */
+  function onRangeKeydown(event: KeyboardEvent): void {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const presets = rangeStore.presets;
+    const index = presets.indexOf(rangeStore.preset);
+    let next = index;
+    if (event.key === 'ArrowLeft') next = (index - 1 + presets.length) % presets.length;
+    if (event.key === 'ArrowRight') next = (index + 1) % presets.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = presets.length - 1;
+    const value = presets[next];
+    if (value) void rangeStore.set(value);
+  }
 
   function onAppClick(params: unknown): void {
     if (typeof params !== 'object' || params === null || !('dataIndex' in params)) return;
@@ -175,16 +193,33 @@
     {/if}
   </article>
 
+  <div class="range-bar">
+    <div class="granularity" role="group" aria-label="Usage range">
+      {#each rangeStore.presets as option (option)}
+        <button
+          type="button"
+          class:active={rangeStore.preset === option}
+          aria-pressed={rangeStore.preset === option}
+          onclick={() => void rangeStore.set(option)}
+          onkeydown={onRangeKeydown}
+        >
+          {rangeStore.labelFor(option)}
+        </button>
+      {/each}
+    </div>
+    <span class="range-meta">{rangeStore.bucketLabel} buckets · local time</span>
+  </div>
+
   <div class="metrics" aria-label="Usage headline">
     <article class="metric-card">
-      <p class="metric-label">DATA TODAY</p>
-      <strong>{headline(today?.total)}</strong>
+      <p class="metric-label">RANGE TOTAL · {rangeStore.label}</p>
+      <strong>{headline(rangeTotals?.total)}</strong>
       <p class="metric-caption">Kernel interface counters</p>
     </article>
     <article class="metric-card">
-      <p class="metric-label">THIS MONTH</p>
-      <strong>{headline(month?.total)}</strong>
-      <p class="metric-caption">Billing cycle total</p>
+      <p class="metric-label">ATTRIBUTED</p>
+      <strong>{headline(rangeTotals?.attributed)}</strong>
+      <p class="metric-caption">Identified per-app traffic</p>
     </article>
     <article class="metric-card metric-card--gap">
       <p class="metric-label">
@@ -195,8 +230,17 @@
           aria-hidden="true"
         ></span>
       </p>
-      <strong>{headline(month?.unattributed)}</strong>
+      <strong>{headline(rangeTotals?.unattributed)}</strong>
       <p class="metric-caption">System traffic, shown honestly</p>
+    </article>
+    <article class="metric-card metric-card--cycle">
+      <p class="metric-label">BILLING CYCLE</p>
+      <strong>{headline(cycle?.used_bytes)}</strong>
+      <p class="metric-caption">
+        {cycle
+          ? `${String(cycle.days_left)} days left · budget ${cycleBudget?.level ?? 'ok'}`
+          : 'Cycle total'}
+      </p>
     </article>
   </div>
 
@@ -207,20 +251,7 @@
           <p class="eyebrow">NETWORK ACTIVITY</p>
           <h2>Usage timeline</h2>
         </div>
-        <div class="granularity" role="group" aria-label="Timeline granularity">
-          {#each ['day', 'hour'] as option (option)}
-            <button
-              type="button"
-              class:active={usageStore.granularity === option}
-              aria-pressed={usageStore.granularity === option}
-              onclick={() => {
-                usageStore.setGranularity(option as Granularity);
-              }}
-            >
-              {option === 'day' ? 'Day' : 'Hour'}
-            </button>
-          {/each}
-        </div>
+        <span class="range-meta">{rangeStore.bucketLabel} · {rangeStore.label}</span>
       </div>
 
       {#if loading && points.length === 0}
@@ -234,7 +265,7 @@
       {:else if points.length > 0}
         <div class="chart-frame timeline-chart">
           <Chart
-            ariaLabel="Usage timeline: download and upload bytes per {usageStore.granularity}"
+            ariaLabel="Usage timeline: download and upload bytes per {rangeStore.bucketLabel} bucket for {rangeStore.label}"
             option={timelineOption}
           />
         </div>
@@ -244,7 +275,7 @@
           <tbody>
             {#each points as point (point.bucket_start)}
               <tr>
-                <td>{labelFor(point.bucket_start, usageStore.granularity)}</td>
+                <td>{labelFor(point.bucket_start)}</td>
                 <td>{formatBytes(point.down)}</td>
                 <td>{formatBytes(point.up)}</td>
               </tr>
@@ -446,9 +477,21 @@
     color: var(--nwp-text-secondary);
     font-size: var(--nwp-size-caption);
   }
+  .range-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nwp-space-4);
+  }
+  .range-meta {
+    color: var(--nwp-text-secondary);
+    font-family: var(--nwp-font-mono);
+    font-size: var(--nwp-size-caption);
+    letter-spacing: 0.04em;
+  }
   .metrics {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--nwp-space-4);
   }
   .metric-card,
@@ -462,6 +505,9 @@
   }
   .metric-card--gap {
     background: var(--nwp-primary-soft);
+  }
+  .metric-card--cycle {
+    background: var(--nwp-surface-2);
   }
   .metric-label {
     display: flex;
@@ -688,6 +734,12 @@
     }
     .network-now__spark {
       width: 100%;
+    }
+    .metrics {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .range-bar {
+      flex-wrap: wrap;
     }
   }
   @media (max-width: 900px) {

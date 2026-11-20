@@ -189,11 +189,11 @@
 - [ ] L-C7 Apps list live speed columns, sorted with ~2 s hold
 - [ ] L-C8 Live Connections screen shows real rows; empty state only when idle
 - [x] L-C9 Degraded path: `NETWATCH_DISABLE_EBPF` + failed attach honest everywhere <!-- daemon /status = no_collector, recording=false, zero drops [VERIFIED host]; rendered UI verified in-browser via mocked Tauri bridge driving real frames through actual stores: Degraded chip + tooltip, Dashboard live-speed note, Live empty state for both no_collector and failed variants; literal WebKit window not agent-verified (GL/AT-SPI/Wayland limits, pkexec prompt) -->
-- [ ] L-D1 Range selector 1 h/24 h/7 d/30 d/cycle, remembered per user via `range_default` (DESIGN.md §7.13, §8.3; API.md §1.4) <!-- docs-first: DESIGN 1.4, ARCHITECTURE 1.7, DATABASE 1.4 + migration 0006, API 1.8, api-contract, TESTING F12; code pending -->
-- [ ] L-D2 Range totals from rollups in configured timezone with `billing_cycle_day` (Asia/Kolkata midnight test) (API.md U1)
-- [ ] L-D3 Timeline buckets 15 m / hour / day by preset, bar chart + data-table fallback (API.md U2, DESIGN.md §7.14)
-- [ ] L-D4 Apps list + app detail respect the selected range (new Apps screen per DESIGN.md §8.10; API.md A1/A3)
-- [ ] L-D5 Billing-cycle card: bytes used, days left, budget state (DESIGN.md §8.3)
+- [x] L-D1 Range selector 1 h/24 h/7 d/30 d/cycle, remembered per user via `range_default` (DESIGN.md §7.13, §8.3; API.md §1.4) <!-- docs-first DESIGN 1.4/ARCHITECTURE 1.7/DATABASE 1.4+migration 0006/API 1.8/api-contract/TESTING F12; setting spec + range.rs tests green; browser-verified preset switch 24h→7d changes bucket label 15 min→Hour and reloads all three U-requests -->
+- [x] L-D2 Range totals from rollups in configured timezone with `billing_cycle_day` (Asia/Kolkata midnight test) (API.md U1) <!-- range::day_preset_resets_at_local_midnight_in_kolkata + cycle_preset_uses_configured_day_and_clamps_short_months + U1 integration test green -->
+- [x] L-D3 Timeline buckets 15 m / hour / day by preset, bar chart + data-table fallback (API.md U2, DESIGN.md §7.14) <!-- Bucket::Minute15 + 15m integration test green; Dashboard bar series + sr-only table rendered in-browser -->
+- [x] L-D4 Apps list + app detail respect the selected range (new Apps screen per DESIGN.md §8.10; API.md A1/A3) <!-- A1 usage.range/usage_range + A3 range tests green; Apps screen (search/sort/live columns/Unattributed row) and AppDetail 7 d headline/timeline rendered in-browser; real-daemon E2E pending -->
+- [x] L-D5 Billing-cycle card: bytes used, days left, budget state (DESIGN.md §8.3) <!-- U1 cycle integration test; card rendered with used bytes, days left and budget level in-browser -->
 
 ---
 

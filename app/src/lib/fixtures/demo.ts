@@ -10,6 +10,17 @@ const HOUR = 3_600;
 export const DEMO_SUMMARY: Summary = {
   today: { total: 1_240_000_000, attributed: 1_080_000_000, unattributed: 160_000_000 },
   month: { total: 18_600_000_000, attributed: 16_900_000_000, unattributed: 1_700_000_000 },
+  range: {
+    preset: '24h',
+    start: 0,
+    end: DAY,
+    totals: { total: 1_240_000_000, attributed: 1_080_000_000, unattributed: 160_000_000 },
+  },
+  cycle: { start: 0, end: 30 * DAY, days_left: 8, used_bytes: 18_600_000_000 },
+  budgets: {
+    total_daily: { used_bytes: 0, limit_bytes: 0, level: 'ok' },
+    total_monthly: { used_bytes: 18_600_000_000, limit_bytes: 0, level: 'ok' },
+  },
   top_apps: [
     { id: 1, name: 'Firefox', bytes_total: 7_400_000_000 },
     { id: 2, name: 'Chrome', bytes_total: 4_100_000_000 },
