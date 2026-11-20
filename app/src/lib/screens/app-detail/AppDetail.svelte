@@ -110,7 +110,7 @@
     <EmptyState
       title="App unavailable"
       description="Connect to the daemon to inspect application usage."
-      icon="◎"
+      icon="grid"
     />
   {:else}
     <header class="app-header">
@@ -228,7 +228,7 @@
               <EmptyState
                 title="No usage in this period"
                 description="This app has no recorded traffic for the selected range."
-                icon="⌁"
+                icon="activity"
               />
             {/if}
           </div>
@@ -263,7 +263,7 @@
             <EmptyState
               title="No connections yet"
               description="Episodes for this app will appear here once traffic is recorded."
-              icon="⌁"
+              icon="activity"
             />
           {/if}
         </div>
@@ -302,7 +302,7 @@
             <EmptyState
               title="No endpoints yet"
               description="Remote hosts contacted by this app will be ranked here."
-              icon="◎"
+              icon="grid"
             />
           {/if}
         </div>
@@ -434,6 +434,12 @@
     color: var(--nwp-text-secondary);
     font-size: var(--nwp-size-body);
     cursor: pointer;
+    transition:
+      color var(--nwp-dur-fast) var(--nwp-ease-standard),
+      border-color var(--nwp-dur-fast) var(--nwp-ease-standard);
+  }
+  .tabs button:hover:not(.active) {
+    color: var(--nwp-text);
   }
   .tabs button.active {
     border-bottom-color: var(--nwp-primary);

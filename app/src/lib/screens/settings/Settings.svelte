@@ -490,6 +490,9 @@
     font-family: var(--nwp-font-ui);
     font-size: var(--nwp-size-label);
     cursor: pointer;
+    transition:
+      color var(--nwp-dur-fast) var(--nwp-ease-standard),
+      border-color var(--nwp-dur-fast) var(--nwp-ease-standard);
   }
   .tab:hover {
     color: var(--nwp-text);
@@ -501,7 +504,7 @@
   }
   .tab:focus-visible {
     outline: 2px solid var(--nwp-primary);
-    outline-offset: -2px;
+    outline-offset: 2px;
   }
   .panel {
     display: grid;

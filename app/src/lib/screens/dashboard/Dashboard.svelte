@@ -229,7 +229,7 @@
         <EmptyState
           title="Waiting for first data"
           description="Once monitoring is enabled, your activity will appear here."
-          icon="⌁"
+          icon="activity"
         />
       {:else if points.length > 0}
         <div class="chart-frame timeline-chart">
@@ -255,7 +255,7 @@
         <EmptyState
           title="No usage in this period"
           description="Try another day or hour range."
-          icon="◷"
+          icon="clock"
         />
       {/if}
     </article>
@@ -288,7 +288,7 @@
         <EmptyState
           title="No attributed apps yet"
           description="App usage will appear here after monitoring begins."
-          icon="◎"
+          icon="grid"
         />
       {/if}
       <!-- Phase C C7: live per-app speed from the `live.apps` stream. -->
@@ -368,7 +368,7 @@
         <EmptyState
           title="No interface samples yet"
           description="Counter samples will appear here once the daemon starts."
-          icon="⌁"
+          icon="activity"
         />
       {/if}
     </article>
@@ -394,7 +394,6 @@
   }
   .network-now {
     padding: var(--nwp-space-5);
-    margin-bottom: var(--nwp-space-4);
   }
   .network-now__head {
     display: flex;
@@ -472,7 +471,7 @@
     color: var(--nwp-text-secondary);
     font-family: var(--nwp-font-mono);
     font-size: var(--nwp-size-caption);
-    letter-spacing: 0.045em;
+    letter-spacing: 0.04em;
   }
   .metric-caption {
     margin: var(--nwp-space-1) 0 0;
@@ -512,10 +511,10 @@
   }
   .eyebrow {
     margin: 0 0 var(--nwp-space-1);
-    color: var(--nwp-text-disabled);
+    color: var(--nwp-text-secondary);
     font-family: var(--nwp-font-mono);
     font-size: var(--nwp-size-caption);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.04em;
   }
   h2 {
     margin: 0;
@@ -540,10 +539,16 @@
     border: 0;
     border-radius: var(--nwp-radius-sm);
     background: transparent;
-    padding: var(--nwp-space-1) var(--nwp-space-3);
+    padding: var(--nwp-space-2) var(--nwp-space-3);
     color: var(--nwp-text-secondary);
     font-size: var(--nwp-size-label);
     cursor: pointer;
+    transition:
+      background-color var(--nwp-dur-fast) var(--nwp-ease-standard),
+      color var(--nwp-dur-fast) var(--nwp-ease-standard);
+  }
+  .granularity button:hover:not(.active) {
+    color: var(--nwp-text);
   }
   .granularity button.active {
     background: var(--nwp-surface);
@@ -586,7 +591,8 @@
     font-size: var(--nwp-size-label);
   }
   .live-apps__idle {
-    opacity: 0.6;
+    /* §9.1: dim with a token, not opacity — dimmed text must stay legible. */
+    color: var(--nwp-text-disabled);
   }
   .live-apps__name {
     display: inline-flex;
@@ -673,6 +679,16 @@
     overflow: hidden;
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
+  }
+  /* §5.4 compact: keep the live numbers readable before the columns stack. */
+  @media (max-width: 1100px) {
+    .network-now__body {
+      flex-wrap: wrap;
+      gap: var(--nwp-space-4);
+    }
+    .network-now__spark {
+      width: 100%;
+    }
   }
   @media (max-width: 900px) {
     .metrics {

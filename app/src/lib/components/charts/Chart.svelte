@@ -36,10 +36,29 @@
   let resizeObserver: ResizeObserver | undefined;
   let themeObserver: MutationObserver | undefined;
 
+  /** §6.1: read motion durations from the token layer, never hard-code them here. */
+  function tokenMs(name: string, fallback: number): number {
+    const raw = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const value = Number.parseFloat(raw);
+    return raw.endsWith('ms') && Number.isFinite(value) ? value : fallback;
+  }
+
+  /** §9.5: reduced motion disables all chart animation, sparkline included. */
+  function applyOption(next: EChartsCoreOption): void {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const optionWithMotion: EChartsCoreOption = {
+      animationDuration: tokenMs('--nwp-dur-slow', 240),
+      animationDurationUpdate: tokenMs('--nwp-dur-base', 160),
+      animationEasing: 'cubicOut' as const,
+      ...next,
+    };
+    chart?.setOption(reduced ? { ...optionWithMotion, animation: false } : optionWithMotion, true);
+  }
+
   function create(): void {
     chart?.dispose();
     chart = echarts.init(container, registerChartTheme(), { renderer: 'canvas' });
-    chart.setOption(option, true);
+    applyOption(option);
     Object.entries(onEvents).forEach(([event, handler]) => {
       chart?.on(event, handler);
     });
@@ -70,8 +89,7 @@
   });
 
   $effect(() => {
-    const next = option;
-    chart?.setOption(next, true);
+    applyOption(option);
   });
 </script>
 

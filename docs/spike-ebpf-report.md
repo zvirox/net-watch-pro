@@ -295,7 +295,7 @@ Final run evidence:
   states were then checked in the in-app browser (Vite dev server) with a
   mocked Tauri IPC bridge feeding real `status`, `net.rates`, `live.apps` and
   `live.connections` frames through the actual stores and components:
-  chip = `status-chip--degraded` with a `!` icon and tooltip "No collector —
+  chip = `status-chip--degraded` with a warning-triangle icon and tooltip "No collector —
   PC live speed works, per-app rates unavailable"; Dashboard "Network now"
   shows "PC speed works without eBPF; per-app live rates need a collector."
   plus the LIVE SPEED note "Per-app live speed needs an eBPF collector; PC

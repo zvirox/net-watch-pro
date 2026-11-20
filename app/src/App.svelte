@@ -26,7 +26,19 @@
     { label: 'History', key: 'history' },
     { label: 'Settings', key: 'settings' },
   ];
-  const navigationIcons = ['◫', '⌁', '◉', '◷', '⚙'];
+  // DESIGN.md §6.2: Lucide stroke icons. Inline SVG keeps the zero-dependency
+  // promise (no icon package); each entry is a Lucide `path` `d` string.
+  const navigationIcons = [
+    ['M3 3h7v9H3z', 'M14 3h7v5h-7z', 'M14 12h7v9h-7z', 'M3 16h7v5H3z'], // layout-dashboard
+    ['M22 12h-4l-3 9L9 3l-3 9H2'], // activity
+    ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'], // layout-grid
+    ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5', 'M12 7v5l4 2'], // history
+    [
+      'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z',
+      'M12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6',
+    ], // settings
+  ];
+  const upgradeIcon = ['M2 18h20', 'M2 9l4 3 6-9 6 9 4-3-2 7H4']; // crown
   let activeRoute = $state('dashboard');
   let selectedAppId = $state<number | null>(null);
   const navRoute = $derived(activeRoute === 'app-detail' ? 'apps' : activeRoute);
@@ -77,6 +89,7 @@
   <Onboarding />
 {:else}
   <div class="app-shell">
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <aside class="sidebar" aria-label="Main navigation">
       <a class="brand" href="#dashboard" aria-label="Net Watch Pro home"
         ><img class="brand__logo" src="/logo.png" alt="" width="32" height="32" /><span
@@ -92,7 +105,11 @@
             aria-current={navRoute === route.key ? 'page' : undefined}
             onclick={() => (activeRoute = route.key)}
           >
-            <span class="nav-icon" aria-hidden="true">{navigationIcons[index]}</span>
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+              {#each navigationIcons[index] as path, pathIndex (pathIndex)}
+                <path d={path} />
+              {/each}
+            </svg>
             <span>{route.label}</span>
           </a>
         {/each}
@@ -104,7 +121,11 @@
             licenseStore.openUpgrade();
           }}
         >
-          <span class="nav-icon" aria-hidden="true">◇</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            {#each upgradeIcon as path, index (index)}
+              <path d={path} />
+            {/each}
+          </svg>
           <span class="nav-label">Upgrade</span>
           {#if licenseStore.isPro}<span class="pro-badge">PRO</span>{/if}
         </a>
@@ -148,7 +169,7 @@
           <StatusChip /><span class="avatar" aria-label="Local user">L</span>
         </div>
       </header>
-      <main class="content">
+      <main class="content" id="main-content">
         {#if activeRoute !== 'dashboard' && activeRoute !== 'live' && activeRoute !== 'history' && activeRoute !== 'app-detail' && activeRoute !== 'settings'}
           <section class="notice" role="status">
             <div>
@@ -209,28 +230,48 @@
   :global(a) {
     font: inherit;
   }
+  /* §9.3: skip link is the first focusable element, visible only on focus. */
+  .skip-link {
+    position: absolute;
+    z-index: 10;
+    top: var(--nwp-space-2);
+    left: var(--nwp-space-2);
+    transform: translateY(-200%);
+    border-radius: var(--nwp-radius-md);
+    background: var(--nwp-primary);
+    padding: var(--nwp-space-2) var(--nwp-space-4);
+    color: var(--nwp-on-primary);
+    text-decoration: none;
+  }
+  .skip-link:focus-visible {
+    transform: translateY(0);
+    outline: 2px solid var(--nwp-text);
+    outline-offset: 2px;
+  }
   .app-shell {
     display: flex;
     min-height: 100vh;
   }
   .sidebar {
     display: flex;
-    width: 240px;
-    flex: 0 0 240px;
+    width: var(--nwp-sidebar-width);
+    flex: 0 0 var(--nwp-sidebar-width);
     flex-direction: column;
     padding: var(--nwp-space-6) var(--nwp-space-4);
     border-right: 1px solid var(--nwp-border);
     background: var(--nwp-surface);
+    transition:
+      width var(--nwp-dur-slow) var(--nwp-ease-standard),
+      flex-basis var(--nwp-dur-slow) var(--nwp-ease-standard);
   }
   .brand {
     display: flex;
     align-items: center;
     gap: var(--nwp-space-3);
-    margin: 0 0 42px;
+    margin: 0 0 var(--nwp-space-10);
     color: var(--nwp-text);
     text-decoration: none;
-    font-weight: 650;
-    letter-spacing: -0.02em;
+    font-weight: 600;
   }
   .brand__logo {
     display: block;
@@ -246,10 +287,10 @@
   .nav-heading,
   .eyebrow {
     margin: 0 0 var(--nwp-space-2);
-    color: var(--nwp-text-disabled);
+    color: var(--nwp-text-secondary);
     font-family: var(--nwp-font-mono);
     font-size: var(--nwp-size-caption);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.04em;
   }
   .nav-heading--lower {
     margin-top: var(--nwp-space-8);
@@ -263,6 +304,9 @@
     padding: 0 var(--nwp-space-3);
     color: var(--nwp-text-secondary);
     text-decoration: none;
+    transition:
+      background-color var(--nwp-dur-fast) var(--nwp-ease-standard),
+      color var(--nwp-dur-fast) var(--nwp-ease-standard);
   }
   nav a:hover {
     background: var(--nwp-surface-2);
@@ -288,11 +332,16 @@
     outline: 2px solid var(--nwp-primary);
     outline-offset: 2px;
   }
+  /* §6.2: 20px Lucide stroke icons — 2px stroke, round caps/joins, currentColor. */
   .nav-icon {
-    display: inline-grid;
     width: 20px;
-    place-items: center;
-    font-size: 18px;
+    height: 20px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
   .sidebar-foot {
     display: flex;
@@ -318,7 +367,7 @@
   }
   .topbar {
     display: flex;
-    height: 72px;
+    height: var(--nwp-topbar-height);
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--nwp-border);
@@ -374,9 +423,9 @@
     font-size: var(--nwp-size-label);
   }
   .content {
-    max-width: 1440px;
+    max-width: var(--nwp-content-max);
     margin: auto;
-    padding: 36px var(--nwp-space-8) var(--nwp-space-6);
+    padding: var(--nwp-space-8) var(--nwp-space-8) var(--nwp-space-6);
   }
   .notice {
     display: flex;
@@ -400,13 +449,13 @@
     display: flex;
     justify-content: space-between;
     margin-top: var(--nwp-space-8);
-    color: var(--nwp-text-disabled);
+    color: var(--nwp-text-secondary);
     font-family: var(--nwp-font-mono);
-    font-size: 10px;
-    letter-spacing: 0.06em;
+    font-size: var(--nwp-size-caption);
+    letter-spacing: 0.04em;
   }
   .page-footer i {
-    padding: 0 5px;
+    padding: 0 var(--nwp-space-1);
     font-style: normal;
   }
   @media (min-width: 1600px) {
@@ -417,14 +466,14 @@
   }
   @media (max-width: 1279px) {
     .sidebar {
-      width: 68px;
-      flex-basis: 68px;
+      width: var(--nwp-sidebar-width-collapsed);
+      flex-basis: var(--nwp-sidebar-width-collapsed);
       align-items: center;
       padding-right: var(--nwp-space-2);
       padding-left: var(--nwp-space-2);
     }
     .brand {
-      margin-bottom: 42px;
+      margin-bottom: var(--nwp-space-10);
     }
     .brand > span:last-child,
     nav a > span:last-child,

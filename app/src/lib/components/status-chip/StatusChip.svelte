@@ -8,6 +8,17 @@
     stopped: 'Stopped',
     starting: 'Connecting…',
   } as const;
+  // §7.5: shape differs per state — status is never conveyed by color alone.
+  const statusIcons = {
+    monitoring: ['M20 6 9 17l-5-5'], // check
+    degraded: [
+      'm10.29 3.86-8.18 14.2A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z',
+      'M12 9v4',
+      'M12 17h.01',
+    ], // triangle-alert
+    stopped: ['M18 6 6 18', 'M6 6l12 12'], // x
+    starting: [], // spinner below
+  } as const;
 </script>
 
 <button
@@ -27,9 +38,15 @@
   }}
 >
   <span class="status-chip__icon" aria-hidden="true">
-    {#if state === 'monitoring'}✓{:else if state === 'degraded'}!{:else if state === 'stopped'}×{:else}<span
-        class="status-chip__spinner"
-      ></span>{/if}
+    {#if state === 'starting'}
+      <span class="status-chip__spinner"></span>
+    {:else}
+      <svg viewBox="0 0 24 24">
+        {#each statusIcons[state] as path, index (index)}
+          <path d={path} />
+        {/each}
+      </svg>
+    {/if}
   </span>
   <span>{labels[state]}</span>
 </button>
@@ -47,6 +64,9 @@
     font-size: var(--nwp-size-label);
     font-weight: 500;
     cursor: pointer;
+    transition:
+      background-color var(--nwp-dur-fast) var(--nwp-ease-standard),
+      color var(--nwp-dur-fast) var(--nwp-ease-standard);
   }
   .status-chip--monitoring {
     background: var(--nwp-success-soft);
@@ -69,7 +89,15 @@
     width: 12px;
     height: 12px;
     place-items: center;
-    font-weight: 700;
+  }
+  .status-chip__icon svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
   .status-chip__spinner {
     width: 9px;
