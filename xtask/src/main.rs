@@ -49,10 +49,15 @@ fn bpf() -> Result<PathBuf, Box<dyn std::error::Error>> {
         cmd.env("RUSTC_BOOTSTRAP", "1");
         cmd
     };
+    // makepkg injects host RUSTFLAGS (e.g. -Ctarget-cpu=native). Those are
+    // meaningless for the BPF target and make bpf-linker reject the host CPU
+    // name ("tigerlake"), so strip them for this child process only.
     let status = command
         .args(args)
         .current_dir(&crate_dir)
         .env("CARGO_TARGET_DIR", &target_dir)
+        .env_remove("RUSTFLAGS")
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status()?;
