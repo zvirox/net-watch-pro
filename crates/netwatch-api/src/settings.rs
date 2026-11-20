@@ -124,6 +124,16 @@ const SPECIFICATIONS: &[Spec] = &[
         help: "Live speed unit: Mbps (bits/s) or MB/s (bytes/s)",
     },
     Spec {
+        key: "range_default",
+        kind: "enum",
+        default: "24h",
+        min: None,
+        max: None,
+        pro_max: None,
+        values: Some(&["1h", "24h", "7d", "30d", "cycle"]),
+        help: "Remembered usage range for Dashboard, Apps and App detail (Phase D)",
+    },
+    Spec {
         key: "metered_policy",
         kind: "enum",
         default: "ask",

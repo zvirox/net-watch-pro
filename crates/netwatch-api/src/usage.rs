@@ -35,6 +35,32 @@ pub struct TopApp {
     pub bytes_total: i64,
 }
 
+/// The selected range and its totals (API.md U1, Phase D).
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct RangeInfo {
+    /// Wire value of the preset (`1h|24h|7d|30d|cycle`).
+    pub preset: &'static str,
+    /// Inclusive UTC start second.
+    pub start: i64,
+    /// Exclusive UTC end second.
+    pub end: i64,
+    /// Totals over the selected range.
+    pub totals: Totals,
+}
+
+/// Current billing-cycle metadata for the D5 card (API.md U1, Phase D).
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct CycleInfo {
+    /// Inclusive UTC start second.
+    pub start: i64,
+    /// Exclusive UTC end second.
+    pub end: i64,
+    /// Whole days until the next cycle starts.
+    pub days_left: i64,
+    /// Interface-counter bytes used in this cycle.
+    pub used_bytes: i64,
+}
+
 /// Full U1 response payload.
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct UsageSummary {
@@ -42,7 +68,11 @@ pub struct UsageSummary {
     pub today: Totals,
     /// Current billing cycle.
     pub month: Totals,
-    /// Ranked talkers within the billing cycle.
+    /// Selected preset, its window and totals (Phase D).
+    pub range: RangeInfo,
+    /// Current billing cycle card data (Phase D).
+    pub cycle: CycleInfo,
+    /// Ranked talkers within the selected range.
     pub top_apps: Vec<TopApp>,
     /// Budget states for the same periods (D6a; additive within v1).
     pub budgets: crate::budgets::Budgets,
@@ -69,20 +99,36 @@ pub async fn summary(
     let tz = resolve_timezone(&timezone);
     let today = day_period(now, tz);
     let month = billing_period(now, tz, billing_day);
+    let preset = crate::range::resolve(pool, raw_query).await?;
+    let selected = preset.period(now, tz, billing_day);
 
     let (today_total, today_attributed) = period_totals(pool, today).await?;
     let (month_total, month_attributed) = period_totals(pool, month).await?;
-    let top_apps = top_apps(pool, month, top_limit).await?;
+    let (range_total, range_attributed) = period_totals(pool, selected).await?;
+    let top_apps = top_apps(pool, selected, top_limit).await?;
     let budgets = crate::budgets::compute(pool, today, month, today_total, month_total).await?;
     let has_data = today_total > 0
         || today_attributed > 0
         || month_total > 0
         || month_attributed > 0
+        || range_total > 0
         || !top_apps.is_empty();
 
     Ok(UsageSummary {
         today: totals(today_total, today_attributed),
         month: totals(month_total, month_attributed),
+        range: RangeInfo {
+            preset: preset.as_str(),
+            start: selected.start,
+            end: selected.end,
+            totals: totals(range_total, range_attributed),
+        },
+        cycle: CycleInfo {
+            start: month.start,
+            end: month.end,
+            days_left: crate::range::days_left(now, tz, month),
+            used_bytes: month_total,
+        },
         top_apps,
         budgets,
         state: if has_data { "ok" } else { "collecting" },
@@ -181,6 +227,9 @@ fn parse_top_limit(raw: Option<&str>) -> Result<i64, ApiError> {
                 limit = value
                     .parse::<i64>()
                     .map_err(|_| ApiError::query_invalid(format!("invalid top_limit: {value}")))?;
+            }
+            "range" => {
+                // Validated by crate::range::resolve; ignored here.
             }
             other => {
                 return Err(ApiError::query_invalid(format!(

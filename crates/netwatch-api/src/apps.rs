@@ -53,6 +53,8 @@ pub struct AppUsagePair {
     pub today: AppUsage,
     /// Current billing cycle.
     pub month: AppUsage,
+    /// Selected range preset (Phase D; defaults to `range_default`).
+    pub range: AppUsage,
 }
 
 /// One A4 endpoint-ranking row.
@@ -88,6 +90,7 @@ pub struct AppDetail {
 enum Sort {
     UsageMonth,
     UsageToday,
+    UsageRange,
     LastSeenAt,
 }
 
@@ -108,15 +111,17 @@ pub async fn apps_page(
     raw_query: Option<&str>,
 ) -> Result<Vec<AppRow>, ApiError> {
     let query = parse_query(raw_query)?;
-    let (today, month) = periods(pool, now).await?;
+    let (today, month, range_period) = periods(pool, now, raw_query).await?;
 
     let today_usage = usage_by_app(pool, today).await?;
     let month_usage = usage_by_app(pool, month).await?;
+    let range_usage = usage_by_app(pool, range_period).await?;
     let mut rows = load_apps(pool, query.include_deleted).await?;
     for row in &mut rows {
         let empty = DirectionTotals::default();
         let today = today_usage.get(&row.id).unwrap_or(&empty);
         let month = month_usage.get(&row.id).unwrap_or(&empty);
+        let range = range_usage.get(&row.id).unwrap_or(&empty);
         row.usage = AppUsagePair {
             today: AppUsage {
                 up: today.up,
@@ -125,6 +130,10 @@ pub async fn apps_page(
             month: AppUsage {
                 up: month.up,
                 down: month.down,
+            },
+            range: AppUsage {
+                up: range.up,
+                down: range.down,
             },
         };
     }
@@ -136,14 +145,27 @@ pub async fn apps_page(
 async fn periods(
     pool: &SqlitePool,
     now: i64,
-) -> Result<(crate::calendar::Period, crate::calendar::Period), ApiError> {
+    raw_query: Option<&str>,
+) -> Result<
+    (
+        crate::calendar::Period,
+        crate::calendar::Period,
+        crate::calendar::Period,
+    ),
+    ApiError,
+> {
     let timezone = crate::usage::setting(pool, "timezone", "local").await?;
     let billing_day = crate::usage::setting(pool, "billing_cycle_day", "1")
         .await?
         .parse::<i64>()
         .unwrap_or(1);
     let tz = resolve_timezone(&timezone);
-    Ok((day_period(now, tz), billing_period(now, tz, billing_day)))
+    let preset = crate::range::resolve(pool, raw_query).await?;
+    Ok((
+        day_period(now, tz),
+        billing_period(now, tz, billing_day),
+        preset.period(now, tz, billing_day),
+    ))
 }
 
 /// Build the A2 payload for one app, including soft-deleted rows so history
@@ -165,12 +187,14 @@ pub async fn app_detail(pool: &SqlitePool, now: i64, id: i64) -> Result<AppDetai
     .ok_or_else(ApiError::not_found)?;
 
     let mut app = map_app_row(&row)?;
-    let (today, month) = periods(pool, now).await?;
+    let (today, month, range_period) = periods(pool, now, None).await?;
     let today_usage = usage_by_app(pool, today).await?;
     let month_usage = usage_by_app(pool, month).await?;
+    let range_usage = usage_by_app(pool, range_period).await?;
     let empty = DirectionTotals::default();
     let today = today_usage.get(&app.id).unwrap_or(&empty);
     let month = month_usage.get(&app.id).unwrap_or(&empty);
+    let range = range_usage.get(&app.id).unwrap_or(&empty);
     app.usage = AppUsagePair {
         today: AppUsage {
             up: today.up,
@@ -179,6 +203,10 @@ pub async fn app_detail(pool: &SqlitePool, now: i64, id: i64) -> Result<AppDetai
         month: AppUsage {
             up: month.up,
             down: month.down,
+        },
+        range: AppUsage {
+            up: range.up,
+            down: range.down,
         },
     };
     Ok(AppDetail {
@@ -392,6 +420,7 @@ fn parse_query(raw: Option<&str>) -> Result<Query, ApiError> {
                 query.sort = match value.as_str() {
                     "usage_month" => Sort::UsageMonth,
                     "usage_today" => Sort::UsageToday,
+                    "usage_range" => Sort::UsageRange,
                     "last_seen_at" => Sort::LastSeenAt,
                     other => {
                         return Err(ApiError::query_invalid(format!("invalid sort: {other}")));
@@ -411,6 +440,9 @@ fn parse_query(raw: Option<&str>) -> Result<Query, ApiError> {
                 query.limit = value.parse::<i64>().map_err(|_| {
                     ApiError::query_invalid(format!("invalid query parameter 'limit': {value}"))
                 })?;
+            }
+            "range" => {
+                // Validated by crate::range::resolve; ignored here.
             }
             "include_deleted" => {
                 query.include_deleted = match value.as_str() {
@@ -474,6 +506,7 @@ fn map_app_row(row: &SqliteRow) -> Result<AppRow, ApiError> {
         usage: AppUsagePair {
             today: AppUsage { up: 0, down: 0 },
             month: AppUsage { up: 0, down: 0 },
+            range: AppUsage { up: 0, down: 0 },
         },
     })
 }
@@ -514,6 +547,7 @@ fn sort_rows(rows: &mut [AppRow], sort: Sort, order: Order) {
         match sort {
             Sort::UsageMonth => u128::from(row.usage.month.up) + u128::from(row.usage.month.down),
             Sort::UsageToday => u128::from(row.usage.today.up) + u128::from(row.usage.today.down),
+            Sort::UsageRange => u128::from(row.usage.range.up) + u128::from(row.usage.range.down),
             Sort::LastSeenAt => {
                 u128::from(u64::try_from(row.last_seen_at.max(0)).unwrap_or(u64::MAX))
             }

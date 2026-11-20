@@ -13,11 +13,12 @@ use sqlx::{Row, SqlitePool};
 
 use crate::calendar::{Bucket, bucket_start, resolve_timezone};
 use crate::error::ApiError;
+use crate::range::RangePreset;
 
 pub(crate) const DAY_S: i64 = 24 * 60 * 60;
-const HOUR_S: i64 = 60 * 60;
 const DEFAULT_DAY_BUCKETS: i64 = 90;
 const DEFAULT_HOUR_BUCKETS: i64 = 168;
+const DEFAULT_MINUTE15_BUCKETS: i64 = 96;
 const LIMIT_MAX: i64 = 500;
 
 /// One chart point (A3 shape, minus `app_id`).
@@ -89,10 +90,15 @@ async fn timeline_for_app(
     raw_query: Option<&str>,
     app_id: Option<i64>,
 ) -> Result<Timeline, ApiError> {
-    let mut query = parse_query(raw_query, now)?;
-    query.app_id = app_id;
     let timezone = crate::usage::setting(pool, "timezone", "local").await?;
+    let billing_day = crate::usage::setting(pool, "billing_cycle_day", "1")
+        .await?
+        .parse::<i64>()
+        .unwrap_or(1);
     let tz = resolve_timezone(&timezone);
+    let preset = crate::range::resolve(pool, raw_query).await?;
+    let mut query = parse_query(raw_query, now, preset, tz, billing_day)?;
+    query.app_id = app_id;
     let cutoff = raw_cutoff(pool, now).await?;
 
     let mut buckets = BTreeMap::new();
@@ -125,6 +131,7 @@ pub(crate) async fn raw_cutoff(pool: &SqlitePool, now: i64) -> Result<i64, ApiEr
 
 fn granularity_name(bucket: Bucket) -> &'static str {
     match bucket {
+        Bucket::Minute15 => "15m",
         Bucket::Hour => "hour",
         Bucket::Day => "day",
     }
@@ -287,8 +294,14 @@ async fn load_interface_samples(
     Ok(())
 }
 
-fn parse_query(raw: Option<&str>, now: i64) -> Result<Query, ApiError> {
-    let mut bucket = Bucket::Day;
+fn parse_query(
+    raw: Option<&str>,
+    now: i64,
+    preset: RangePreset,
+    tz: chrono_tz::Tz,
+    billing_day: i64,
+) -> Result<Query, ApiError> {
+    let mut bucket = preset.bucket();
     let mut since = None;
     let mut until = None;
     let mut limit = None;
@@ -297,6 +310,7 @@ fn parse_query(raw: Option<&str>, now: i64) -> Result<Query, ApiError> {
         match key.as_str() {
             "granularity" => {
                 bucket = match value.as_str() {
+                    "15m" => Bucket::Minute15,
                     "hour" => Bucket::Hour,
                     "day" => Bucket::Day,
                     other => {
@@ -305,6 +319,10 @@ fn parse_query(raw: Option<&str>, now: i64) -> Result<Query, ApiError> {
                         )));
                     }
                 };
+            }
+            "range" => {
+                // Already validated by crate::range::resolve; the preset's
+                // bucket/window are applied unless explicitly overridden.
             }
             "since" => since = Some(parse_int("since", &value)?),
             "until" => until = Some(parse_int("until", &value)?),
@@ -317,16 +335,14 @@ fn parse_query(raw: Option<&str>, now: i64) -> Result<Query, ApiError> {
             }
         }
     }
-    let step = match bucket {
-        Bucket::Day => DAY_S,
-        Bucket::Hour => HOUR_S,
-    };
     let default_limit = match bucket {
-        Bucket::Day => DEFAULT_DAY_BUCKETS,
+        Bucket::Minute15 => DEFAULT_MINUTE15_BUCKETS,
         Bucket::Hour => DEFAULT_HOUR_BUCKETS,
+        Bucket::Day => DEFAULT_DAY_BUCKETS,
     };
-    let until = until.unwrap_or(now);
-    let since = since.unwrap_or_else(|| until.saturating_sub(default_limit.saturating_mul(step)));
+    let period = preset.period(now, tz, billing_day);
+    let until = until.unwrap_or(period.end.min(now));
+    let since = since.unwrap_or(period.start);
     let limit = limit.unwrap_or(default_limit);
     if since >= until {
         return Err(ApiError::query_invalid("since must be earlier than until"));

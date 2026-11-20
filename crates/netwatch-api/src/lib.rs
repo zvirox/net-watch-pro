@@ -21,6 +21,7 @@ pub mod history;
 pub mod interfaces;
 pub mod interfaces_usage;
 pub mod license;
+pub mod range;
 pub mod ratelimit;
 pub mod routes;
 pub mod settings;

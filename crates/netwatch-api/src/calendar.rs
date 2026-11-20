@@ -12,6 +12,8 @@ use chrono_tz::Tz;
 /// Chart bucket size for usage timelines (API.md A3/U2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Bucket {
+    /// Fifteen minutes — the automatic bucket for `1h` and `24h` (Phase D).
+    Minute15,
     /// One local hour.
     Hour,
     /// One local calendar day.
@@ -81,6 +83,10 @@ fn local_midnight(date: NaiveDate, tz: Tz) -> DateTime<Tz> {
 pub fn bucket_start(epoch_seconds: i64, bucket: Bucket, tz: Tz) -> i64 {
     let local = local_now(epoch_seconds, tz);
     let naive = match bucket {
+        Bucket::Minute15 => local
+            .date_naive()
+            .and_hms_opt(local.hour(), (local.minute() / 15) * 15, 0)
+            .unwrap_or_default(),
         Bucket::Hour => local
             .date_naive()
             .and_hms_opt(local.hour(), 0, 0)
@@ -103,6 +109,17 @@ pub fn day_period(now: i64, tz: Tz) -> Period {
     let date = local_now(now, tz).date_naive();
     let end = date.succ_opt().unwrap_or(date);
     period_from(date, end, tz)
+}
+
+/// The last `days` local calendar days ending at the next local midnight
+/// (Phase D `7d` / `30d`). Uses local dates so a `Asia/Kolkata` day boundary
+/// is 00:00 +05:30, not 05:30 UTC.
+#[must_use]
+pub fn local_days_period(now: i64, tz: Tz, days: i64) -> Period {
+    let today = local_now(now, tz).date_naive();
+    let start = today - Duration::days(days.saturating_sub(1).max(0));
+    let end = today.succ_opt().unwrap_or(today);
+    period_from(start, end, tz)
 }
 
 fn previous_month(year: i32, month: u32) -> (i32, u32) {

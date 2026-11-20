@@ -9,7 +9,7 @@ use std::path::Path;
 use serde::Serialize;
 use sqlx::{Row, SqlitePool};
 
-use crate::calendar::{day_period, resolve_timezone};
+use crate::calendar::resolve_timezone;
 use crate::error::ApiError;
 
 /// Local sysfs root for Wi-Fi link information (owner L-OQ4). The UI never
@@ -143,6 +143,9 @@ pub(crate) async fn parse_range(
         match key.as_str() {
             "since" => since = Some(parse_int("since", &value)?),
             "until" => until = Some(parse_int("until", &value)?),
+            "range" => {
+                // Validated by crate::range::resolve below.
+            }
             other => {
                 return Err(ApiError::query_invalid(format!(
                     "invalid query parameter '{other}': unknown"
@@ -157,8 +160,17 @@ pub(crate) async fn parse_range(
         return Ok((s, u));
     }
     let timezone = crate::usage::setting(pool, "timezone", "local").await?;
-    let today = day_period(now, resolve_timezone(&timezone));
-    Ok((since.unwrap_or(today.start), until.unwrap_or(today.end)))
+    let billing_day = crate::usage::setting(pool, "billing_cycle_day", "1")
+        .await?
+        .parse::<i64>()
+        .unwrap_or(1);
+    let tz = resolve_timezone(&timezone);
+    let preset = crate::range::resolve(pool, raw_query).await?;
+    let period = preset.period(now, tz, billing_day);
+    // Keep the historical U3 end (next local midnight): a rollup bucket
+    // stamped inside the current local day but ahead of `now` still belongs
+    // to that day (netwatchd's publisher relies on this).
+    Ok((since.unwrap_or(period.start), until.unwrap_or(period.end)))
 }
 
 fn parse_int(key: &str, value: &str) -> Result<i64, ApiError> {

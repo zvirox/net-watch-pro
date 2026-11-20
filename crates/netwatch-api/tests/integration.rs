@@ -1145,6 +1145,91 @@ async fn usage_summary_rejects_invalid_top_limit() {
     }
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_summary_range_adds_cycle_card_and_scopes_top_apps() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    seed_usage_data(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/usage/summary?range=24h").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["range"]["preset"], "24h");
+    assert_eq!(v["range"]["totals"]["total"], v["today"]["total"]);
+    assert!(v["range"]["start"].as_i64().unwrap() < v["range"]["end"].as_i64().unwrap());
+    assert!(v["cycle"]["days_left"].as_i64().unwrap() >= 0);
+    assert_eq!(v["cycle"]["used_bytes"], v["month"]["total"]);
+    // One of the two seeded apps fell outside part of the window; the range
+    // ranking must still be the same shape as today/month.
+    assert_eq!(v["top_apps"].as_array().unwrap().len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_summary_rejects_invalid_range() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+    let (status, body) = http_get(&sock, "/api/v1/usage/summary?range=13h").await;
+    assert_eq!(status, 400, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["error"]["code"], "QUERY_INVALID");
+    assert!(body.contains("range"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_timeline_range_preset_uses_15m_buckets() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    seed_usage_data(&db).await;
+    // Recent bytes live in the raw window (connections), not the rollups —
+    // the seam cutoff is 7 days, so seed a recent episode for the 1 h view.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        .cast_signed();
+    sqlx::query(
+        "INSERT INTO connections (app_id, pid, protocol, local_ip, local_port,
+                                  remote_ip, remote_port, bytes_up, bytes_down,
+                                  first_seen_at, last_seen_at)
+         VALUES (1, 42, 'tcp', '10.0.0.2', 51000, '198.51.100.1', 443,
+                 10, 20, ?1, ?2)",
+    )
+    .bind(now - 60)
+    .bind(now - 30)
+    .execute(&db)
+    .await
+    .unwrap();
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/usage/timeline?range=1h").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["granularity"], "15m");
+    assert_eq!(v["data"].as_array().unwrap().len(), 1, "body: {body}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn apps_list_range_sort_uses_selected_window() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    seed_usage_data(&db).await;
+    let (sock, _tx) = spawn_server_with(db).await;
+
+    let (status, body) = http_get(&sock, "/api/v1/apps?range=24h&sort=usage_range").await;
+    assert_eq!(status, 200, "body: {body}");
+    let rows: Value = serde_json::from_str(&body).unwrap();
+    let rows = rows.as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0]["usage"]["range"].is_object());
+    assert!(rows[0]["usage"]["range"]["down"].as_u64().unwrap() > 0);
+}
+
 // ---------------------------------------------------- §2.5 U2 usage timeline
 
 async fn set_timezone(pool: &sqlx::SqlitePool, name: &str) {
@@ -1903,7 +1988,7 @@ async fn settings_list_and_free_retention_ceiling() {
     assert_eq!(status, 200, "body: {body}");
     let rows: Value = serde_json::from_str(&body).unwrap();
     let rows = rows.as_array().unwrap();
-    assert_eq!(rows.len(), 13);
+    assert_eq!(rows.len(), 14); // 13 + range_default (migration 0006, Phase D)
     let retention = rows
         .iter()
         .find(|row| row["key"] == "retention_days")

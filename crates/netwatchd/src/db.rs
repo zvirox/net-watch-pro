@@ -750,7 +750,7 @@ mod tests {
             .fetch_one(&pool)
             .await
             .unwrap();
-        assert_eq!(settings, 8); // 7 from 0001 + speed_unit from 0005 (DATABASE.md §2.6)
+        assert_eq!(settings, 9); // 7 from 0001 + speed_unit 0005 + range_default 0006 (DATABASE.md §2.6)
         let unit: String =
             sqlx::query_scalar("SELECT value FROM settings WHERE key = 'speed_unit'")
                 .fetch_one(&pool)
