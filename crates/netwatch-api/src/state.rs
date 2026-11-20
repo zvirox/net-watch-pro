@@ -13,6 +13,7 @@ use sqlx::SqlitePool;
 use tokio::sync::watch;
 
 use crate::LiveFeed;
+use crate::app_names::AppNames;
 use crate::exports::ExportRegistry;
 use crate::ratelimit::RateLimiter;
 
@@ -24,6 +25,8 @@ pub struct AppState {
     pub status_tx: watch::Sender<StatusSnapshot>,
     /// Live connection snapshot + delta feed (P2.6).
     pub live: LiveFeed,
+    /// Cgroup-id -> app display name resolver (Phase C C4).
+    pub app_names: AppNames,
     /// Read-side SQLite pool for query endpoints (history; API.md §2.2).
     /// The daemon owns the database file; this pool shares its WAL.
     pub db: SqlitePool,
@@ -52,6 +55,7 @@ impl AppState {
             status,
             status_tx,
             live,
+            app_names: AppNames::default(),
             db,
             ws_clients: AtomicU64::new(0),
             started_at: std::time::Instant::now(),

@@ -136,6 +136,41 @@ pub struct AppUsage {
     pub ts: u64,
 }
 
+/// One row of the `live.apps` stream (API.md §3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveAppRate {
+    /// Socket cgroup id — the grouping key (Motrix + aria2c share one id).
+    pub cgroup_id: u64,
+    /// Display name resolved from the cgroup scope / `.desktop` entry.
+    pub name: String,
+    /// Current download bits per second (decimal).
+    pub down_bps: u64,
+    /// Current upload bits per second (decimal).
+    pub up_bps: u64,
+    /// Confidence of the display name: `high` or `low`.
+    pub confidence: String,
+}
+
+/// Up/down rate pair for the `live.apps` unattributed remainder (API.md §3).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RatePair {
+    /// Unattributed download bits per second.
+    pub down_bps: u64,
+    /// Unattributed upload bits per second.
+    pub up_bps: u64,
+}
+
+/// Payload of the `live.apps` WS channel (API.md §3).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveAppRatesFrame {
+    /// Sample timestamp (epoch seconds).
+    pub ts: u64,
+    /// Active apps, sorted by current total rate.
+    pub apps: Vec<LiveAppRate>,
+    /// Remainder to the PC total that could not be attributed to a cgroup.
+    pub unattributed: RatePair,
+}
+
 /// Live PC rate snapshot pushed on the `net.rates` WS channel (API.md §3).
 ///
 /// Rates are decimal bits per second; `ts` is epoch seconds of the sample.
@@ -253,6 +288,9 @@ pub enum Channel {
     /// 1 Hz live PC network rates.
     #[serde(rename = "net.rates")]
     Rates,
+    /// 1 Hz per-app live rates (Phase C).
+    #[serde(rename = "live.apps")]
+    Apps,
 }
 
 impl Channel {
@@ -264,6 +302,7 @@ impl Channel {
             Channel::Status => "status",
             Channel::UsageTotals => "usage.totals",
             Channel::Rates => "net.rates",
+            Channel::Apps => "live.apps",
         }
     }
 }

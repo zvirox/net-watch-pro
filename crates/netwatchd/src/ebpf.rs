@@ -37,6 +37,9 @@ struct Counts {
 #[allow(unsafe_code)]
 unsafe impl Pod for Counts {}
 
+/// Receiver of the latest per-app rows (fed to the `live.apps` stream).
+pub type AppUsageRx = watch::Receiver<std::sync::Arc<Vec<AppUsage>>>;
+
 /// Outcome of the loader, used to set the honest status snapshot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CollectorState {
@@ -53,12 +56,8 @@ pub enum CollectorState {
 pub fn start(
     disabled: bool,
     object_override: Option<PathBuf>,
-) -> (
-    CollectorState,
-    watch::Receiver<Vec<AppUsage>>,
-    Option<JoinHandle<()>>,
-) {
-    let (tx, rx) = watch::channel(Vec::new());
+) -> (CollectorState, AppUsageRx, Option<JoinHandle<()>>) {
+    let (tx, rx) = watch::channel(std::sync::Arc::new(Vec::new()));
     if disabled {
         tracing::info!("NETWATCH_DISABLE_EBPF set: collector disabled");
         return (CollectorState::Disabled, rx, None);
@@ -139,7 +138,7 @@ pub fn start(
 async fn sample_loop(
     map: AyaHashMap<MapData, u64, Counts>,
     _stats: Option<Array<MapData, u64>>,
-    tx: watch::Sender<Vec<AppUsage>>,
+    tx: watch::Sender<std::sync::Arc<Vec<AppUsage>>>,
 ) {
     let mut previous: BTreeMap<u64, Counts> = BTreeMap::new();
     let mut tick = tokio::time::interval(SAMPLE_INTERVAL);
@@ -169,7 +168,7 @@ async fn sample_loop(
         }
         previous = current;
         rows.sort_by_key(|row| std::cmp::Reverse(row.down_bps + row.up_bps));
-        let _ = tx.send(rows);
+        let _ = tx.send(std::sync::Arc::new(rows));
     }
 }
 

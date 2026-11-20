@@ -54,6 +54,7 @@ fn live_feed_with_totals() -> (
             deltas: delta_tx.clone(),
             totals: totals_rx,
             rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
+            apps: watch::channel(Arc::new(Vec::new())).1,
             rate_history: Arc::new(netwatch_common::RateHistory::default()),
         },
         delta_tx,
@@ -351,6 +352,7 @@ async fn subscribe_live_connections_returns_injected_snapshot_then_delta() {
         deltas: delta_tx.clone(),
         totals: totals_rx,
         rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
+        apps: watch::channel(Arc::new(Vec::new())).1,
         rate_history: Arc::new(netwatch_common::RateHistory::default()),
     };
 
@@ -454,6 +456,7 @@ async fn connections_live_rest_matches_ws_snapshot() {
         deltas: delta_tx.clone(),
         totals: totals_rx,
         rates: watch::channel(Arc::new(netwatch_common::RateSnapshot::default())).1,
+        apps: watch::channel(Arc::new(Vec::new())).1,
         rate_history: Arc::new(netwatch_common::RateHistory::default()),
     };
 
@@ -2202,6 +2205,33 @@ async fn subscribe_net_rates_delivers_snapshot() {
     ws_send(
         &mut ws,
         json!({ "op": "unsubscribe", "channel": "net.rates" }),
+    )
+    .await;
+}
+
+// ------------------------------------------------ §3 live.apps stream (Phase C)
+
+#[tokio::test(flavor = "multi_thread")]
+async fn subscribe_live_apps_delivers_empty_snapshot_without_collector() {
+    let db = test_db().await;
+    let (sock, _tx) = spawn_server_with(db).await;
+    let mut ws = ws_connect(&sock).await;
+    ws_send(
+        &mut ws,
+        json!({ "op": "subscribe", "channel": "live.apps" }),
+    )
+    .await;
+    let frame = ws_next(&mut ws).await;
+    assert_eq!(frame["channel"], "live.apps", "frame: {frame}");
+    assert_eq!(frame["kind"], "update");
+    assert!(frame["data"]["apps"].is_array(), "frame: {frame}");
+    assert_eq!(frame["data"]["apps"].as_array().unwrap().len(), 0);
+    assert!(frame["data"]["unattributed"]["down_bps"].is_u64());
+    assert!(frame["data"]["unattributed"]["up_bps"].is_u64());
+    assert!(frame["data"]["ts"].is_u64());
+    ws_send(
+        &mut ws,
+        json!({ "op": "unsubscribe", "channel": "live.apps" }),
     )
     .await;
 }

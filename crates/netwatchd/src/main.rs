@@ -136,7 +136,7 @@ async fn start_collector(
     pool: &sqlx::SqlitePool,
 ) -> (
     EbpfState,
-    watch::Receiver<Vec<netwatch_common::AppUsage>>,
+    watch::Receiver<std::sync::Arc<Vec<netwatch_common::AppUsage>>>,
     Option<tokio::task::JoinHandle<()>>,
 ) {
     let disabled = std::env::var_os("NETWATCH_DISABLE_EBPF").is_some();
@@ -229,7 +229,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     });
 
     // Phase C (C1): start the collector; failures are degraded, never fatal.
-    let (ebpf_state, _app_usage_rx, collector_task) = start_collector(&pool).await;
+    let (ebpf_state, app_usage_rx, collector_task) = start_collector(&pool).await;
 
     let (status_tx, _status_rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,
@@ -258,6 +258,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
             deltas: delta_tx,
             totals: totals_tx.subscribe(),
             rates: rates_rx,
+            apps: app_usage_rx,
             rate_history,
         },
         pool,

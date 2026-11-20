@@ -15,7 +15,9 @@ use std::sync::Arc;
 use axum::extract::ws::Message;
 use axum::extract::ws::WebSocket;
 use futures_util::StreamExt;
-use netwatch_common::{Channel, ErrorCode, RateSnapshot, StatusSnapshot, UsageTotals};
+use netwatch_common::{
+    Channel, ErrorCode, LiveAppRatesFrame, RateSnapshot, StatusSnapshot, UsageTotals,
+};
 use serde_json::json;
 use tokio::sync::{broadcast, watch};
 
@@ -75,6 +77,38 @@ fn rates_obj(rates: &RateSnapshot) -> serde_json::Value {
     })
 }
 
+/// Build a `live.apps` frame: resolve cgroup ids to names and compute the
+/// unattributed remainder against the PC total from `net.rates` (API.md §3).
+fn apps_obj(state: &AppState) -> serde_json::Value {
+    let rates = state.live.rates.borrow();
+    let rows = state.live.apps.borrow();
+    let mut attributed_down = 0u64;
+    let mut attributed_up = 0u64;
+    let mut apps = Vec::with_capacity(rows.len());
+    for row in rows.iter() {
+        attributed_down = attributed_down.saturating_add(row.down_bps);
+        attributed_up = attributed_up.saturating_add(row.up_bps);
+        apps.push(
+            state
+                .app_names
+                .resolve(row.cgroup_id, row.down_bps, row.up_bps),
+        );
+    }
+    let frame = LiveAppRatesFrame {
+        ts: rates.ts,
+        apps,
+        unattributed: netwatch_common::RatePair {
+            down_bps: rates.down_bps.saturating_sub(attributed_down),
+            up_bps: rates.up_bps.saturating_sub(attributed_up),
+        },
+    };
+    json!({
+        "channel": Channel::Apps.as_str(),
+        "kind": "update",
+        "data": frame,
+    })
+}
+
 /// Build a JSON object for an error frame.
 fn error_obj(code: ErrorCode, message: impl Into<String>) -> serde_json::Value {
     json!({
@@ -90,6 +124,7 @@ fn initial_frame(channel: Channel, state: &AppState) -> Message {
         Channel::LiveConnections => live_snapshot_obj(&state.live.snapshot.borrow()),
         Channel::UsageTotals => usage_totals_obj(&state.live.totals.borrow()),
         Channel::Rates => rates_obj(&state.live.rates.borrow()),
+        Channel::Apps => apps_obj(state),
     };
     Message::text(v.to_string())
 }
@@ -128,6 +163,7 @@ pub async fn run_connection(state: Arc<AppState>, mut stream: WebSocket) {
     let mut status_rx = state.status.clone();
     let mut totals_rx = Some(state.live.totals.clone());
     let mut rates_rx = Some(state.live.rates.clone());
+    let mut apps_rx = Some(state.live.apps.clone());
     // Per-connection delta receiver; subscribed to the broadcast on connect
     // so frames between subscribe and this point are not lost (the client
     // still gets the fresh snapshot on subscribe).
@@ -169,6 +205,14 @@ pub async fn run_connection(state: Arc<AppState>, mut stream: WebSocket) {
                 if let Some(rx) = &rates_rx {
                     let payload = rates_obj(&rx.borrow().clone());
                     if !send_if_subscribed(&conn.subs, &mut stream, Channel::Rates, payload).await { break; }
+                }
+            }
+            // Per-app rates tick at the collector's 1 Hz cadence (§3).
+            changed = watch_signal(&mut apps_rx) => {
+                if !changed { apps_rx = None; continue; }
+                if apps_rx.is_some() {
+                    let payload = apps_obj(&state);
+                    if !send_if_subscribed(&conn.subs, &mut stream, Channel::Apps, payload).await { break; }
                 }
             }
             // Live deltas push to subscribed clients (§3: ≤ 1 msg/s, kept
@@ -292,6 +336,7 @@ fn parse_channel(v: &serde_json::Value) -> Result<Channel, String> {
         "status" => Ok(Channel::Status),
         "usage.totals" => Ok(Channel::UsageTotals),
         "net.rates" => Ok(Channel::Rates),
+        "live.apps" => Ok(Channel::Apps),
         other => Err(format!("Unknown channel '{other}'")),
     }
 }

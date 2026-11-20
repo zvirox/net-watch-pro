@@ -1,9 +1,9 @@
 # Net Watch Pro — API.md (Local API Reference)
 
-**Version:** 1.5 · **Date:** 2026-11-19
+**Version:** 1.6 · **Date:** 2026-11-20
 **Source of truth:** `PRD.md` (features, freemium gating) · `ARCHITECTURE.md` §5.3 (transport contract) · `DATABASE.md` (tables) · `docs/decisions.md` (owner decisions D1a–D5a)
 
-**Version history:** 1.3.1 (2026-11-17): reference the offline license key wire format in `AUTH_SECURITY.md` §2.4. 1.3.0 (2026-11-17): document the A2 icon resource endpoint and the `deleted_at` field on app details for soft-deleted history views. 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a). 1.4 (2026-11-19): add the `net.rates` 1 Hz stream, the `speed_unit` setting and the honest `no_collector` status value (`docs/LIVE-THROUGHPUT-PLAN.md` Phase A). 1.5 (2026-11-19): add the in-memory 1-minute rate history endpoint and optional Wi-Fi signal/link fields on U3 (owner decisions L-OQ1/L-OQ4).
+**Version history:** 1.3.1 (2026-11-17): reference the offline license key wire format in `AUTH_SECURITY.md` §2.4. 1.3.0 (2026-11-17): document the A2 icon resource endpoint and the `deleted_at` field on app details for soft-deleted history views. 1.2.1 (2026-11-17): clarify that soft-deleted apps are excluded from U1 `top_apps` so A1 ranking matches the dashboard summary. 1.2 (2026-11-15): Unix-socket + peer-credential transport replaces loopback+token (F-06/D1a); usage_endpoint_day aggregate shape beyond raw window (F-02/D2a); /usage/summary returns total/attributed/unattributed (F-03/D3a); timezone/cycle behavior documented (F-04/D4a). 1.4 (2026-11-19): add the `net.rates` 1 Hz stream, the `speed_unit` setting and the honest `no_collector` status value (`docs/LIVE-THROUGHPUT-PLAN.md` Phase A). 1.5 (2026-11-19): add the in-memory 1-minute rate history endpoint and optional Wi-Fi signal/link fields on U3 (owner decisions L-OQ1/L-OQ4). 1.6 (2026-11-20): finalize the `live.apps` channel contract for Phase C (cgroup-id key, confidence, unattributed remainder).
 
 > **Binding:** every endpoint below maps to a PRD feature and a DATABASE.md table (§10 traceability matrix). Anything flagged as not doing so is explicitly justified there. Implementation of this file lives in `docs/api-contract.md` (ARCHITECTURE.md §4) and must not drift.
 
@@ -331,6 +331,10 @@ Server → client:
 { "channel": "net.rates", "kind": "update",
   "data": { "ts": 1763548800, "down_bps": 10000000, "up_bps": 1000000,
             "interfaces": [ {"name":"wlan0","down_bps":10000000,"up_bps":1000000} ] } }
+{ "channel": "live.apps", "kind": "update",
+  "data": { "ts": 1763548800,
+            "apps": [ {"cgroup_id":143335,"name":"Motrix","down_bps":10000000,"up_bps":1000000,"confidence":"high"} ],
+            "unattributed": {"down_bps":120000,"up_bps":30000} } }
 { "op": "error", "error": { "code": "QUERY_INVALID", "message": "Unknown channel 'x'" } }
 ```
 
@@ -340,8 +344,9 @@ Server → client:
 | `status` | `update` on change | on change | §6.1 #6 chip/banners | derived + `daemon_events` |
 | `usage.totals` | `update` | ≤ 1 msg/s | §6.1 #2/3 dashboard headline | `connections`/rollups |
 | `net.rates` | `update` (snapshot on subscribe) | 1 msg/s | §6.1 #11 live PC speed | derived from `/sys/class/net` counters |
+| `live.apps` | `update` (snapshot on subscribe) | 1 msg/s | §6.1 #2 per-app live speed | eBPF cgroup counters + `.desktop` names *(flagged §10)* |
 
-Rates are integer bits per second (decimal: 1 Mbps = 1,000,000 bps). The total sums non-excluded interfaces with the documented tunnel double-counting rule. Each frame carries `ts` (epoch seconds); a client that receives no frame for 3 s shows a stale state. `live.apps` is reserved for Phase C and is not emitted yet.
+Rates are integer bits per second (decimal: 1 Mbps = 1,000,000 bps). The total sums non-excluded interfaces with the documented tunnel double-counting rule. Each frame carries `ts` (epoch seconds); a client that receives no frame for 3 s shows a stale state. `live.apps` rows are keyed by `cgroup_id` (the socket's cgroup — Motrix + aria2c share one id), not by PID; `name` is resolved from the cgroup scope/`.desktop` entry with `confidence` `high`/`low`, and `unattributed` is the remainder to the PC total from `net.rates`. With no collector the channel emits an empty `apps` array — never fake rows.
 
 Rules: deltas replace by row `id` (keyed, not positional); server pushes at most one message per channel per second (UI renders from its store, DESIGN.md §7.6 in-place updates); on reconnect the client re-subscribes and receives a fresh snapshot — no gap replay (honest-state UI shows "Connecting…" until it lands). Socket authorization failure (UID not in allowlist) → connection refused.
 ---

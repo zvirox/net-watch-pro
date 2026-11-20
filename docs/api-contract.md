@@ -37,13 +37,14 @@ Status mapping: 400 QUERY_INVALID · 401 AUTH_INVALID · 403 PERMISSION_DENIED/E
 | Interfaces | `GET /interfaces` · `PATCH /interfaces/{id}` |
 | Settings | `GET /settings` · `PUT /settings/{key}` |
 | License | `GET /license` · `POST /license/activate` · `DELETE /license` |
-| Stream | socket frame stream → channels `live.connections`, `status`, `usage.totals`, `net.rates` (`live.apps` reserved for Phase C) |
+| Stream | socket frame stream → channels `live.connections`, `status`, `usage.totals`, `net.rates`, `live.apps` |
 
 Rate limits: 600/min reads · 5/min export create · 10/min writes & downloads → 429 + `Retry-After`.
 
 ## Live throughput (API.md §3, Phase A)
 
 - `net.rates` frame: `{ "channel":"net.rates","kind":"update","data":{ "ts":<epoch>,"down_bps":<int>,"up_bps":<int>,"interfaces":[{ "name","down_bps","up_bps" }] } }`; snapshot on subscribe, then 1 Hz.
+- `live.apps` frame: `{ "channel":"live.apps","kind":"update","data":{ "ts":<epoch>,"apps":[{ "cgroup_id":<int>,"name":<str>,"down_bps":<int>,"up_bps":<int>,"confidence":"high"|"low" }],"unattributed":{"down_bps":<int>,"up_bps":<int>} } }`; keyed by socket cgroup id, 1 Hz, empty rows when no collector.
 - Rates are decimal bits per second; total is the sum over non-excluded interfaces with the tunnel dedup rule. Frames older than 3 s are stale on the client.
 - `GET /status` `ebpf` may be `no_collector` (no collector attached); the UI must not show a green chip for that state.
 - Settings key `speed_unit`: enum `mbps` (default) | `mbytes`; forward-only migration 0005.
