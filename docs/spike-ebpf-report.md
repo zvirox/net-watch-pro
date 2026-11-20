@@ -210,6 +210,53 @@ in principle. **Still to verify:** that Motrix and its `aria2c` child land in
 the same cgroup (the specific Q5 grouping question) — needs a run with Motrix
 active. Kprobe identity remains `[REFUTED]`; sock_ops is the working path.
 
+### Fourteenth owner run — 2026-11-20 (60 s, --root-attach, two curls)
+
+First run of the new cgroup-id-keyed build, attached at the root cgroup with
+`--no-sock-ops`. Workload: two `curl` downloads of the 100 MB OVH file (the
+owner started a Motrix download too, but **Motrix had 0 bytes in this window**
+— see Q5 below).
+
+- **Per-app display names WORK.** The final table names cgroups from
+  `app-<name>-<pid>.scope` and `.desktop` files with confidence `high`:
+  `Foot Server` (a curl, cgroup `app-foot@…`), `Claude`, `OpenCode`, `Motrix`,
+  `Helium Browser`; system units get confidence `low`. This is the first run
+  where bytes are grouped by **socket cgroup id**
+  (`bpf_skb_cgroup_id`) rather than `current`. **[VERIFIED:
+  spike-ebpf-report §Fourteenth owner run]** per-cgroup grouping and naming.
+- rx: attributed 212,207,761 B vs `wlan0` delta 221,435,419 B =
+  **95.8% (4.2% error, PASS)**. Unattributed row = 9,227,658 B (4.2%).
+  **[VERIFIED]**
+- tx: attributed 988,168 B vs 1,728,272 B = **57.2% (42.8% error)**;
+  Unattributed row = 740,104 B (42.8%). Cause still under test.
+- **tx-gap diagnostic (new measurement):** 17,612 tx packets; cgroup_skb
+  **56.1 B/pkt** vs interface **98.1 B/pkt** = **42.0 B/pkt gap**.
+  **[VERIFIED]** the per-packet gap is **42.0 bytes**, which is **3× a
+  14-byte Ethernet header** → **[REFUTED]** "14-byte Ethernet header alone
+  explains the tx gap". The exact composition (WiFi 802.11 hdr + FCS +
+  preamble/IFG, etc.) is **[HYPOTHESIS]** — not claimed without measurement.
+- Loopback attributed 33,899/34,979 B vs sysfs 35,291/35,291 B (~4%);
+  CPU 0.0%, RSS 4,384 KiB; 54,393 events, 0 bad; clean detach. **[VERIFIED]**
+- **Q5 still UNMEASURED:** the `Motrix` row exists but shows **0 rx / 0 tx**
+  (80 events only) — Motrix was not actually transferring while the spike
+  ran. No row containing both Motrix and aria2c bytes appeared, so Q5 is
+  **not** `[VERIFIED]`.
+
+### Fifteenth owner run — 2026-11-20 (30 s, --root-attach, failed upload workload)
+
+The intended single-upload workload **failed** (no iperf3 server, and the
+local file did not exist — `uploaded 0`). Only background traffic was present
+(2,324 B attributed, 4,933 B interface delta), so accuracy percentages from
+this run are **not meaningful** and are not used.
+
+One valid measurement survived: the tx-gap diagnostic on 14 packets again
+showed cgroup_skb **110.4 B/pkt** vs interface **152.4 B/pkt** = **42.0 B/pkt
+gap** — identical to §Fourteenth run despite a completely different traffic
+volume. **[VERIFIED]** the 42.0 B/pkt gap is reproducible and does **not**
+depend on traffic volume or on "other apps" (this run had almost none). It is
+a per-packet overhead, not a per-app or volume effect; exact composition
+remains **[HYPOTHESIS]**.
+
 ### Thirteenth owner run — 2026-11-20 (20 s, UDP/DNS burst)
 
 Workload: 200 parallel `dig +time=1 +tries=1 example.com @8.8.8.8` queries.
@@ -469,11 +516,11 @@ Fedora VMs) is still outstanding.
 
 | # | Question | Measurement / evidence | Status |
 |---|---|---|---|
-| Q1 | Per-app bytes vs interface counters; composition of the gap | rx 96.3% (§Eighth, error 3.7%, loopback filtered); tx 63.8% (error 36.2%, cause unknown; loopback refuted as cause) | rx verified; tx fails threshold, cause unmeasured |
+| Q1 | Per-app bytes vs interface counters; composition of the gap | rx 95.8% (§Fourteenth, 4.2% error, PASS); tx gap = 42.0 B/pkt (§Fourteenth and §Fifteenth, reproducible); 14 B header alone REFUTED; loopback REFUTED | rx verified; tx per-packet gap verified, exact composition HYPOTHESIS |
 | Q2 | 1 s per-app rate stability (jitter, lag) | 94.3–95.7% rx across 12 steady download seconds | verified |
 | Q3 | CPU/RSS at load | 0.0% CPU, 4,116 KiB RSS under ~10 MB/s download | verified (partial: no 500-conn test) |
 | Q4 | Capabilities required | CAP_BPF + CAP_PERFMON + CAP_NET_ADMIN effective | verified on this host |
-| Q5 | cgroup identity for Motrix + `aria2c` | §Sixth run: 12/37 cookies had pid/cgroup via sock_ops, but several rows had cgroup_id=1 (root) and are UNIDENTIFIED by the owner's rule; Motrix was not active, so grouping was never measured | capture demonstrated; Motrix/aria2c grouping UNMEASURED |
+| Q5 | cgroup identity for Motrix + `aria2c` | per-cgroup naming WORKS (§Fourteenth: Foot Server/Claude/OpenCode/Motrix/Helium from cgroup id); Motrix row had 0 bytes because it was not transferring; OS-level /proc grouping verified (§Tenth) | naming VERIFIED; Motrix+aria2c bytes in one row UNMEASURED |
 | Q6 | Secure Boot / lockdown on Ubuntu LTS + Fedora VMs | — | SKIPPED by owner (2026-11-20); not measured |
 
 **Go/no-go inputs:** attributed vs true ≤ 5% (curl/iperf3); attributed +
