@@ -278,11 +278,18 @@ Final run evidence:
   from the same tick (`AppUsageFrame`); `live.apps` computes the remainder
   from that one frame. `[VERIFIED]` by a test that injects a conflicting
   smoothed rates channel and confirms the remainder uses the frame.
-- CPU/RSS at 50/500 connections: `spikes/ebpf-aya/verify_load.sh` provided —
-  **owner run pending**, so not `[VERIFIED]`.
-- Disabled/attach-failure UI: `spikes/ebpf-aya/verify_degraded.sh` provided;
-  daemon status path is covered by tests, manual UI states **owner run
-  pending** (no vitest in the UI). Not `[VERIFIED]` end-to-end.
+- CPU/RSS at 50/500 connections: owner ran `verify_load.sh` — daemon stayed
+  `attached`, `bpf_packets_seen` rose 2→19 and loopback 3.8M→17M over the two
+  windows, but the run used a **stale binary** (no `bpf_*` drops fields) and
+  the daemon did not log CPU/RSS then. Those bugs are fixed (`cpu_pct`/`rss_kib`
+  now in the diagnostic log, daemon rebuilt). **[NOT VERIFIED]** until re-run.
+- Disabled path: owner ran `verify_degraded.sh` — daemon logged
+  `state=Disabled`, `/status` returned `ebpf=no_collector`, `recording=false`
+  with zero drops. **[VERIFIED]** for the daemon status path. The UI states
+  still need a manual check against that socket (no vitest in the UI).
+- Re-run of `verify_host.sh` had no Motrix download active (idle ~2 kbps), so
+  no motrix row appeared; the Motrix rollup shown was from a previous run.
+  Scripts now clear the DB so results reflect the current run.
 - Q6 VMs remain skipped by owner.
 
 ### Fourteenth owner run — 2026-11-20 (60 s, --root-attach, two curls)
