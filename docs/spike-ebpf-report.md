@@ -466,7 +466,7 @@ Fedora VMs) is still outstanding.
 | Q3 | CPU/RSS at load | 0.0% CPU, 4,116 KiB RSS under ~10 MB/s download | verified (partial: no 500-conn test) |
 | Q4 | Capabilities required | CAP_BPF + CAP_PERFMON + CAP_NET_ADMIN effective | verified on this host |
 | Q5 | cgroup identity for Motrix + `aria2c` | §Sixth run: 12/37 cookies had pid/cgroup via sock_ops, but several rows had cgroup_id=1 (root) and are UNIDENTIFIED by the owner's rule; Motrix was not active, so grouping was never measured | capture demonstrated; Motrix/aria2c grouping UNMEASURED |
-| Q6 | Secure Boot / lockdown on Ubuntu LTS + Fedora VMs | — | not measured |
+| Q6 | Secure Boot / lockdown on Ubuntu LTS + Fedora VMs | — | SKIPPED by owner (2026-11-20); not measured |
 
 **Go/no-go inputs:** attributed vs true ≤ 5% (curl/iperf3); attributed +
 unattributed vs interface ≤ 2%; CPU ≤ 3%; RSS ≤ 150 MB. Per owner L-OQ3, a
