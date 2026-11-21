@@ -399,8 +399,23 @@ fn csv_cell(value: &Value) -> String {
         Value::Null => String::new(),
         Value::Bool(flag) => flag.to_string(),
         Value::Number(number) => number.to_string(),
-        Value::String(text) => csv_quote(text),
+        Value::String(text) => csv_quote(&neutralize_formula(text)),
         other => csv_quote(&other.to_string()),
+    }
+}
+
+/// Defuse spreadsheet formula injection (OWASP "CSV Injection").
+///
+/// `process_name` and `remote_host` come from whatever runs on the machine, so
+/// a process named `=HYPERLINK(...)` would execute when the export is opened in
+/// Excel/LibreOffice. Text cells that start with a formula trigger get a
+/// leading apostrophe, which spreadsheets treat as "this is plain text".
+/// Numbers are `Value::Number`, never strings, so they are unaffected.
+fn neutralize_formula(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        std::borrow::Cow::Owned(format!("'{text}"))
+    } else {
+        std::borrow::Cow::Borrowed(text)
     }
 }
 
@@ -752,6 +767,27 @@ mod tests {
         assert_eq!(csv_quote("a,b"), "\"a,b\"");
         assert_eq!(csv_quote("a\"b"), "\"a\"\"b\"");
         assert_eq!(csv_quote("line\nbreak"), "\"line\nbreak\"");
+    }
+
+    #[test]
+    fn csv_cells_neutralize_spreadsheet_formulas() {
+        for trigger in [
+            "=HYPERLINK(\"http://evil\")",
+            "+1+1",
+            "-2+3",
+            "@SUM(A1)",
+            "\tcmd",
+            "\rcmd",
+        ] {
+            let cell = csv_cell(&Value::String(trigger.to_string()));
+            assert!(
+                cell.trim_start_matches('"').starts_with('\''),
+                "formula cell not defused: {cell:?}"
+            );
+        }
+        assert_eq!(csv_cell(&Value::String("firefox".into())), "firefox");
+        assert_eq!(csv_cell(&json!(-5)), "-5", "numbers must stay numeric");
+        assert_eq!(csv_cell(&Value::Null), "");
     }
 
     #[tokio::test]

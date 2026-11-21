@@ -150,6 +150,10 @@ async fn daemon_http_request(
 ) -> Result<HttpResponse, String> {
     require_main_window(&window)?;
 
+    // Method and path are interpolated into a raw HTTP request line below, so
+    // both are validated first: a CR/LF or space in either would let the
+    // webview smuggle extra headers or a second request past the allowlist.
+    let method = validate_http_method(&method)?;
     // Path allowlist: v1 API paths only; the full versioned path (and any
     // encoded query string) must be sent to the daemon unchanged.
     let api_path = validate_api_path(&path)?;
@@ -369,10 +373,28 @@ fn require_main_window(window: &WebviewWindow) -> Result<(), String> {
     }
 }
 
+/// Accept only the HTTP methods the daemon API uses, as exact upper-case
+/// tokens. Anything else (including CR/LF-bearing strings) is rejected.
+fn validate_http_method(method: &str) -> Result<&'static str, String> {
+    match method {
+        "GET" => Ok("GET"),
+        "POST" => Ok("POST"),
+        "PUT" => Ok("PUT"),
+        "PATCH" => Ok("PATCH"),
+        "DELETE" => Ok("DELETE"),
+        _ => Err("invalid HTTP method".to_string()),
+    }
+}
+
 /// Validate a caller-supplied API path and return it unchanged for the HTTP
 /// request. Query strings are allowed (UI filters use encoded values) but
 /// traversal, fragment markers and malformed percent escapes are rejected.
 fn validate_api_path(path: &str) -> Result<&str, String> {
+    // Raw bytes go into the request line: reject whitespace and every control
+    // character (CR, LF, NUL, TAB, DEL) and any non-ASCII byte up front.
+    if !path.bytes().all(|byte| byte.is_ascii_graphic()) {
+        return Err("invalid API path".to_string());
+    }
     let (path_part, query) = match path.split_once('?') {
         Some((head, tail)) => (head, Some(tail)),
         None => (path, None),
@@ -439,7 +461,42 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_api_path, validate_export_path};
+    use super::{validate_api_path, validate_export_path, validate_http_method};
+
+    #[test]
+    fn http_method_is_an_exact_allowlisted_token() {
+        for valid in ["GET", "POST", "PUT", "PATCH", "DELETE"] {
+            assert_eq!(validate_http_method(valid), Ok(valid));
+        }
+        for invalid in [
+            "",
+            "get",
+            "TRACE",
+            "GET /api/v1/status HTTP/1.1\r\nX: y\r\n\r\nDELETE",
+            "GET\r\n",
+            "GET ",
+        ] {
+            assert!(
+                validate_http_method(invalid).is_err(),
+                "accepted {invalid:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn api_path_rejects_control_characters_and_whitespace() {
+        for invalid in [
+            "/api/v1/status\r\nX-Injected: 1",
+            "/api/v1/status HTTP/1.1",
+            "/api/v1/status\t",
+            "/api/v1/status\0",
+            "/api/v1/status?x=1\r\n",
+            "/api/v1/status?x=a b",
+            "/api/v1/stätus",
+        ] {
+            assert!(validate_api_path(invalid).is_err(), "accepted {invalid:?}");
+        }
+    }
 
     #[test]
     fn api_path_keeps_version_prefix_and_allows_encoded_queries() {

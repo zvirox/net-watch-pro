@@ -10,6 +10,26 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ## [Unreleased]
 
+### Security
+
+- API socket now enforces `SO_PEERCRED`: connections from UIDs outside
+  `/etc/netwatch-pro/allowed-uids` (plus root, the daemon's own UID and
+  `SUDO_UID`) are dropped before HTTP is parsed. Previously the allowlist was
+  written at onboarding but never read, so group membership alone granted full
+  API access (D1a). New `NETWATCH_ALLOWED_UIDS_FILE` override.
+- Tauri bridge: HTTP method is an exact allowlist and the API path/query reject
+  whitespace, control characters and non-ASCII before being written into the raw
+  request line (request-smuggling hardening).
+- CSP no longer allows the retired loopback `127.0.0.1:7897` origins.
+- CSV exports prefix text cells that start with `= + - @ TAB CR` with `'` so a
+  process named `=HYPERLINK(...)` cannot run as a spreadsheet formula.
+
+### Fixed
+
+- Per-app live rates divide by the measured interval (not an assumed 1 s) and
+  the first collector read is a baseline, so a delayed tick no longer inflates
+  speeds.
+
 ## [v0.9.1-beta.3] — 2026-11-21
 
 Release-pipeline fix over `v0.9.1-beta.2`: the release workflow now installs

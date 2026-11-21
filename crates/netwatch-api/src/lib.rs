@@ -22,6 +22,7 @@ pub mod history;
 pub mod interfaces;
 pub mod interfaces_usage;
 pub mod license;
+pub mod peer;
 pub mod range;
 pub mod ratelimit;
 pub mod routes;
@@ -95,6 +96,9 @@ pub async fn serve_unix(
     let state = Arc::new(AppState::new(status_tx, status_rx, live, db));
     let app = crate::routes::router(state).into_make_service();
 
+    // D1a: enforce SO_PEERCRED. Connections from UIDs outside the allowlist are
+    // dropped before any HTTP is parsed (see `peer`).
+    let listener = peer::PeerCredListener::new(listener, peer::PeerPolicy::from_env());
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
         .await
@@ -113,8 +117,8 @@ pub async fn serve_unix(
 ///
 /// A Unix socket requires *write* permission to connect, so the default
 /// `0755` from `bind()` is unusable by the unprivileged UI. `0660` with the
-/// caller's primary group closes that gap until the peer-credential UID
-/// allowlist (D1a) is implemented in full.
+/// caller's primary group is only the first gate: [`peer::PeerCredListener`]
+/// then checks the connecting UID against the allowlist (D1a).
 fn configure_socket_access(path: &Path, gid: Option<u32>) -> Result<(), crate::error::ApiError> {
     use std::os::unix::fs::PermissionsExt;
 

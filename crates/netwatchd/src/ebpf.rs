@@ -255,6 +255,17 @@ pub fn start(
     (CollectorState::Attached, rx, Some(handle))
 }
 
+/// Byte delta over a measured interval → decimal bits per second.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamped finite, non-negative
+fn bytes_to_bps(delta_bytes: u64, elapsed_s: f64) -> u64 {
+    let bps = netwatch_core::rates::bits_per_second(delta_bytes, elapsed_s);
+    if bps.is_finite() && bps > 0.0 {
+        bps.round().min(1.0e18) as u64
+    } else {
+        0
+    }
+}
+
 struct FlowSources {
     map: Option<AyaHashMap<MapData, u64, Flow>>,
     pool: SqlitePool,
@@ -270,6 +281,8 @@ async fn sample_loop(
     tx: watch::Sender<std::sync::Arc<AppUsageFrame>>,
 ) {
     let mut previous: BTreeMap<u64, Counts> = BTreeMap::new();
+    // Instant of the previous map read; `None` until the baseline tick.
+    let mut last_read: Option<std::time::Instant> = None;
     let mut flow_state: BTreeMap<u64, FlowEpisode> = BTreeMap::new();
     let mut tick = tokio::time::interval(SAMPLE_INTERVAL);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -285,6 +298,12 @@ async fn sample_loop(
         for item in map.iter().flatten() {
             current.insert(item.0, item.1);
         }
+        // Rates use the measured interval, not an assumed 1 s: a delayed tick
+        // (MissedTickBehavior::Delay, or slow DB writes in `process_flows`)
+        // must not inflate per-app speeds. The first read is only a baseline.
+        let read_at = std::time::Instant::now();
+        let elapsed_s = last_read.map(|at| read_at.duration_since(at).as_secs_f64());
+        last_read = Some(read_at);
         let collector_stats =
             stats
                 .as_ref()
@@ -339,10 +358,13 @@ async fn sample_loop(
             let prev = previous.get(cgroup_id).copied().unwrap_or_default();
             let down = counts.rx_bytes.saturating_sub(prev.rx_bytes);
             let up = counts.tx_bytes.saturating_sub(prev.tx_bytes);
+            let (down_bps, up_bps) = elapsed_s.map_or((0, 0), |elapsed| {
+                (bytes_to_bps(down, elapsed), bytes_to_bps(up, elapsed))
+            });
             rows.push(AppUsage {
                 cgroup_id: *cgroup_id,
-                down_bps: down.saturating_mul(8),
-                up_bps: up.saturating_mul(8),
+                down_bps,
+                up_bps,
                 bytes_down: counts.rx_bytes,
                 bytes_up: counts.tx_bytes,
                 ts: now,
@@ -500,6 +522,20 @@ fn lo_ifindex() -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn per_app_rate_uses_measured_interval() {
+        // 1,000,000 bytes over 1 s = 8 Mbit/s; the same bytes over a 2 s
+        // delayed tick are 4 Mbit/s, not 8 (the old fixed-1 s assumption).
+        assert_eq!(bytes_to_bps(1_000_000, 1.0), 8_000_000);
+        assert_eq!(bytes_to_bps(1_000_000, 2.0), 4_000_000);
+        assert_eq!(
+            bytes_to_bps(1_000_000, 0.0),
+            0,
+            "zero interval is not infinite"
+        );
+        assert_eq!(bytes_to_bps(0, 1.0), 0);
+    }
 
     #[test]
     fn flow_layout_matches_bpf_struct() {

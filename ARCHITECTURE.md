@@ -322,6 +322,7 @@ Retry policy: user-initiated retries everywhere except WS reconnect (automatic, 
 | `NETWATCH_LOG_LEVEL` | netwatchd | `info` | `error/warn/info/debug/trace` |
 | `NETWATCH_API_SOCKET` | netwatchd + UI | `/run/netwatch-pro/api.sock` | Unix domain socket path; peer-credential UID allowlist authorization |
 | `NETWATCH_API_GID` | netwatchd | `SUDO_GID` if set, else root GID | Group id allowed to connect: socket is created `0660` owned by this group (desktop user's primary group in dev, service group in packages) |
+| `NETWATCH_ALLOWED_UIDS_FILE` | netwatchd | `/etc/netwatch-pro/allowed-uids` | One UID per line (`#` comments). Peer-credential allowlist read on every connection; root, the daemon's own UID and `SUDO_UID` are always allowed. Missing file = no extra UIDs (fail closed) |
 | `NETWATCH_RETENTION_DAYS` | netwatchd | `90` | Default retention; user setting overrides (Pro > 90) |
 | `NETWATCH_DISABLE_EBPF` | netwatchd | unset | Diagnostic switch: run with empty collector (degraded chip) |
 | `NETWATCH_EBPF_OBJECT` | netwatchd (dev only) | unset | Dev override: read the eBPF object from this path instead of the embedded bytes. Packaged builds need no object file; a missing override falls back to the embedded object. An explicitly bad override is a degraded state, never a startup failure |
