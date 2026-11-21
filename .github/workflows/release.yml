@@ -59,7 +59,13 @@ jobs:
       - name: Install eBPF build tools
         run: |
           rustup component add rust-src
-          cargo install --locked bpf-linker --version 0.13.0
+          # cargo install bpf-linker needs a matching llvm-config (LLVM 23),
+          # which the hosted runner does not provide. Use the upstream
+          # prebuilt static binary pinned to the spike-verified version.
+          curl -fsSL -o /tmp/bpf-linker.tar.zst \
+            https://github.com/aya-rs/bpf-linker/releases/download/v0.13.0/bpf-linker-x86_64-unknown-linux-musl.tar.zst
+          tar -xf /tmp/bpf-linker.tar.zst -C "$HOME/.cargo/bin"
+          bpf-linker --version
 
       - name: Build eBPF object for embedding
         run: cargo run -p xtask -- bpf
