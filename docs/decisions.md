@@ -117,40 +117,40 @@ never from a network call. Missing values are shown as "—", never invented.
 the target hardware, since some kernels expose a 0–100 link-quality value
 there instead (see ARCHITECTURE.md §5.1b).
 
-## D8 — IPv6 Flow Accounting in Live & History (proposed 2026-11-21) [HYPOTHESIS]
+## D8 — IPv6 Flow Accounting in Live & History (2026-11-21) [VERIFIED: layout & tests on host]
 
 **Context:** Currently `ebpf.rs` skips `flow.family != 2` (`AF_INET`), so IPv6
 connections never appear in the Live connection table or History (though their bytes
 are still aggregated in per-cgroup / per-app totals via the `BYTES` map).
 
-**Proposed Design:**
-1. **BPF `Flow` struct:** Expand IP fields from 32-bit (`u32`) to 128-bit (`[u8; 16]` / `[u32; 4]`):
+**Implemented Design:**
+1. **BPF `Flow` struct:** Expanded IP fields from 32-bit (`u32`) to 128-bit (`[u32; 4]`):
    ```rust
    #[repr(C)]
    #[derive(Clone, Copy)]
    pub struct Flow {
        pub cgroup_id: u64,
-       pub local_ip: [u8; 16],
-       pub remote_ip: [u8; 16],
+       pub local_ip: [u32; 4],
+       pub remote_ip: [u32; 4],
        pub local_port: u32,
        pub remote_port: u32,
        pub protocol: u32,
+       pub _pad: u32,
        pub bytes_up: u64,
        pub bytes_down: u64,
        pub packets_up: u32,
        pub packets_down: u32,
        pub family: u32, // AF_INET = 2, AF_INET6 = 10
+       pub _pad2: u32,
    }
    ```
-   IPv4 addresses are stored in the first 4 bytes with `family = 2` (or optionally IPv4-mapped IPv6 `::ffff:a.b.c.d`).
+   IPv4 addresses are stored in `local_ip[0]` / `remote_ip[0]` with `family = 2`; IPv6 addresses store all 4 words with `family = 10`.
 2. **Memory & Map Impact:**
    - Struct size increases from 64 bytes to 88 bytes (+24 bytes per entry).
-   - In `crates/netwatchd/src/ebpf.rs`, add matching `#[repr(C)] Flow` with size assertion: `assert_eq!(std::mem::size_of::<Flow>(), 88)`.
+   - In `crates/netwatchd/src/ebpf.rs`, matching `#[repr(C)] Flow` with size assertion: `assert_eq!(std::mem::size_of::<Flow>(), 88)`.
    - `FLOWS` map overhead in kernel: At `MAX_CGROUPS` = 1024, additional memory is `1024 * 24 B = ~24.5 KiB` (negligible).
 3. **Database Schema:**
-   - `connections` table schema (`DATABASE.md` §3) already uses `local_ip TEXT` and `remote_ip TEXT`. Standard IPv6 strings (up to 39 characters) fit without table alteration or migration.
+   - `connections` table schema (`DATABASE.md` §3) uses `local_ip TEXT` and `remote_ip TEXT`. Standard IPv6 strings (up to 39 characters) fit without table alteration or migration.
 4. **UI Display & Sorting:**
-   - Formatted via standard canonical RFC 5952 representation in frontend (`Live.svelte`, `History.svelte`).
+   - Formatted via standard canonical RFC 5952 representation (`std::net::Ipv6Addr::to_string()`).
    - Monospace tabular presentation with middle truncation or tooltip if width is constrained.
-5. **Deferral Alternative:**
-   - If the owner defers full IPv6 live flow extraction to Phase 9, add an explicit "IPv4 only" badge to the Live connection table header and empty state, and note the limitation in `CHANGELOG.md`.

@@ -43,22 +43,24 @@ static BYTES: HashMap<u64, Counts> = HashMap::with_max_entries(MAX_CGROUPS, 0);
 
 /// Per-socket flow identity and absolute counters, keyed by socket cookie.
 /// `bpf_get_socket_cookie` is measured-legal in cgroup_skb (spike report §Sixth);
-/// tuple fields come straight from `__sk_buff`. IPv4 only — IPv6 flows are
-/// still counted by BYTES for the per-app rollups but produce no episode.
+/// tuple fields come straight from `__sk_buff`. Supports IPv4 (`family == 2`)
+/// and IPv6 (`family == 10`) (Decision D8 / Task 5).
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Flow {
     pub cgroup_id: u64,
-    pub local_ip4: u32,
-    pub remote_ip4: u32,
+    pub local_ip: [u32; 4],
+    pub remote_ip: [u32; 4],
     pub local_port: u32,
     pub remote_port: u32,
     pub protocol: u32,
+    pub _pad: u32,
     pub bytes_up: u64,
     pub bytes_down: u64,
     pub packets_up: u32,
     pub packets_down: u32,
     pub family: u32,
+    pub _pad2: u32,
 }
 
 #[map]
@@ -105,29 +107,35 @@ fn count_skb(ctx: &SkBuffContext, direction: u32) -> i32 {
         return CGROUP_SKB_ACCEPT;
     }
 
-    // Per-socket flow for Live/History. `family == 2` is AF_INET; IPv6 bytes
-    // stay in BYTES only (honest — no invented tuple).
+    // Per-socket flow for Live/History. Supports AF_INET (2) and AF_INET6 (10).
     let cookie = unsafe { bpf_get_socket_cookie(skb_ptr) };
-    if cookie != 0 && skb.family == 2 {
+    if cookie != 0 && (skb.family == 2 || skb.family == 10) {
         let mut flow = match FLOWS.get_ptr_mut(&cookie) {
             Some(ptr) => unsafe { *ptr },
             None => Flow {
                 cgroup_id,
-                local_ip4: 0,
-                remote_ip4: 0,
+                local_ip: [0; 4],
+                remote_ip: [0; 4],
                 local_port: 0,
                 remote_port: 0,
                 protocol: 0,
+                _pad: 0,
                 bytes_up: 0,
                 bytes_down: 0,
                 packets_up: 0,
                 packets_down: 0,
                 family: skb.family,
+                _pad2: 0,
             },
         };
         flow.cgroup_id = cgroup_id;
-        flow.local_ip4 = skb.local_ip4;
-        flow.remote_ip4 = skb.remote_ip4;
+        if skb.family == 2 {
+            flow.local_ip = [skb.local_ip4, 0, 0, 0];
+            flow.remote_ip = [skb.remote_ip4, 0, 0, 0];
+        } else {
+            flow.local_ip = skb.local_ip6;
+            flow.remote_ip = skb.remote_ip6;
+        }
         flow.local_port = skb.local_port;
         flow.remote_port = skb.remote_port;
         flow.protocol = skb.protocol;

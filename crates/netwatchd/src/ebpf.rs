@@ -34,16 +34,18 @@ use crate::live::LiveEventSender;
 #[derive(Clone, Copy, Default, Debug)]
 struct Flow {
     cgroup_id: u64,
-    local_ip4: u32,
-    remote_ip4: u32,
+    local_ip: [u32; 4],
+    remote_ip: [u32; 4],
     local_port: u32,
     remote_port: u32,
     protocol: u32,
+    _pad: u32,
     bytes_up: u64,
     bytes_down: u64,
     packets_up: u32,
     packets_down: u32,
     family: u32,
+    _pad2: u32,
 }
 // SAFETY: repr(C) struct of integer fields with no padding-sensitive types.
 #[allow(unsafe_code)]
@@ -63,6 +65,20 @@ struct FlowEpisode {
 
 fn ipv4(value: u32) -> String {
     std::net::Ipv4Addr::from(u32::from_be(value)).to_string()
+}
+
+fn format_ip(family: u32, words: [u32; 4]) -> String {
+    if family == 2 {
+        ipv4(words[0])
+    } else if family == 10 {
+        let mut octets = [0u8; 16];
+        for (i, word) in words.iter().enumerate() {
+            octets[i * 4..(i + 1) * 4].copy_from_slice(&word.to_ne_bytes());
+        }
+        std::net::Ipv6Addr::from(octets).to_string()
+    } else {
+        "—".to_string()
+    }
 }
 
 fn protocol_from(value: u32) -> Protocol {
@@ -432,9 +448,9 @@ async fn process_flows(
                 pid: names.pid_hint(flow.cgroup_id),
                 process_name: None,
                 protocol: protocol_from(flow.protocol),
-                local_ip: ipv4(flow.local_ip4),
+                local_ip: format_ip(flow.family, flow.local_ip),
                 local_port: u16::try_from(flow.local_port).unwrap_or(0),
-                remote_ip: ipv4(flow.remote_ip4),
+                remote_ip: format_ip(flow.family, flow.remote_ip),
                 remote_port: u16::try_from(flow.remote_port).unwrap_or(0),
                 remote_host: None,
                 interface_id: None,
@@ -539,13 +555,25 @@ mod tests {
 
     #[test]
     fn flow_layout_matches_bpf_struct() {
-        assert_eq!(std::mem::size_of::<Flow>(), 64);
+        assert_eq!(std::mem::size_of::<Flow>(), 88);
     }
 
     #[test]
     fn ipv4_converts_network_byte_order() {
         // 151.101.1.1 stored as a network-order u32 on a little-endian host.
         assert_eq!(ipv4(0x0101_6597), "151.101.1.1");
+    }
+
+    #[test]
+    fn ipv6_formats_canonical_address() {
+        // 2001:db8::1 in network bytes: 20 01 0d b8, 00 00 00 00, 00 00 00 00, 00 00 00 01
+        let words = [
+            u32::from_ne_bytes([0x20, 0x01, 0x0d, 0xb8]),
+            u32::from_ne_bytes([0x00, 0x00, 0x00, 0x00]),
+            u32::from_ne_bytes([0x00, 0x00, 0x00, 0x00]),
+            u32::from_ne_bytes([0x00, 0x00, 0x00, 0x01]),
+        ];
+        assert_eq!(format_ip(10, words), "2001:db8::1");
     }
 
     #[test]
