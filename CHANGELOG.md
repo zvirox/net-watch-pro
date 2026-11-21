@@ -10,6 +10,12 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ## [Unreleased]
 
+## [v0.9.1-beta.2] — 2026-11-21
+
+Patch beta: per-socket live connections plus fixes for the first beta's
+Dashboard/Live/History defects. Install from the release artifacts or the
+AUR `-git` package; no manual eBPF steps are needed.
+
 ### Added
 
 - Per-socket live connections: the cgroup_skb programs maintain a cookie-keyed
@@ -78,7 +84,7 @@ Public beta: diagnostics and accessibility gate.
   socket is unreachable.
 
 **Verification:** `cargo fmt --check`, `cargo clippy --workspace --all-targets
--- -D warnings`, `cargo test --workspace` (58 API tests, all workspace suites
+-- -D warnings`, `cargo test --workspace` (59 API tests, all workspace suites
 green), `python3 tests/a11y/contrast.py` (34 pairs pass in both themes),
 `npm run check` (0 errors/0 warnings), `npm run lint`, `npm run build`,
 Lighthouse accessibility 1.0, plus browser-rendered checks of the diagnostics
@@ -514,7 +520,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.9.0-beta.1...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.9.1-beta.2...HEAD
+[v0.9.1-beta.2]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.9.1-beta.2
 [v0.9.0-beta.1]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.9.0-beta.1
 [v0.8.10-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.10-alpha.8
 [v0.8.9-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.9-alpha.8
