@@ -35,6 +35,8 @@ mkdir -p "$OUT_DIR"
 
 install -m 0755 "$DAEMON" "$SOURCES/netwatchd"
 install -m 0755 "$APP" "$SOURCES/netwatch-app"
+install -m 0755 "$ROOT/packaging/polkit/enable-monitoring" "$SOURCES/enable-monitoring"
+install -m 0644 "$ROOT/packaging/polkit/pro.netwatch.enable-monitoring.policy" "$SOURCES/pro.netwatch.enable-monitoring.policy"
 install -m 0644 "$ROOT/packaging/systemd/netwatchd.service" "$SOURCES/netwatchd.service"
 install -m 0644 "$ROOT/packaging/deb/net-watch-pro.desktop" "$SOURCES/net-watch-pro.desktop"
 install -m 0644 "$ROOT/app/src-tauri/icons/icon@2x.png" "$SOURCES/net-watch-pro.png"

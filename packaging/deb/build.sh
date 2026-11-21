@@ -33,6 +33,8 @@ mkdir -p "$OUT_DIR"
 
 install -d "$STAGE/DEBIAN" \
   "$STAGE/usr/bin" \
+  "$STAGE/usr/libexec/netwatch-pro" \
+  "$STAGE/usr/share/polkit-1/actions" \
   "$STAGE/usr/share/applications" \
   "$STAGE/usr/share/icons/hicolor/256x256/apps" \
   "$STAGE/lib/systemd/system"
@@ -41,6 +43,10 @@ sed "s/@VERSION@/${VERSION}/" "$HERE/control" > "$STAGE/DEBIAN/control"
 install -m 0755 "$HERE/postinst" "$HERE/prerm" "$HERE/postrm" "$STAGE/DEBIAN/"
 install -m 0755 "$DAEMON" "$STAGE/usr/bin/netwatchd"
 install -m 0755 "$APP" "$STAGE/usr/bin/netwatch-app"
+install -m 0755 "$ROOT/packaging/polkit/enable-monitoring" \
+  "$STAGE/usr/libexec/netwatch-pro/enable-monitoring"
+install -m 0644 "$ROOT/packaging/polkit/pro.netwatch.enable-monitoring.policy" \
+  "$STAGE/usr/share/polkit-1/actions/pro.netwatch.enable-monitoring.policy"
 install -m 0644 "$ROOT/packaging/systemd/netwatchd.service" "$STAGE/lib/systemd/system/netwatchd.service"
 install -m 0644 "$HERE/net-watch-pro.desktop" "$STAGE/usr/share/applications/net-watch-pro.desktop"
 install -m 0644 "$ROOT/app/src-tauri/icons/icon@2x.png" \

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Dedicated root helper for Net Watch Pro onboarding.
+# Executed via polkit: pkexec /usr/libexec/netwatch-pro/enable-monitoring
+# Takes NO arguments. Reads caller UID from PKEXEC_UID.
+set -euo pipefail
+
+if [ "$#" -ne 0 ]; then
+  echo "error: enable-monitoring takes no arguments" >&2
+  exit 2
+fi
+
+if [ -z "${PKEXEC_UID:-}" ]; then
+  echo "error: PKEXEC_UID is missing from environment" >&2
+  exit 1
+fi
+
+case "$PKEXEC_UID" in
+  ''|*[!0-9]*)
+    echo "error: PKEXEC_UID must be an unsigned integer" >&2
+    exit 1
+    ;;
+esac
+
+if [ "$PKEXEC_UID" -le 0 ] || [ "$PKEXEC_UID" -gt 4294967294 ]; then
+  echo "error: PKEXEC_UID out of valid range (1..4294967294)" >&2
+  exit 1
+fi
+
+UID_INT="$PKEXEC_UID"
+
+# 1. Idempotently append UID to /etc/netwatch-pro/allowed-uids (atomic write)
+install -d -m 0755 -o root -g root /etc/netwatch-pro
+
+ALLOWED_FILE="/etc/netwatch-pro/allowed-uids"
+ALREADY_ALLOWED=0
+if [ -f "$ALLOWED_FILE" ]; then
+  if grep -E "^[[:space:]]*${UID_INT}([[:space:]]+#.*|[[:space:]]*)$" "$ALLOWED_FILE" >/dev/null 2>&1; then
+    ALREADY_ALLOWED=1
+  fi
+fi
+
+if [ "$ALREADY_ALLOWED" -eq 0 ]; then
+  TMP_FILE="$(mktemp "/etc/netwatch-pro/allowed-uids.tmp.XXXXXX")"
+  chmod 0644 "$TMP_FILE"
+  chown root:root "$TMP_FILE"
+  if [ -f "$ALLOWED_FILE" ]; then
+    cat "$ALLOWED_FILE" > "$TMP_FILE"
+  fi
+  printf '%s\n' "$UID_INT" >> "$TMP_FILE"
+  mv -f "$TMP_FILE" "$ALLOWED_FILE"
+fi
+
+# 2. Write the drop-in for socket group and add user to netwatch group
+USER_GID="$(id -g "$UID_INT" 2>/dev/null || true)"
+USER_NAME="$(id -un "$UID_INT" 2>/dev/null || true)"
+
+if [ -n "$USER_NAME" ] && getent group netwatch >/dev/null 2>&1; then
+  usermod -aG netwatch "$USER_NAME" 2>/dev/null || true
+fi
+
+if [ -n "$USER_GID" ]; then
+  mkdir -p /etc/systemd/system/netwatchd.service.d
+  printf '[Service]\nEnvironment=NETWATCH_API_GID=%s\n' "$USER_GID" \
+    > /etc/systemd/system/netwatchd.service.d/10-socket-group.conf
+fi
+
+# 3. Reload systemd and enable/start the service
+systemctl daemon-reload
+systemctl enable --now netwatchd.service

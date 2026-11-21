@@ -26,6 +26,8 @@ Source2:        netwatchd.service
 Source3:        net-watch-pro.desktop
 Source4:        net-watch-pro.png
 Source5:        LICENSE
+Source6:        enable-monitoring
+Source7:        pro.netwatch.enable-monitoring.policy
 
 %description
 Net Watch Pro observes network traffic on this device and records per-application
@@ -45,6 +47,8 @@ No telemetry, no analytics, no update pings, no outbound connections.
 
 %install
 install -d %{buildroot}%{_bindir}
+install -d %{buildroot}%{_libexecdir}/netwatch-pro
+install -d %{buildroot}%{_datadir}/polkit-1/actions
 install -d %{buildroot}%{_unitdir}
 install -d %{buildroot}%{_sysconfdir}/systemd/system/netwatchd.service.d
 install -d %{buildroot}%{_datadir}/applications
@@ -54,6 +58,8 @@ install -d %{buildroot}%{nwp_datadir}
 
 install -m 0755 %{SOURCE0} %{buildroot}%{_bindir}/netwatchd
 install -m 0755 %{SOURCE1} %{buildroot}%{_bindir}/netwatch-app
+install -m 0755 %{SOURCE6} %{buildroot}%{_libexecdir}/netwatch-pro/enable-monitoring
+install -m 0644 %{SOURCE7} %{buildroot}%{_datadir}/polkit-1/actions/pro.netwatch.enable-monitoring.policy
 install -m 0644 %{SOURCE2} %{buildroot}%{_unitdir}/netwatchd.service
 install -m 0644 %{SOURCE3} %{buildroot}%{_datadir}/applications/net-watch-pro.desktop
 install -m 0644 %{SOURCE4} %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/net-watch-pro.png
@@ -109,6 +115,9 @@ exit 0
 %ghost %config(noreplace) %{_sysconfdir}/systemd/system/netwatchd.service.d/10-socket-group.conf
 %{_bindir}/netwatchd
 %{_bindir}/netwatch-app
+%dir %{_libexecdir}/netwatch-pro
+%{_libexecdir}/netwatch-pro/enable-monitoring
+%{_datadir}/polkit-1/actions/pro.netwatch.enable-monitoring.policy
 %{_unitdir}/netwatchd.service
 %{_datadir}/applications/net-watch-pro.desktop
 %{_datadir}/icons/hicolor/256x256/apps/net-watch-pro.png

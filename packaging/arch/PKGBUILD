@@ -53,6 +53,10 @@ package() {
   cd "$srcdir/$_pkgname"
   install -Dm755 target/release/netwatchd "$pkgdir/usr/bin/netwatchd"
   install -Dm755 target/release/netwatch-app "$pkgdir/usr/bin/netwatch-app"
+  install -Dm755 packaging/polkit/enable-monitoring \
+    "$pkgdir/usr/libexec/netwatch-pro/enable-monitoring"
+  install -Dm644 packaging/polkit/pro.netwatch.enable-monitoring.policy \
+    "$pkgdir/usr/share/polkit-1/actions/pro.netwatch.enable-monitoring.policy"
   install -Dm644 packaging/systemd/netwatchd.service \
     "$pkgdir/usr/lib/systemd/system/netwatchd.service"
   install -Dm644 packaging/deb/net-watch-pro.desktop \
