@@ -262,6 +262,18 @@
 
 The real-host row is `[VERIFIED]` only after an owner run; unit/integration tests cover the rest.
 
+### F17 — Beta hardening (P10.1–P10.5)
+
+| Scenario | Input | Expected |
+|---|---|---|
+| Accuracy | seeded interface + app rollups over synthetic load | total equals kernel-counter sum by construction; attributed ≥ 95% on the reference profile |
+| Perf budget | daemon under seeded REST/DB load, sampled from `/proc` | CPU p95 ≤ 3%, RSS p95 ≤ 150 MB; eBPF-path overhead stays owner-verified from the spike report |
+| Retention soak | seeded 1-year profile from ARCHITECTURE.md §9 | DB file < 1.5 GiB; pruner keeps the free/Pro ceilings |
+| Distro smoke | CI containers: Arch, Ubuntu, Fedora | packages install, unit present/disabled, daemon starts and answers `/health` — labelled container smoke, NOT the VM matrix |
+| Security review | unit, peer-cred auth, API surface, CSP/capabilities | findings documented in `docs/security-review.md`; P1/P2 findings fixed or explicitly accepted by owner |
+
+The container matrix is an owner-approved deviation from PLAN P10.4 and does not satisfy DoD #1; real VM results remain pending.
+
 ### F16 — Owner dev-license testing
 
 | Scenario | Input | Expected |

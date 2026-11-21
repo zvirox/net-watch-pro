@@ -158,11 +158,11 @@
 - [ ] P10.1 Accuracy harness (≥95% attributed; totals equal kernel counters) in CI
 - [ ] P10.2 Perf budget test (≤3% CPU / ≤150 MB RSS p95)
 - [ ] P10.3 1-year retention soak (< 1.5 GB)
-- [ ] P10.4 Kernel VM matrix (Arch/CachyOS, Ubuntu LTS, Fedora — VMs not containers)
+- [ ] P10.4 Distro matrix smoke in CI **containers** (owner-approved deviation; real VM matrix still pending and blocks DoD #1)
 - [ ] P10.5 Security review: unit sandbox, socket peer-credential, API surface
 - [ ] P10.6 Beta feedback fixes (patch-tagged)
-- [ ] **DoD: PRD §11 DoD #1–#8 signed off; tag `v0.9.9-beta.N`**
-- [ ] **Release: final `v0.9.x-beta.N` release** <!-- patch-tag each beta feedback fix; final tag after DoD sign-off -->
+- [ ] **DoD: PRD §11 DoD #1–#8 signed off; final beta tag `v0.9.2-beta.4` (owner-approved, replaces `v0.9.9-beta.N`)**
+- [ ] **Release: final `v0.9.2-beta.4` release** <!-- final beta after DoD sign-off; patch-tags for feedback fixes -->
 
 ## Phase 11 — Launch → `v1.0.0` (~40 h)
 

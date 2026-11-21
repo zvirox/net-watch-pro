@@ -72,6 +72,7 @@ AUR `-git` package; no manual eBPF steps are needed.
 
 ### Added
 
+- Beta hardening harnesses: accuracy (≥95% attributed), perf-budget (≤3% CPU / ≤150 MB RSS p95), seeded 1-year retention soak (<1.5 GiB), and a documented security review with CI distro-container smoke jobs (owner-approved deviation from the VM matrix).
 - Owner-only debug license test path: `NETWATCH_LICENSE_PUBLIC_KEY` (debug builds only) and `cargo run -p xtask -- license-dev-key [expiry]` to mint ephemeral Ed25519 test keys. Release binaries still verify only the embedded public key. Verified locally: free → Pro → free activation, expired-key rejection, and release-build override rejection.
 - Per-socket live connections: the cgroup_skb programs maintain a cookie-keyed
   `FLOWS` map, and the daemon turns it into episode rows so Live and History

@@ -1,11 +1,11 @@
 # PLAN.md — Implementation Roadmap
 
-**Version:** 1.3 · **Date:** 2026-11-19
+**Version:** 1.4 · **Date:** 2026-11-21
 **Sources:** `PRD.md` §6 (features), `ARCHITECTURE.md` §4 (structure), `DATABASE.md` §8 (migrations), `API.md` §2 (endpoints) · `docs/decisions.md` (owner decisions D1–D7)
 
 **Companion tracker:** `CHECKLIST.md` (same task IDs, ticked live)
 
-**Version history:** 1.2 (2026-11-15): apply plan-fix findings — insert Phase S (eBPF spike) and Phase D (doc fixes); reorder phases per Part 5; replace week targets with effort estimates (D7: 40+ h/week); rewrite P1.1–P1.5 for Unix-socket + peer-credential transport (D1a); defer self-hosted apt/dnf repos until after beta (F-10). 1.3 (2026-11-19): add Phase L (Live Throughput, F11) with tasks A1–A8, owner-run spike B, collector C and range presets D; full detail in `docs/LIVE-THROUGHPUT-PLAN.md`.
+**Version history:** 1.2 (2026-11-15): apply plan-fix findings — insert Phase S (eBPF spike) and Phase D (doc fixes); reorder phases per Part 5; replace week targets with effort estimates (D7: 40+ h/week); rewrite P1.1–P1.5 for Unix-socket + peer-credential transport (D1a); defer self-hosted apt/dnf repos until after beta (F-10). 1.3 (2026-11-19): add Phase L (Live Throughput, F11) with tasks A1–A8, owner-run spike B, collector C and range presets D; full detail in `docs/LIVE-THROUGHPUT-PLAN.md`. 1.4 (2026-11-21): Phase 10 scope — CI **container** matrix instead of VMs (owner-approved deviation from P10.4), and final beta tag continues the sequence at `v0.9.2-beta.4` instead of `v0.9.9-beta.N`.
 
 > **Ordering rules:** vertical slices only — every phase ends with a runnable app; never all-backend-then-all-frontend. Each task ≤ 2 hours. Dependencies use task IDs (e.g. `dep: P1.3`). A task may start when its deps are done.
 
@@ -271,11 +271,11 @@
 | P10.1 | Accuracy harness: daemon vs interface counters (≥95% attributed, totals equal kernel counters) | `tests/accuracy/` | CI job green over synthetic 50-conn load; moved into spike then Phase 2 | P4.2 |
 | P10.2 | Perf budget test: ≤3% CPU / ≤150 MB RSS p95 | `tests/integration/` | budget assertions in CI | P10.1 |
 | P10.3 | 1-year retention soak: size < 1.5 GB | `tests/integration/` | seeded volume profile matches ARCHITECTURE.md §9 | P7.1 |
-| P10.4 | Kernel VM matrix runs full test suite (Arch/CachyOS, Ubuntu LTS, Fedora — **VMs, not containers**) | CI | VM jobs green on all 3 families | P8.2, P8.3 |
+| P10.4 | Distro matrix smoke tests in CI **containers** (Arch, Ubuntu, Fedora) — **owner-approved deviation**: the plan required VMs, containers cannot validate kernel variance, so this is labelled a smoke test, not the VM matrix | `.github/workflows/` | container jobs green; real VM matrix remains pending | P8.2, P8.3 |
 | P10.5 | Security review: unit sandbox, socket peer-credential, API surface | daemon | review findings fixed/closed | P8.1 |
 | P10.6 | Beta feedback fixes (buffer; scope-tight only) | as needed | each fix tagged patch `v0.9.x-beta.N` | P9 |
 
-**DoD:** PRD §11 Definition of Done items #1–#8 all satisfied; crash-free ≥ 99.5% in beta; tag `v0.9.9-beta.N`.
+**DoD:** PRD §11 Definition of Done items #1–#8 all satisfied; crash-free ≥ 99.5% in beta; final beta tag `v0.9.2-beta.4` (owner-approved continuation of the existing beta sequence, replacing the plan's `v0.9.9-beta.N` placeholder). P10.4 container smoke does **not** satisfy the VM-matrix part of DoD #1.
 
 ---
 
