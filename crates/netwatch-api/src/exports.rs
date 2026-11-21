@@ -29,6 +29,13 @@ use crate::ratelimit::RateLimiter;
 /// Job lifetime (API.md E1 `expires_in_s`, FEATURES.md F9 edge case).
 const TTL: Duration = Duration::from_secs(600);
 
+/// Maximum rows allowed in a single export job (API.md §2.3 / Task 4).
+pub const MAX_EXPORT_ROWS: usize = 100_000;
+/// Maximum bytes allowed in an in-memory export buffer (API.md §2.3 / Task 4).
+pub const MAX_JOB_BYTES: usize = 48 * 1024 * 1024;
+/// Maximum concurrent active export jobs daemon-wide (API.md §2.3 / Task 4).
+pub const MAX_CONCURRENT_JOBS: usize = 5;
+
 /// Filter whitelist — identical to C2 (API.md §2.3 / §2.2).
 const FILTER_KEYS: &[&str] = &[
     "app_id",
@@ -242,6 +249,11 @@ async fn generate(
         Format::Csv => encode_csv(&columns, &rows),
         Format::Json => encode_json(&columns, &rows),
     };
+    if content.len() > MAX_JOB_BYTES {
+        return Err(ApiError::query_invalid(
+            "Export exceeds maximum file size (48 MiB). Narrow the date range or filter criteria.",
+        ));
+    }
     let date = utc_date(now);
     let filename = format!("netwatch-pro-export-{date}.{}", parsed.format.extension());
     Ok(Generated {
@@ -266,9 +278,9 @@ async fn connections_rows(
     }
     if let Some(name) = &q.app_name {
         builder
-            .push(" AND app_id IN (SELECT id FROM apps WHERE name LIKE '%' || ")
-            .push_bind(name.clone())
-            .push(" || '%')");
+            .push(" AND app_id IN (SELECT id FROM apps WHERE name LIKE ")
+            .push_bind(crate::history::like_pattern(name))
+            .push(" ESCAPE '\\')");
     }
     if let Some(open) = q.open {
         builder.push(" AND is_open = ").push_bind(i64::from(open));
@@ -292,20 +304,27 @@ async fn connections_rows(
     }
     if let Some(remote_host) = &q.remote_host {
         builder
-            .push(" AND remote_host LIKE '%' || ")
-            .push_bind(remote_host.clone())
-            .push(" || '%'");
+            .push(" AND remote_host LIKE ")
+            .push_bind(crate::history::like_pattern(remote_host))
+            .push(" ESCAPE '\\'");
     }
     if let Some(remote_port) = q.remote_port {
         builder.push(" AND remote_port = ").push_bind(remote_port);
     }
-    builder.push(" ORDER BY last_seen_at DESC, id DESC");
+    builder
+        .push(" ORDER BY last_seen_at DESC, id DESC LIMIT ")
+        .push_bind(i64::try_from(MAX_EXPORT_ROWS + 1).unwrap_or(i64::MAX));
 
     let rows = builder
         .build()
         .fetch_all(db)
         .await
         .map_err(crate::history::db_error)?;
+    if rows.len() > MAX_EXPORT_ROWS {
+        return Err(ApiError::query_invalid(
+            "Export exceeds maximum of 100,000 rows. Narrow the date range or filter criteria.",
+        ));
+    }
     let values = rows
         .iter()
         .map(|row| {
@@ -357,13 +376,20 @@ async fn usage_rows(
     if let Some(until) = q.until {
         builder.push(" AND bucket_start <= ").push_bind(until);
     }
-    builder.push(" GROUP BY app_id, bucket ORDER BY bucket DESC, app_id");
+    builder
+        .push(" GROUP BY app_id, bucket ORDER BY bucket DESC, app_id LIMIT ")
+        .push_bind(i64::try_from(MAX_EXPORT_ROWS + 1).unwrap_or(i64::MAX));
 
     let rows = builder
         .build()
         .fetch_all(db)
         .await
         .map_err(crate::history::db_error)?;
+    if rows.len() > MAX_EXPORT_ROWS {
+        return Err(ApiError::query_invalid(
+            "Export exceeds maximum of 100,000 rows. Narrow the date range or filter criteria.",
+        ));
+    }
     let values = rows
         .iter()
         .map(|row| {
@@ -480,13 +506,33 @@ impl ExportRegistry {
         Self::default()
     }
 
-    /// Store a generated file, purging expired jobs to bound memory.
-    fn insert(&self, generated: Generated) -> String {
+    /// Ensure there is capacity for another concurrent active job (API.md §2.3).
+    ///
+    /// # Errors
+    ///
+    /// `RATE_LIMITED` (429) if `MAX_CONCURRENT_JOBS` is reached.
+    pub fn ensure_capacity(&self) -> Result<(), ApiError> {
         let mut jobs = self
             .jobs
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         jobs.retain(|_, job| !job.is_expired());
+        if jobs.len() >= MAX_CONCURRENT_JOBS {
+            return Err(ApiError::concurrent_job_limit(30));
+        }
+        Ok(())
+    }
+
+    /// Store a generated file, purging expired jobs to bound memory.
+    fn insert(&self, generated: Generated) -> Result<String, ApiError> {
+        let mut jobs = self
+            .jobs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        jobs.retain(|_, job| !job.is_expired());
+        if jobs.len() >= MAX_CONCURRENT_JOBS {
+            return Err(ApiError::concurrent_job_limit(30));
+        }
         loop {
             let id = new_id();
             if !jobs.contains_key(&id) {
@@ -497,7 +543,7 @@ impl ExportRegistry {
                         generated,
                     },
                 );
-                return id;
+                return Ok(id);
             }
         }
     }
@@ -578,9 +624,10 @@ pub async fn create_job(
     create_limiter
         .try_acquire()
         .map_err(ApiError::rate_limited)?;
+    registry.ensure_capacity()?;
     let generated = generate(db, &parsed, now).await?;
     let estimated_rows = generated.rows;
-    let id = registry.insert(generated);
+    let id = registry.insert(generated)?;
     Ok(CreateResponse {
         id,
         state: "queued",
@@ -869,5 +916,94 @@ mod tests {
             job_status(&registry, "exp_missing").unwrap_err().code(),
             ErrorCode::NotFound
         );
+    }
+
+    #[tokio::test]
+    async fn export_escapes_search_wildcards() {
+        let db = seeded_db().await;
+        sqlx::query("INSERT INTO apps (id, name) VALUES (10, 'App 100%'), (11, 'App Other'), (12, 'a_b'), (13, 'axb')")
+            .execute(&db)
+            .await
+            .unwrap();
+        for (app_id, ip) in [
+            (10, "10.0.0.10"),
+            (11, "10.0.0.11"),
+            (12, "10.0.0.12"),
+            (13, "10.0.0.13"),
+        ] {
+            sqlx::query(
+                "INSERT INTO connections (app_id, pid, protocol, local_ip, local_port, remote_ip, remote_port, first_seen_at, last_seen_at)
+                 VALUES (?1, 100, 'tcp', '10.0.0.1', 50000, ?2, 443, 1733165200, 1733170600)",
+            )
+            .bind(app_id)
+            .bind(ip)
+            .execute(&db)
+            .await
+            .unwrap();
+        }
+
+        // app_name="100%" must only match "App 100%"
+        let csv_pct =
+            parse(r#"{"scope":"connections","format":"csv","filters":{"app_name":"100%"}}"#);
+        let gen_pct = generate(&db, &csv_pct, NOW).await.unwrap();
+        assert_eq!(gen_pct.rows, 1);
+        let text_pct = String::from_utf8(gen_pct.content).unwrap();
+        assert!(text_pct.contains("10.0.0.10"));
+        assert!(!text_pct.contains("10.0.0.11"));
+
+        // app_name="a_b" must only match "a_b", not "axb"
+        let csv_und =
+            parse(r#"{"scope":"connections","format":"csv","filters":{"app_name":"a_b"}}"#);
+        let gen_und = generate(&db, &csv_und, NOW).await.unwrap();
+        assert_eq!(gen_und.rows, 1);
+        let text_und = String::from_utf8(gen_und.content).unwrap();
+        assert!(text_und.contains("10.0.0.12"));
+        assert!(!text_und.contains("10.0.0.13"));
+    }
+
+    #[test]
+    fn concurrent_job_limit_enforced() {
+        let registry = ExportRegistry::new();
+        for i in 0..MAX_CONCURRENT_JOBS {
+            let res = registry.insert(Generated {
+                content: format!("job{i}").into_bytes(),
+                content_type: "text/csv",
+                filename: format!("job{i}.csv"),
+                rows: 1,
+            });
+            assert!(res.is_ok(), "insert {i} should succeed");
+        }
+
+        // 6th concurrent job must be rejected with 429 RateLimited
+        assert!(registry.ensure_capacity().is_err());
+        let err = registry
+            .insert(Generated {
+                content: b"overflow".to_vec(),
+                content_type: "text/csv",
+                filename: "overflow.csv".to_string(),
+                rows: 1,
+            })
+            .unwrap_err();
+        assert_eq!(err.code(), ErrorCode::RateLimited);
+        assert!(err.to_string().contains("Maximum concurrent exports"));
+    }
+
+    #[tokio::test]
+    async fn row_cap_overflow_returns_query_invalid() {
+        let db = seeded_db().await;
+        // Efficiently insert 100,005 rows using SQLite recursive CTE
+        sqlx::query(
+            "WITH RECURSIVE cnt(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM cnt WHERE x <= 100005)
+             INSERT INTO connections (app_id, pid, protocol, local_ip, local_port, remote_ip, remote_port, first_seen_at, last_seen_at)
+             SELECT 1, 42, 'tcp', '10.0.0.1', 1000, '1.1.1.1', 80, 1000, 2000 FROM cnt",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let req = parse(r#"{"scope":"connections","format":"csv","filters":{"app_id":1}}"#);
+        let err = connections_rows(&db, &req.query).await.unwrap_err();
+        assert_eq!(err.code(), ErrorCode::QueryInvalid);
+        assert!(err.to_string().contains("100,000 rows"));
     }
 }

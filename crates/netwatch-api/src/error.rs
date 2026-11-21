@@ -51,6 +51,21 @@ impl ApiError {
         }
     }
 
+    /// 429 — maximum concurrent export jobs reached (API.md §2.3 / Task 4).
+    #[must_use]
+    pub fn concurrent_job_limit(retry_after_s: u64) -> Self {
+        let mut details = Map::new();
+        details.insert("retry_after_s".to_string(), json!(retry_after_s));
+        Self {
+            code: ErrorCode::RateLimited,
+            status: StatusCode::TOO_MANY_REQUESTS,
+            message: "Maximum concurrent exports reached (5). Wait for current jobs to complete."
+                .to_string(),
+            details,
+            retry_after_s: Some(retry_after_s),
+        }
+    }
+
     /// Stable contract code (API.md §1.3) — used by callers and tests to
     /// assert the exact error without matching on message text.
     #[must_use]

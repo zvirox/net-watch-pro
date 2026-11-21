@@ -663,7 +663,8 @@ impl Sql {
 
 /// LIKE pattern with wildcard escaping (`app_name`/`remote_host` substring,
 /// API.md C2).
-fn like_pattern(value: &str) -> String {
+#[must_use]
+pub fn like_pattern(value: &str) -> String {
     let mut out = String::with_capacity(value.len() + 2);
     out.push('%');
     for c in value.chars() {
@@ -1642,5 +1643,30 @@ mod tests {
         assert_eq!(page.data[0].app.name, "Firefox");
         let page = connections_page(&pool, "app_id=2", NOW).await.unwrap();
         assert_eq!(page.data[0].app.id, 2);
+    }
+
+    #[tokio::test]
+    async fn search_wildcard_escaping_treats_special_characters_literally() {
+        let pool = db().await;
+        insert_app(&pool, 1, "App 100%").await;
+        insert_app(&pool, 2, "App Other").await;
+        insert_app(&pool, 3, "a_b").await;
+        insert_app(&pool, 4, "axb").await;
+        insert_raw(&pool, 1, CUTOFF + 100, 1000, "1.1.1.1").await;
+        insert_raw(&pool, 2, CUTOFF + 200, 1000, "2.2.2.2").await;
+        insert_raw(&pool, 3, CUTOFF + 300, 1000, "3.3.3.3").await;
+        insert_raw(&pool, 4, CUTOFF + 400, 1000, "4.4.4.4").await;
+
+        // Searching "100%" must not match every row; only "App 100%"
+        let page_percent = connections_page(&pool, "app_name=100%25", NOW)
+            .await
+            .unwrap();
+        assert_eq!(page_percent.data.len(), 1);
+        assert_eq!(page_percent.data[0].app.name, "App 100%");
+
+        // Searching "a_b" must not match "axb"; only "a_b"
+        let page_underscore = connections_page(&pool, "app_name=a_b", NOW).await.unwrap();
+        assert_eq!(page_underscore.data.len(), 1);
+        assert_eq!(page_underscore.data[0].app.name, "a_b");
     }
 }
