@@ -33,6 +33,8 @@ function holdOrder(rows: LiveAppRow[], holdMs: number): LiveAppRow[] {
     heldAt = Date.now();
     return byRate;
   }
+  // Rank map is local sorting state, not reactive state.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const rank = new Map(heldOrder.map((id, index) => [id, index]));
   return byRate.sort(
     (a, b) =>
@@ -40,6 +42,8 @@ function holdOrder(rows: LiveAppRow[], holdMs: number): LiveAppRow[] {
       (rank.get(b.cgroup_id) ?? Number.MAX_SAFE_INTEGER),
   );
 }
+
+export { holdOrder };
 
 let data = $state<LiveAppsData | null>(null);
 let now = $state(Date.now());

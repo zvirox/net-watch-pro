@@ -97,3 +97,8 @@ export const ratesStore = {
   start,
   stop,
 };
+
+export { onFrame as onRatesFrame };
+export function tickRatesNow(time: number): void {
+  now = time;
+}

@@ -28,6 +28,15 @@ export class DaemonApiClient {
     return this.#state;
   }
 
+  get retryDelayMs(): number {
+    return this.#retryDelayMs;
+  }
+
+  /** Handle native backend link state updates (exposed for tests / internal bridge). */
+  handleNativeState(state: string): void {
+    this.#handleNativeState(state);
+  }
+
   onState(listener: LinkListener): () => void {
     this.#stateListeners.add(listener);
     listener(this.#state);
