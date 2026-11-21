@@ -245,6 +245,20 @@
 
 `[VERIFIED]` for the clean-install row requires a real host run; containerised CI cannot be treated as proof of eBPF attach.
 
+### F15 — Per-socket live connections (P2.2/P2.3, L-C8)
+
+| Scenario | Input | Expected |
+|---|---|---|
+| Flow map | BPF map with one IPv4 flow | daemon emits Open then Bytes; `live.connections` snapshot contains the row |
+| Counters | two 1 Hz observations after traffic | `Bytes` are absolute totals; live rate derived from the delta, no duplicate rows |
+| Idle close | no update for the idle timeout | Close emitted; row moves to History with `is_open=false` |
+| Unknown PID | cgroup scope has no parsable pid | row renders PID "—", not "0" |
+| App resolution | cgroup id registered by the collector | row's `app.id` joins in `connections`; name matches `live.apps` |
+| No collector | `NETWATCH_DISABLE_EBPF=1` | Live empty state explains the missing collector; PC cards still work |
+| Real host | start a TCP download with the embedded collector | Live shows a row with remote host/port and non-zero rate; History shows a row after close |
+
+The real-host row is `[VERIFIED]` only after an owner run; unit/integration tests cover the rest.
+
 ---
 
 ## 5. Edge & Negative Test Matrix (cross-feature)

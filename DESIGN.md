@@ -1,9 +1,9 @@
 # Net Watch Pro — DESIGN.md (UI Design System)
 
-**Version:** 1.5 · **Date:** 2026-11-20
+**Version:** 1.6 · **Date:** 2026-11-21
 **Source of truth:** `PRD.md` (scope, screens, flows) · `REAPM.md` (reference teardown) · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a). 1.2 (2026-11-19): add the "Network now" live-rate card with 60-second sparkline, Apps live-speed columns, `speed_unit` selector, and stale/no-collector states (live throughput plan, Phase A). 1.3 (2026-11-19): interfaces card shows Wi-Fi signal/link from local sysfs with "—" for missing values; last-hour rate history is labelled in-memory. 1.4 (2026-11-20): Phase D — range selector (§7.13), range-driven Dashboard totals and bar timeline plus billing-cycle card (§8.3), and the new Apps list screen (§8.10). 1.5 (2026-11-20): Phase 9 contrast fix — `border-strong`, light `text-disabled`, light chart series 3/4/muted and the light axis-label were recalculated to satisfy §9.1 (owner-approved; measured ratios recorded there). No new tokens.
+**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a). 1.2 (2026-11-19): add the "Network now" live-rate card with 60-second sparkline, Apps live-speed columns, `speed_unit` selector, and stale/no-collector states (live throughput plan, Phase A). 1.3 (2026-11-19): interfaces card shows Wi-Fi signal/link from local sysfs with "—" for missing values; last-hour rate history is labelled in-memory. 1.4 (2026-11-20): Phase D — range selector (§7.13), range-driven Dashboard totals and bar timeline plus billing-cycle card (§8.3), and the new Apps list screen (§8.10). 1.5 (2026-11-20): Phase 9 contrast fix — `border-strong`, light `text-disabled`, light chart series 3/4/muted and the light axis-label were recalculated to satisfy §9.1 (owner-approved; measured ratios recorded there). No new tokens. 1.6 (2026-11-21): Live/History connection rows are fed by the per-socket collector; `pid = 0` renders as "—" (unknown) and the empty state is reserved for genuinely idle periods.
 **Stack context:** Tauri 2 shell · Svelte 5 · shadcn-svelte components · ECharts · localhost WS data
 
 > **STRICT RULES — every UI built later must follow this file.**
@@ -477,7 +477,7 @@ Loading: skeleton headline + chart placeholder. Empty (no data yet): empty state
 │ …            (virtualized, new rows fade)   │
 └─────────────────────────────────────────────┘
 ```
-Pause freezes data (banner "Frozen at 14:32" + resume ghost). Row click → App detail. Compact breakpoint hides PID/Local.
+Pause freezes data (banner "Frozen at 14:32" + resume ghost). Row click → App detail. Compact breakpoint hides PID/Local. `pid = 0` means the collector could not resolve a process id — render "—" in the PID cell, never "0" (measured eBPF hooks return the softirq thread, so an invented PID would be dishonest). Only IPv4 flows produce rows; the timeline chart and Unattributed row still show the full PC total.
 
 ### 8.5 App Detail (`/apps/:id`)
 

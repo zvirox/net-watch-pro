@@ -12,6 +12,10 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ### Added
 
+- Per-socket live connections: the cgroup_skb programs maintain a cookie-keyed
+  `FLOWS` map, and the daemon turns it into episode rows so Live and History
+  show real traffic. IPv4 only; PID shows "—" when unresolved; flows close on
+  idle timeout (no measured close callback).
 - Self-contained eBPF collector: the object is embedded in `netwatchd` at build
   time, so packaged installs attach without a separate object file (P8.9–P8.11).
 - Clean-install verification script and an eBPF dev-override contract. The host

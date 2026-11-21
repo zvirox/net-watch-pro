@@ -123,8 +123,8 @@
 | ID | Task | Files | Verify | Deps |
 |---|---|---|---|---|
 | P2.1 | eBPF skeleton: attach empty socket trace, ring buffer plumbed | `crates/netwatch-ebpf/`, `crates/netwatchd/src/ebpf_loader.rs` | daemon logs attach OK on test VM | P1.1 |
-| P2.2 | Byte counters per socket → delta events (1 s flush) | `crates/netwatch-ebpf/src/main.rs`, `netwatch-core/src/accounting.rs` | counters move while downloading a file | P2.1 |
-| P2.3 | `/proc` attribution + `apps` registry upserts | `netwatch-core/src/attribution.rs` | new connection → row in `apps` with confidence | P2.2 |
+| P2.2 | Per-socket `FLOWS` map (cookie + IPv4 tuple + absolute counters) → 1 Hz `EpisodeEvent`s | `crates/netwatch-ebpf/src/main.rs`, `crates/netwatchd/src/ebpf.rs` | counters move while downloading a file | P2.1 |
+| P2.3 | cgroup→app registry resolution for episode rows; PID best-effort from scope name (0 = unknown) | `crates/netwatchd/src/db.rs`, `netwatch-common/src/app_names.rs` | new connection → row in `apps` + `connections` with confidence | P2.2 |
 | P2.4 | Migration 0001+0002 applied at daemon boot (sqlx) | `crates/netwatchd/src/db/migrations/` | fresh data dir → tables + seeds exist (DATABASE.md §8) | P1.1 |
 | P2.5 | `connections` batch writer (≤ 1 tx/s equivalent from in-memory deltas, checkpoint cadence ~60 s) | `crates/netwatchd/src/db.rs` | sqlite row counts grow during traffic; tx rate ≤ 1/s | P2.3, P2.4 |
 | P2.6 | `live.connections` channel: snapshot + deltas ≤1 msg/s over socket stream | `crates/netwatch-api/src/` | socket client sees snapshot then deltas | P2.5, P1.4 |

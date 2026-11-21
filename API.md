@@ -145,6 +145,8 @@ Errors: 401, 429.
 ```
 Errors: 400, 401, 429, 503 (daemon starting).
 
+Rows come from the collector's per-socket `FLOWS` map via in-memory episodes. `pid` is `0` when no PID could be resolved from the cgroup scope name — clients must render it as "—", never as a real PID. Only IPv4 flows produce connection rows; IPv6 bytes remain in the cgroup rollups and the Unattributed gap. A flow is closed after an idle timeout because the measured eBPF hooks have no reliable close callback. `app` is resolved from the socket cgroup (`app_key = cgroup:<id>`), consistent with `live.apps`.
+
 **C2 `GET /connections`** — history episodes, keyset-paginated. Filters (whitelist):
 `app_id`, `app_name` (substring, free), `since`/`until` (epoch, Pro-set), `remote_ip`, `remote_host` (substring, Pro-set), `remote_port`, `protocol`, `interface_id`, `open` (bool). Sort whitelist: `first_seen_at`, `last_seen_at`, `bytes_up`, `bytes_down`, `remote_ip`. **Rule:** requests using ≥2 filters, or any of `since/until/remote_ip/remote_host/remote_port`, require Pro → otherwise `403 EXPORT_PRO_REQUIRED` with the missing entitlement named in `message`. **Beyond the raw window (7 days default), rows are aggregate rows from `usage_endpoint_day` (flagged `"kind": "aggregate"`), not connection episodes.** C3 `GET /connections/{id}` stays raw-window only. Success 200: envelope; rows shaped like C1 minus rates, plus `packets_up/packets_down` (raw) or `bytes_up/bytes_down/connection_count` (aggregate).
 Errors: 400 `QUERY_INVALID`, 401, 403, 429, 500 `DB_ERROR`.

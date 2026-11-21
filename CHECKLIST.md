@@ -51,7 +51,7 @@
 
 - [!] P2.1 eBPF attach + ring buffer plumbing <!-- BLOCKED on kernel -EPERM (spike report); daemon uses /sys interface counters + degraded events instead -->
 - [!] P2.2 Byte counters → 1 s delta events <!-- BLOCKED with P2.1 (eBPF); no 1 Hz live-delta collector exists. L-A3 adds a 1 Hz *rate* sampler for PC speed, not per-connection deltas -->
-- [ ] P2.3 `/proc` attribution + `apps` upserts <!-- UNTICKED (L-A8): cgroup-first identity helpers exist in netwatch-core but no collector feeds them, so no real per-app attribution runs; blocked on the L-B spike report -->
+- [ ] P2.3 `/proc` attribution + `apps` upserts <!-- pending: per-socket FLOWS -> cgroup app registry wiring (ARCHITECTURE 1.9); no real /proc primary source — PID best-effort from cgroup scope name, 0 when unknown --> <!-- UNTICKED (L-A8): cgroup-first identity helpers exist in netwatch-core but no collector feeds them, so no real per-app attribution runs; blocked on the L-B spike report -->
 - [x] P2.4 Migrations 0001+0002 at boot <!-- fresh data dir → tables + seeds verified (smoke run + unit tests) -->
 - [x] P2.5 Batched `connections` writer (checkpoint cadence ~60 s, F-09) <!-- persist_episodes upserts absolute totals, one tx per batch; unit tested -->
 - [x] P2.6 `live.connections` channel (snapshot + delta) over socket stream <!-- EpisodeStore + 1 Hz live service + WS snapshot/delta frames; verified over live socket -->
@@ -194,7 +194,7 @@
 - [ ] L-C5 `live.apps` stream with per-second smoothed per-app rates
 - [ ] L-C6 Feed attributed bytes into episode store + rollups so Unattributed row shrinks
 - [ ] L-C7 Apps list live speed columns, sorted with ~2 s hold
-- [ ] L-C8 Live Connections screen shows real rows; empty state only when idle
+- [ ] L-C8 Live Connections screen shows real rows; empty state only when idle <!-- pending: per-socket FLOWS map -> EpisodeEvent producer (P2.2), app registry app_id + best-effort PID, idle-timeout close; F15 tests planned; UI renders PID 0 as "—" once implemented -->
 - [x] L-C9 Degraded path: `NETWATCH_DISABLE_EBPF` + failed attach honest everywhere <!-- daemon /status = no_collector, recording=false, zero drops [VERIFIED host]; rendered UI verified in-browser via mocked Tauri bridge driving real frames through actual stores: Degraded chip + tooltip, Dashboard live-speed note, Live empty state for both no_collector and failed variants; literal WebKit window not agent-verified (GL/AT-SPI/Wayland limits, pkexec prompt) -->
 - [x] L-D1 Range selector 1 h/24 h/7 d/30 d/cycle, remembered per user via `range_default` (DESIGN.md §7.13, §8.3; API.md §1.4) <!-- docs-first DESIGN 1.4/ARCHITECTURE 1.7/DATABASE 1.4+migration 0006/API 1.8/api-contract/TESTING F12; setting spec + range.rs tests green; browser-verified preset switch 24h→7d changes bucket label 15 min→Hour and reloads all three U-requests -->
 - [x] L-D2 Range totals from rollups in configured timezone with `billing_cycle_day` (Asia/Kolkata midnight test) (API.md U1) <!-- range::day_preset_resets_at_local_midnight_in_kolkata + cycle_preset_uses_configured_day_and_clamps_short_months + U1 integration test green -->
