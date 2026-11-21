@@ -79,10 +79,14 @@ async function enable(): Promise<void> {
     await daemonStore.authorize();
     for (let attempt = 0; attempt < HEALTH_ATTEMPTS; attempt += 1) {
       try {
-        await daemonStore.request('GET', '/api/v1/health');
+        await daemonStore.request('GET', '/api/v1/status');
         finish();
         return;
-      } catch {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('not authorized') || msg.includes('auth-invalid')) {
+          throw new Error('This user is not authorized. Run enable monitoring again.');
+        }
         await new Promise<void>((resolve) => {
           setTimeout(resolve, HEALTH_DELAY_MS);
         });

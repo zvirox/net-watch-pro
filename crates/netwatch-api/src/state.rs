@@ -40,6 +40,8 @@ pub struct AppState {
     pub export_create_limiter: RateLimiter,
     /// 10 export downloads per minute (API.md §1.5).
     pub export_download_limiter: RateLimiter,
+    /// Connection rejection statistics (Task 2).
+    pub peer_stats: std::sync::Arc<crate::peer::PeerStats>,
 }
 
 impl AppState {
@@ -50,6 +52,7 @@ impl AppState {
         status: watch::Receiver<StatusSnapshot>,
         live: LiveFeed,
         db: SqlitePool,
+        peer_stats: std::sync::Arc<crate::peer::PeerStats>,
     ) -> Self {
         Self {
             status,
@@ -62,6 +65,7 @@ impl AppState {
             exports: ExportRegistry::new(),
             export_create_limiter: RateLimiter::new(5, Duration::from_secs(60)),
             export_download_limiter: RateLimiter::new(10, Duration::from_secs(60)),
+            peer_stats,
         }
     }
 

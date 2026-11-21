@@ -814,6 +814,7 @@ async fn diagnostics_over_socket_returns_checks_and_journal() {
     assert_eq!(v["journal_excerpt"][0]["code"], "DB_ERROR");
     assert_eq!(v["data"]["retention_days"], 90);
     assert!(v["data"]["db_size_bytes"].as_i64().is_some_and(|n| n > 0));
+    assert_eq!(v["rejected_connections"]["count"], 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -895,7 +896,13 @@ async fn client_counting_bumps_status_counter() {
         ebpf: EbpfState::Attached,
         recording: true,
     });
-    let state = Arc::new(AppState::new(tx, rx, live_feed().0, test_db().await));
+    let state = Arc::new(AppState::new(
+        tx,
+        rx,
+        live_feed().0,
+        test_db().await,
+        Arc::new(netwatch_api::peer::PeerStats::default()),
+    ));
     state.client_delta(1);
     assert_eq!(state.client_count(), 1);
     state.client_delta(-1);

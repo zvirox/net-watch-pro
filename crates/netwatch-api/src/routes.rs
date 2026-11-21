@@ -50,7 +50,7 @@ pub async fn status(State(state): State<Arc<AppState>>) -> Response {
 /// `GET /diagnostics` — S3, one payload for the Diagnostics modal (DESIGN.md §8.9).
 pub async fn diagnostics(State(state): State<Arc<AppState>>) -> Response {
     let ebpf = state.status.borrow().ebpf;
-    match crate::diagnostics::diagnostics(&state.db, ebpf).await {
+    match crate::diagnostics::diagnostics(&state.db, ebpf, &state.peer_stats).await {
         Ok(payload) => Json(payload).into_response(),
         Err(err) => err.into_response(),
     }

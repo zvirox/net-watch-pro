@@ -57,6 +57,8 @@ pub struct DiagnosticsResponse {
     pub journal_excerpt: Vec<JournalRow>,
     /// Database metadata.
     pub data: DiagnosticsData,
+    /// Connection rejection statistics (Task 2).
+    pub rejected_connections: crate::peer::RejectedConnections,
 }
 
 /// One S4 row.
@@ -104,6 +106,7 @@ fn skip(name: &'static str, detail: &str) -> Check {
 pub async fn diagnostics(
     pool: &SqlitePool,
     ebpf: EbpfState,
+    stats: &crate::peer::PeerStats,
 ) -> Result<DiagnosticsResponse, ApiError> {
     let ebpf_check = match ebpf {
         EbpfState::Attached => Check {
@@ -196,6 +199,7 @@ pub async fn diagnostics(
             db_size_bytes: page_count.saturating_mul(page_size),
             retention_days,
         },
+        rejected_connections: stats.snapshot(),
     })
 }
 

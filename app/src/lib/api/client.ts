@@ -93,14 +93,21 @@ export class DaemonApiClient {
     let response: DaemonHttpResponse;
     try {
       response = await requestDaemon(method, path, body);
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('auth-invalid')) {
+        this.#clearRetry();
+        this.#setState('auth-invalid');
+        throw new Error('This user is not authorized. Run enable monitoring again.');
+      }
       this.#scheduleReconnect();
       throw new Error('Daemon is unreachable');
     }
 
     if (response.status === 401) {
-      await this.#invalidateToken();
-      throw new Error('Daemon authorization expired');
+      this.#clearRetry();
+      this.#setState('auth-invalid');
+      throw new Error('This user is not authorized. Run enable monitoring again.');
     }
     if (response.status < 200 || response.status >= 300) {
       const envelope = parseJson(response.body);
@@ -159,8 +166,14 @@ export class DaemonApiClient {
       await sendDaemonFrame({ op: 'subscribe', channel: 'status' });
       this.#retryDelayMs = 1_000;
       this.#clearRetry();
-    } catch {
+    } catch (err) {
       if (!this.#isCurrent(generation)) return;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('auth-invalid')) {
+        this.#clearRetry();
+        this.#setState('auth-invalid');
+        return;
+      }
       this.#scheduleReconnect();
     }
   }
@@ -175,7 +188,9 @@ export class DaemonApiClient {
       this.#clearRetry();
       this.#setState('connected');
     } else if (state === 'auth-invalid') {
-      void this.#invalidateToken();
+      this.#clearRetry();
+      this.#setState('auth-invalid');
+      void disconnectDaemonWebSocket().catch(() => undefined);
     } else if (state === 'auth-required') {
       this.#clearRetry();
       this.#setState('auth-required');
@@ -202,13 +217,6 @@ export class DaemonApiClient {
 
   async #disconnectAfterFailure(): Promise<void> {
     await disconnectDaemonWebSocket().catch(() => undefined);
-  }
-
-  async #invalidateToken(): Promise<void> {
-    this.#setState('auth-invalid');
-    await disconnectDaemonWebSocket().catch(() => undefined);
-    this.#clearRetry();
-    this.#setState('auth-required');
   }
 
   #scheduleReconnect(): void {

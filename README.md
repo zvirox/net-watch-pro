@@ -245,10 +245,16 @@ Tauri binaries load the Vite dev URL. Start `npm run dev` in `app/`, or use a
 release package. If the daemon is linked, its `/status` reports
 `ws_clients: 1`.
 
-**"Authorization needed" appears.** Your UID is not in
-`/etc/netwatch-pro/allowed-uids`. Re-run onboarding, or have root add your
-numeric UID to that file. Socket access also requires membership of the group
-set by `NETWATCH_API_GID` (normally `netwatch`).
+**"Authorization needed" / "This user is not authorized" appears.** Your UID is not in
+`/etc/netwatch-pro/allowed-uids`. Re-run the dedicated onboarding helper, or manually append
+your numeric UID to the allowlist:
+```bash
+pkexec /usr/libexec/netwatch-pro/enable-monitoring
+# or manually:
+echo $(id -u) | sudo tee -a /etc/netwatch-pro/allowed-uids
+```
+Socket access also requires membership of the group set by `NETWATCH_API_GID` (normally `netwatch`),
+which `enable-monitoring` configures automatically.
 
 **Chip is Degraded / per-app speeds missing.** Packaged builds carry the
 collector object already, so check the daemon log and Diagnostics modal for

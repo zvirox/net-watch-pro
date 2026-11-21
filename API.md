@@ -118,9 +118,10 @@ Single trusted local client over a Unix socket, so limits are minimal and exist 
               {"name":"ebpf_attach","result":"fail","guidance_url":"docs:kernel-btf"},
               {"name":"database","result":"pass","detail":"writable, 2.3 GB"} ],
   "journal_excerpt": [ {"occurred_at":1731570600,"level":"error","code":"EBPF_ATTACH_FAILED","message":"…"} ],
-  "data": {"db_size_bytes":2469606195, "retention_days":90} }
+  "data": {"db_size_bytes":2469606195, "retention_days":90},
+  "rejected_connections": {"count":0, "last_rejected_uid":1001} }
 ```
-`result` is `pass|fail|skip`. `skip` is used for checks the local API process cannot honestly perform in-process (service-unit state, kernel/BTF compatibility); it always carries a `detail` explaining why and is rendered as "—" in the modal (DESIGN.md §8.9). `ebpf_attach` mirrors S2 `ebpf`; `database` reports a real write probe and DB size.
+`result` is `pass|fail|skip`. `skip` is used for checks the local API process cannot honestly perform in-process (service-unit state, kernel/BTF compatibility); it always carries a `detail` explaining why and is rendered as "—" in the modal (DESIGN.md §8.9). `ebpf_attach` mirrors S2 `ebpf`; `database` reports a real write probe and DB size. `rejected_connections` reports peer-credential socket rejections with `count` and the optional `last_rejected_uid`.
 Errors: 401, 429.
 
 **S4 `GET /events`** — paginated `daemon_events`. Query: `?limit=&cursor=&level=warn|error&code=`. Success 200: envelope with rows `{id, occurred_at, level, code, message, detail_json}`. Errors: 400, 401, 429.

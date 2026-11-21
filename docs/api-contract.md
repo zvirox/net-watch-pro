@@ -45,7 +45,7 @@ Rate limits: 600/min reads · 5/min export create · 10/min writes & downloads �
 
 Live/history connection rows are fed by the per-socket `FLOWS` map (cgroup_skb, IPv4 only). `pid: 0` means unknown — render "—"; never treat it as a real process id. Close is idle-timeout based (no measured close callback), and IPv6 bytes stay in cgroup rollups/Unattributed.
 
-Diagnostics S3/S4: `checks[].result` is `pass|fail|skip`; `skip` (always with `detail`) means the local API process cannot observe that check in-process — service-unit state and kernel/BTF compatibility are reported this way rather than guessed, and render as "—" in the modal. S3's `journal_excerpt` reads `daemon_events` newest-first; S4 is the paginated version of the same table.
+Diagnostics S3/S4: `checks[].result` is `pass|fail|skip`; `skip` (always with `detail`) means the local API process cannot observe that check in-process — service-unit state and kernel/BTF compatibility are reported this way rather than guessed, and render as "—" in the modal. S3's `journal_excerpt` reads `daemon_events` newest-first; S4 is the paginated version of the same table. S3 also returns `rejected_connections: { count, last_rejected_uid }` tracking peer-credential rejections.
 
 ## Live throughput (API.md §3, Phase A)
 

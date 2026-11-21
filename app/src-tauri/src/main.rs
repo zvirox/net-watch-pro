@@ -70,9 +70,24 @@ async fn daemon_connect(window: WebviewWindow, state: State<'_, LinkState>) -> R
         }
     }
 
-    let socket = tokio::net::UnixStream::connect(DAEMON_SOCKET)
-        .await
-        .map_err(|_| "daemon WebSocket connection failed".to_string())?;
+    let socket = match tokio::net::UnixStream::connect(DAEMON_SOCKET).await {
+        Ok(s) => s,
+        Err(err) => {
+            let msg = if err.kind() == std::io::ErrorKind::PermissionDenied {
+                let _ = window
+                    .app_handle()
+                    .emit_to("main", "daemon://state", "auth-invalid");
+                "auth-invalid: This user is not authorized. Run enable monitoring again."
+                    .to_string()
+            } else {
+                let _ = window
+                    .app_handle()
+                    .emit_to("main", "daemon://state", "disconnected");
+                "daemon connection failed".to_string()
+            };
+            return Err(msg);
+        }
+    };
 
     // tungstenite does not add Sec-WebSocket-Key to a manually built request.
     let handshake = tokio_tungstenite::client_async(
@@ -88,9 +103,21 @@ async fn daemon_connect(window: WebviewWindow, state: State<'_, LinkState>) -> R
             .map_err(|_| "cannot construct daemon WebSocket request".to_string())?,
         socket,
     )
-    .await
-    .map_err(|_| "daemon WebSocket connection failed".to_string())?;
-    let (socket, _) = handshake;
+    .await;
+    let (socket, _) = match handshake {
+        Ok(res) => res,
+        Err(_err) => {
+            // A connect that reaches the socket but is closed before the HTTP/WS
+            // handshake completes is a peer rejection (SO_PEERCRED gate).
+            let _ = window
+                .app_handle()
+                .emit_to("main", "daemon://state", "auth-invalid");
+            return Err(
+                "auth-invalid: This user is not authorized. Run enable monitoring again."
+                    .to_string(),
+            );
+        }
+    };
 
     let (outgoing_tx, mut outgoing_rx) = mpsc::channel::<String>(64);
     let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
@@ -158,9 +185,21 @@ async fn daemon_http_request(
     // encoded query string) must be sent to the daemon unchanged.
     let api_path = validate_api_path(&path)?;
 
-    let mut stream = tokio::net::UnixStream::connect(DAEMON_SOCKET)
-        .await
-        .map_err(|_| "daemon connection failed".to_string())?;
+    let mut stream = match tokio::net::UnixStream::connect(DAEMON_SOCKET).await {
+        Ok(s) => s,
+        Err(err) => {
+            if err.kind() == std::io::ErrorKind::PermissionDenied {
+                let _ = window
+                    .app_handle()
+                    .emit_to("main", "daemon://state", "auth-invalid");
+                return Err(
+                    "auth-invalid: This user is not authorized. Run enable monitoring again."
+                        .to_string(),
+                );
+            }
+            return Err("daemon connection failed".to_string());
+        }
+    };
 
     let body_bytes = body.unwrap_or_default();
     let req = format!(
@@ -175,11 +214,32 @@ async fn daemon_http_request(
     let mut buf = Vec::new();
     let mut chunk = [0u8; 4096];
     loop {
-        let n = tokio::time::timeout(Duration::from_secs(2), stream.read(&mut chunk))
-            .await
-            .map_err(|_| "daemon HTTP response timed out".to_string())?
-            .map_err(|_| "daemon connection failed".to_string())?;
+        let n = match tokio::time::timeout(Duration::from_secs(2), stream.read(&mut chunk)).await {
+            Ok(Ok(n)) => n,
+            Ok(Err(_)) => {
+                if buf.is_empty() {
+                    let _ = window
+                        .app_handle()
+                        .emit_to("main", "daemon://state", "auth-invalid");
+                    return Err(
+                        "auth-invalid: This user is not authorized. Run enable monitoring again."
+                            .to_string(),
+                    );
+                }
+                return Err("daemon connection failed".to_string());
+            }
+            Err(_) => return Err("daemon HTTP response timed out".to_string()),
+        };
         if n == 0 {
+            if buf.is_empty() {
+                let _ = window
+                    .app_handle()
+                    .emit_to("main", "daemon://state", "auth-invalid");
+                return Err(
+                    "auth-invalid: This user is not authorized. Run enable monitoring again."
+                        .to_string(),
+                );
+            }
             break;
         }
         buf.extend_from_slice(&chunk[..n]);

@@ -93,12 +93,19 @@ pub async fn serve_unix(
     configure_socket_access(socket_path, api_gid)?;
 
     let status_rx = status_tx.subscribe();
-    let state = Arc::new(AppState::new(status_tx, status_rx, live, db));
+    let peer_stats = Arc::new(peer::PeerStats::default());
+    let state = Arc::new(AppState::new(
+        status_tx,
+        status_rx,
+        live,
+        db,
+        peer_stats.clone(),
+    ));
     let app = crate::routes::router(state).into_make_service();
 
     // D1a: enforce SO_PEERCRED. Connections from UIDs outside the allowlist are
     // dropped before any HTTP is parsed (see `peer`).
-    let listener = peer::PeerCredListener::new(listener, peer::PeerPolicy::from_env());
+    let listener = peer::PeerCredListener::new(listener, peer::PeerPolicy::from_env(), peer_stats);
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
         .await

@@ -208,9 +208,10 @@
           <section class="notice" role="status">
             <div>
               <strong>Authorization needed</strong>
-              <p>Authenticate locally to connect to the Net Watch Pro daemon.</p>
+              <p>This user is not authorized. Run enable monitoring again.</p>
             </div>
-            <Button variant="primary" onclick={() => void daemonStore.authorize()}>Authorize</Button
+            <Button variant="primary" onclick={() => void onboardingStore.enable()}
+              >Authorize</Button
             >
           </section>
         {/if}
