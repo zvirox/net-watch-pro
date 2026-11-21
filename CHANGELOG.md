@@ -10,6 +10,13 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ## [Unreleased]
 
+## [v0.9.1-beta.3] — 2026-11-21
+
+Release-pipeline fix over `v0.9.1-beta.2`: the release workflow now installs
+the prebuilt `bpf-linker` 0.13.0 binary instead of compiling it (hosted runners
+lack `llvm-config` for LLVM 23), so the signed `.deb`/`.rpm` artifacts are
+produced and attached.
+
 ## [v0.9.1-beta.2] — 2026-11-21
 
 Patch beta: per-socket live connections plus fixes for the first beta's
@@ -520,7 +527,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.9.1-beta.2...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.9.1-beta.3...HEAD
+[v0.9.1-beta.3]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.9.1-beta.3
 [v0.9.1-beta.2]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.9.1-beta.2
 [v0.9.0-beta.1]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.9.0-beta.1
 [v0.8.10-alpha.8]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.8.10-alpha.8
