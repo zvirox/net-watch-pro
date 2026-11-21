@@ -3,7 +3,7 @@
 pkgname=net-watch-pro-git
 _pkgname=net-watch-pro
 pkgver=0.9.0.beta.1.r0.gbc9f33b
-pkgrel=2
+pkgrel=3
 pkgdesc='Local network-traffic monitor and per-app usage tracker (dev channel)'
 arch=('x86_64')
 url='https://github.com/zvirox/net-watch-pro'
@@ -16,7 +16,7 @@ conflicts=('net-watch-pro' 'net-watch-pro-bin')
 install=net-watch-pro-git.install
 source=("net-watch-pro::git+https://github.com/zvirox/net-watch-pro.git#branch=main"
         'net-watch-pro-git.install')
-sha256sums=('SKIP' '5f434ab97b7e335cb25464faa0569d75bf32c197c9ba922439382a079c5025fb')
+sha256sums=('SKIP' '5b8ea9346150a0a64537f0bf36072055d7b7f42df740cfa9d1f6dde62449d271')
 
 pkgver() {
   cd "$srcdir/$_pkgname" || { printf '%s' "$pkgver"; return; }

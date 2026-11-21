@@ -88,4 +88,13 @@ check_restart "arch upgrade (stopped): no restart/start" no
 : > "$FAKE_LOG"; FAKE_ACTIVE=1 bash -c 'source "$1"; post_install' _ "$TMP/arch-install"
 check_restart "arch fresh install: no restart" no
 
+# PKGBUILD checksum must track the install hook we just changed; otherwise
+# makepkg fails at source validation before the build even starts.
+declared_hash="$(sed -n "s/^sha256sums=('SKIP' '\([0-9a-f]*\)')/\1/p" \
+  "$ROOT_DIR/packaging/arch/PKGBUILD")"
+actual_hash="$(sha256sum "$ROOT_DIR/packaging/arch/net-watch-pro-git.install" | cut -d' ' -f1)"
+[ "$declared_hash" = "$actual_hash" ] \
+  || fail "PKGBUILD sha256sums is stale: declared $declared_hash, actual $actual_hash"
+pass "PKGBUILD checksum matches the install hook"
+
 echo "ALL UPGRADE RESTART CHECKS PASSED"
