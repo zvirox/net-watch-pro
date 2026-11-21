@@ -12,3 +12,7 @@ path = "src/main.rs"
 
 [lints]
 workspace = true
+
+[dependencies]
+ed25519-dalek = "3"
+base64 = "0.23"

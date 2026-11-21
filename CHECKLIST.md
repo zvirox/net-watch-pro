@@ -206,7 +206,7 @@
 
 ### Owner tooling (approved 2026-11-21)
 
-- [ ] DEV-1 Debug-only license public-key override + `xtask license-dev-key` (docs-first ARCHITECTURE 1.10 / AUTH_SECURITY 1.3.2 / env-vars 1.5 / TESTING F16)
+- [x] DEV-1 Debug-only license public-key override + `xtask license-dev-key` <!-- [VERIFIED 2026-11-21 owner-style local run] minted key -> free -> POST /license/activate -> pro (advanced_filters/export/365d) -> DELETE -> free; expired key rejected; release binary ignores the override and rejects the same key -->
 
 ## Release Gate Summary
 

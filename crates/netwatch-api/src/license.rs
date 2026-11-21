@@ -101,9 +101,30 @@ pub async fn activate_with_public_key(
 /// Same as [`activate_with_public_key`], plus `LICENSE_INVALID` if the public
 /// key file is unreadable/malformed.
 pub async fn activate(pool: &SqlitePool, key: &str, now: i64) -> Result<LicenseState, ApiError> {
-    let public_key = license::parse_public_key_hex(PUBLIC_KEY_HEX.trim())
-        .map_err(|_| ApiError::license_invalid("Embedded public key is invalid"))?;
+    let public_key = activation_public_key()?;
     activate_with_public_key(pool, key, now, &public_key).await
+}
+
+fn embedded_public_key() -> Result<[u8; 32], ApiError> {
+    license::parse_public_key_hex(PUBLIC_KEY_HEX.trim())
+        .map_err(|_| ApiError::license_invalid("Embedded public key is invalid"))
+}
+
+/// Debug builds may use a caller-supplied verifier key so the owner can test
+/// the full Pro/free activation flow with keys minted by `xtask` (F16).
+/// Release builds compile only the embedded-key path.
+#[cfg(debug_assertions)]
+fn activation_public_key() -> Result<[u8; 32], ApiError> {
+    if let Ok(value) = std::env::var("NETWATCH_LICENSE_PUBLIC_KEY") {
+        return license::parse_public_key_hex(value.trim())
+            .map_err(|_| ApiError::license_invalid("NETWATCH_LICENSE_PUBLIC_KEY is invalid"));
+    }
+    embedded_public_key()
+}
+
+#[cfg(not(debug_assertions))]
+fn activation_public_key() -> Result<[u8; 32], ApiError> {
+    embedded_public_key()
 }
 
 /// Reset the singleton license row to free.
