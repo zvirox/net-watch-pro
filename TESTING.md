@@ -262,6 +262,18 @@
 
 The real-host row is `[VERIFIED]` only after an owner run; unit/integration tests cover the rest.
 
+### F16 — Owner dev-license testing
+
+| Scenario | Input | Expected |
+|---|---|---|
+| Mint | `cargo run -p xtask -- license-dev-key` | prints a fresh public-key hex and a signed `NWP1-...` key |
+| Free baseline | fresh data dir, no activation | L1 `tier=free`, Pro filters/export locked |
+| Activate | debug daemon with `NETWATCH_LICENSE_PUBLIC_KEY` set, paste key in Upgrade modal | L1 `tier=pro`, export + advanced filters unlock without restart |
+| Bad key | random `NWP1-...` | 403 `LICENSE_INVALID`, tier stays free |
+| Expired | minted key with past expiry | 403 `LICENSE_INVALID` (expired), tier stays free |
+| Deactivate | `DELETE /api/v1/license` | L1 back to `tier=free`, Pro gates return |
+| Release build | release daemon with the env var set | variable ignored; only the embedded public key verifies |
+
 ---
 
 ## 5. Edge & Negative Test Matrix (cross-feature)

@@ -1,6 +1,6 @@
 # env-vars.md — Environment Variables Mirror
 
-**Binding source:** `../ARCHITECTURE.md` §8.3. This list is **closed** — adding a variable requires updating ARCHITECTURE.md §8.3 first (AGENTS.md §5). **Version:** 1.4 (2026-11-20). Phase C adds `NETWATCH_EBPF_OBJECT` for the collector object path; Phase A added no environment variables. 1.4: the object is embedded in `netwatchd` from a prebuilt file, so the variable is now a dev-only override with no production default path.
+**Binding source:** `../ARCHITECTURE.md` §8.3. This list is **closed** — adding a variable requires updating ARCHITECTURE.md §8.3 first (AGENTS.md §5). **Version:** 1.5 (2026-11-21). Phase C adds `NETWATCH_EBPF_OBJECT` for the collector object path; Phase A added no environment variables. 1.4: the object is embedded in `netwatchd` from a prebuilt file, so the variable is now a dev-only override with no production default path. 1.5 (2026-11-21): add debug-only `NETWATCH_LICENSE_PUBLIC_KEY` for owner license testing; ignored by release builds.
 
 | Var | Consumer | Default | Purpose |
 |---|---|---|---|
@@ -14,6 +14,7 @@
 | `NETWATCH_DISABLE_EBPF` | netwatchd | unset | Diagnostic switch: run with empty collector (degraded chip) |
 | `NETWATCH_EBPF_OBJECT` | netwatchd (dev only) | unset | Dev override to read the compiled object from a file instead of using the bytes embedded by `build.rs` (built by `cargo run -p xtask -- bpf`); a bad override -> degraded state, not a crash |
 | `NETWATCH_DEV_DAEMON_ADDR` | UI (dev only) | unset | Point UI at a dev daemon socket; never read in packaged builds |
+| `NETWATCH_LICENSE_PUBLIC_KEY` | netwatch-api (debug builds only) | unset | 64-char Ed25519 public-key hex; dev verifier override for owner testing, ignored in release builds |
 
 Removed: `NETWATCH_API_ADDR`, `NETWATCH_API_TOKEN_FILE` (Unix socket + peer-credential replaces loopback TCP + bearer token).
 

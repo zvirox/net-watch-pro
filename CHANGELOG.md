@@ -72,6 +72,7 @@ AUR `-git` package; no manual eBPF steps are needed.
 
 ### Added
 
+- Owner-only debug license test path: `NETWATCH_LICENSE_PUBLIC_KEY` (debug builds only) and `cargo run -p xtask -- license-dev-key` to mint ephemeral Ed25519 test keys. Release binaries still verify only the embedded public key.
 - Per-socket live connections: the cgroup_skb programs maintain a cookie-keyed
   `FLOWS` map, and the daemon turns it into episode rows so Live and History
   show real traffic. IPv4 only; PID shows "—" when unresolved; flows close on
