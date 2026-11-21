@@ -139,6 +139,10 @@ Public beta: diagnostics and accessibility gate.
 - The daemon-stopped banner no longer leaves the UI on a blank screen when the
   socket is unreachable.
 
+**Phase 10 harness verification:** accuracy ratio 0.960 (≥0.95 gate), perf
+p95 CPU 0.00% / RSS ~25 MB under seeded load, 1-year seeded DB 0.113 GiB
+(<1.5 GiB), container smoke workflow added (not the VM matrix).
+
 **Verification:** `cargo fmt --check`, `cargo clippy --workspace --all-targets
 -- -D warnings`, `cargo test --workspace` (59 API tests, all workspace suites
 green), `python3 tests/a11y/contrast.py` (34 pairs pass in both themes),

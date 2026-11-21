@@ -1,0 +1,51 @@
+# Phase 10 Beta Hardening: accuracy, perf-budget and retention-soak harnesses.
+# The distro matrix runs in CONTAINERS by owner decision — this is a smoke test
+# of maintainer scripts, NOT the VM matrix required by PLAN P10.4.
+name: hardening
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  harnesses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.1
+      - name: accuracy (P10.1)
+        run: |
+          cargo build -p netwatchd
+          python3 tests/accuracy/accuracy.py
+      - name: perf budget (P10.2)
+        run: python3 tests/integration/perf_budget.py
+      - name: retention soak (P10.3)
+        run: python3 tests/integration/soak.py
+
+  distro-smoke:
+    needs: harnesses
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu
+            image: ubuntu:24.04
+          - name: arch
+            image: archlinux:latest
+          - name: fedora
+            image: fedora:41
+    container:
+      image: ${{ matrix.image }}
+    name: smoke-${{ matrix.name }} (container, not VM)
+    steps:
+      - uses: actions/checkout@v4
+      - name: maintainer-script smoke
+        shell: bash
+        run: |
+          bash packaging/tests/test-upgrade.sh
+          bash packaging/tests/test-uninstall.sh
+          echo "NOTE: container smoke is not the PLAN P10.4 VM matrix"

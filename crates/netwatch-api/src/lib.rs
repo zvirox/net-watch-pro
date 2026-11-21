@@ -12,7 +12,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod apps;
-pub mod auth;
 pub mod budgets;
 pub mod calendar;
 pub mod diagnostics;

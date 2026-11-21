@@ -123,10 +123,31 @@ impl PeerPolicy {
         if uid == 0 || uid == self.own_uid || self.sudo_uid == Some(uid) {
             return true;
         }
-        match std::fs::read_to_string(&self.file) {
-            Ok(text) => parse_uid_list(&text).contains(&uid),
-            Err(_) => false,
+        self.read_allowed_uids()
+            .is_some_and(|uids| uids.contains(&uid))
+    }
+
+    /// Read the root-owned allowlist. Fail closed on a symlink, a
+    /// group/other-writable file, or (when running as root) non-root ownership.
+    fn read_allowed_uids(&self) -> Option<Vec<u32>> {
+        use std::os::unix::fs::MetadataExt;
+        let meta = std::fs::symlink_metadata(&self.file).ok()?;
+        if meta.file_type().is_symlink() || meta.mode() & 0o022 != 0 {
+            return None;
         }
+        if own_uid() == 0 && meta.uid() != 0 {
+            return None;
+        }
+        let text = std::fs::read_to_string(&self.file).ok()?;
+        Some(parse_uid_list(&text))
+    }
+
+    /// The exact decision the accept loop applies to a peer UID. Exposed so
+    /// the rejection path can be tested even when the suite runs as root
+    /// (root itself is always allowed by design).
+    #[must_use]
+    pub fn accept_decision(&self, uid: u32) -> bool {
+        self.allows(uid)
     }
 }
 
@@ -185,7 +206,7 @@ impl axum::serve::Listener for PeerCredListener {
                 }
             };
             match stream.peer_cred() {
-                Ok(cred) if self.policy.allows(cred.uid()) => return (stream, addr),
+                Ok(cred) if self.policy.accept_decision(cred.uid()) => return (stream, addr),
                 Ok(cred) => {
                     let uid = cred.uid();
                     self.stats.record_rejected(uid);
@@ -231,6 +252,24 @@ mod tests {
         assert!(policy.allows(977));
         assert!(policy.allows(1000));
         assert!(!policy.allows(1001));
+    }
+
+    #[test]
+    fn accept_decision_rejects_foreign_uid_even_as_root() {
+        // Root is always allowed, but a different UID must be rejected from a
+        // missing allowlist regardless of the UID this test suite runs under.
+        let policy = PeerPolicy::new(PathBuf::from("/nonexistent/allowed-uids"), 977, None);
+        assert!(!policy.accept_decision(12345));
+    }
+
+    #[test]
+    fn writable_allowlist_file_fails_closed() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = temp_file("writable", "1000\n");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o666)).unwrap();
+        let policy = PeerPolicy::new(path.clone(), 977, None);
+        assert!(!policy.accept_decision(1000));
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

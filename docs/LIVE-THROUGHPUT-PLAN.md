@@ -258,7 +258,7 @@ Update the docs before writing code, because adding streams and a setting is a s
 - Tag unmeasured kernel claims `[HYPOTHESIS]`, and never claim a check you did not run.
 - Do Phase A and stop for approval. Do not start Phase C before the spike report is accepted.
 - Phase B must be run by the owner on the real PC, or the agent must say it cannot.
-- This plan did not re-audit the socket authentication code. Do not assume the UID allowlist is enforced.
+- Historical note: this plan did not re-audit socket authentication. P10.5 confirmed the UID allowlist **is** enforced at the socket layer (`netwatch-api/src/peer.rs`); see `docs/security-review.md`.
 
 **Prompt to paste**
 

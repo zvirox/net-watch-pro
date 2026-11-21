@@ -51,7 +51,7 @@ RestrictRealtime=yes
 SystemCallArchitectures=native
 # 0022 keeps the API socket reachable by the unprivileged UI today; the
 # peer-credential UID allowlist (D1a) will narrow that at the socket layer.
-UMask=0022
+UMask=0077
 # /var/lib/netwatch-pro and /run/netwatch-pro are the only writable paths.
 ReadWritePaths=/var/lib/netwatch-pro /run/netwatch-pro
 
