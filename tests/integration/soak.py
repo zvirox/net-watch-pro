@@ -36,7 +36,7 @@ def fail(message: str) -> None:
 def main() -> int:
     if not DAEMON.is_file():
         fail(f"missing {DAEMON}; run `cargo build -p netwatchd` first")
-    base = Path(tempfile.mkdtemp(prefix="nwp-soak-", dir="/tmp/opencode"))
+    base = Path(tempfile.mkdtemp(prefix="nwp-soak-", dir=tempfile.gettempdir()))
     data = base / "data"
     data.mkdir()
     sock_path = str(base / "api.sock")
