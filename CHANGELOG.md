@@ -10,6 +10,10 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ## [Unreleased]
 
+## [v0.9.2-beta.4] — 2026-11-21
+
+Public beta: security hardening, dedicated Polkit onboarding helper, Vitest UI test suite, export safety caps, and IPv6 live flows.
+
 ### Security
 
 - API socket now enforces `SO_PEERCRED`: connections from UIDs outside
@@ -17,18 +21,41 @@ Categories: Added / Changed / Fixed / Removed / Security.
   `SUDO_UID`) are dropped before HTTP is parsed. Previously the allowlist was
   written at onboarding but never read, so group membership alone granted full
   API access (D1a). New `NETWATCH_ALLOWED_UIDS_FILE` override.
+- Dedicated Polkit action (`pro.netwatch.enable-monitoring`) and root helper
+  (`/usr/libexec/netwatch-pro/enable-monitoring`): replaces arbitrary `pkexec sh -c`
+  onboarding execution with a dedicated binary. Validates `PKEXEC_UID` numerically,
+  appends idempotently to `/etc/netwatch-pro/allowed-uids` without dropping existing
+  users, writes systemd socket group drop-in, and starts `netwatchd.service`.
 - Tauri bridge: HTTP method is an exact allowlist and the API path/query reject
   whitespace, control characters and non-ASCII before being written into the raw
   request line (request-smuggling hardening).
 - CSP no longer allows the retired loopback `127.0.0.1:7897` origins.
 - CSV exports prefix text cells that start with `= + - @ TAB CR` with `'` so a
   process named `=HYPERLINK(...)` cannot run as a spreadsheet formula.
+- Peer stats & rejection tracking: daemon records `rejected_connections` count and
+  `last_rejected_uid` in `/api/v1/diagnostics` (S3) with rate-limited warn logs (1/min max).
+  Early socket drops are mapped to `auth-invalid` without reconnect spam.
+
+### Added
+
+- Vitest UI test suite (`npm test`): added 26 unit tests across 6 test suites covering
+  byte/rate formatters, rates store staleness and negative unattributed rate regressions,
+  live-apps `holdOrder` stabilization, budget percentage clamping, client reconnect
+  exponential backoff (capped at 16s), and export job transitions.
+- Export safety limits: enforced 100,000-row query cap (`LIMIT 100001` returning 400
+  `QUERY_INVALID`), 48 MiB memory buffer cap, and max 5 concurrent export jobs (`RATE_LIMITED` 429).
+- Literal search escaping: escaped `%`, `_`, and `\` wildcards with `ESCAPE '\'` in
+  History and Export queries.
+- IPv6 Live flow attribution: expanded eBPF `Flow` struct to 88 bytes (`[u32; 4]` IPs)
+  handling `skb.family == 10` alongside AF_INET, formatted canonically with RFC 5952 representation.
 
 ### Fixed
 
 - Per-app live rates divide by the measured interval (not an assumed 1 s) and
   the first collector read is a baseline, so a delayed tick no longer inflates
   speeds.
+- Onboarding status health-check: checks `/api/v1/status` after the helper runs and displays
+  specific error details and a retry button on authorization failure instead of false success.
 
 ## [v0.9.1-beta.3] — 2026-11-21
 
@@ -547,7 +574,8 @@ tests; UI `svelte-check` reported 0 errors/warnings.
 
 ---
 
-[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.9.1-beta.3...HEAD
+[Unreleased]: https://github.com/zvirox/net-watch-pro/compare/v0.9.2-beta.4...HEAD
+[v0.9.2-beta.4]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.9.2-beta.4
 [v0.9.1-beta.3]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.9.1-beta.3
 [v0.9.1-beta.2]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.9.1-beta.2
 [v0.9.0-beta.1]: https://github.com/zvirox/net-watch-pro/releases/tag/v0.9.0-beta.1

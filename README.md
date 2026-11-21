@@ -26,7 +26,7 @@
 
 ## Project status
 
-Net Watch Pro is a **public beta**. The latest tag is `v0.9.1-beta.3`
+Net Watch Pro is a **public beta**. The latest tag is `v0.9.2-beta.4`
 (2026-11-21); see the [changelog](CHANGELOG.md) for every release.
 
 Monitoring works end to end:
