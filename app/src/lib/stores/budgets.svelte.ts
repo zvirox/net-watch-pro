@@ -39,7 +39,9 @@ let timer: ReturnType<typeof setInterval> | null = null;
 
 function percent(state: BudgetState): number {
   if (state.limit_bytes <= 0) return 0;
-  return Math.min(999, Math.round((state.used_bytes / state.limit_bytes) * 100));
+  // A negative used_bytes is invalid; never render a negative percentage or
+  // pass one to aria-valuenow (Settings.svelte).
+  return Math.max(0, Math.min(999, Math.round((state.used_bytes / state.limit_bytes) * 100)));
 }
 
 async function notify(): Promise<void> {

@@ -259,6 +259,11 @@ export const historyStore = {
     void fetchPage(cursor, 'more');
   },
 
+  /** Refetch page 1 — used when the History screen opens or data may have
+   * arrived since the last connection event. */
+  load(): void {
+    void fetchPage(null, 'first');
+  },
   /** Retry after an error: refetch page 1 with the current filter. */
   retry(): void {
     if (searchTimer !== null) clearTimeout(searchTimer);

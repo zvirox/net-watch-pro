@@ -62,6 +62,18 @@ Public beta: diagnostics and accessibility gate.
 
 ### Fixed
 
+- Negative "Unattributed" values on the Dashboard: `saturating_sub` only
+  clamps at integer bounds, not at zero; the gap is now explicitly clamped,
+  and negative byte counts render as "—" rather than raw integers.
+- Live screen crashed as soon as rows appeared: `displayAppName()` called
+  itself recursively instead of reading `row.app.name`.
+- Live now loads the REST `/connections/live` snapshot when WS subscribe
+  fails; `net.rates`/`live.apps` report "Unavailable" instead of waiting
+  forever; early subscribe calls no longer flip the client into reconnect.
+- History refreshes when opened (and while empty) instead of only on daemon
+  reconnect; polling no longer resets keyset pagination.
+- Guard against negative budget percentages and rate values; copy report no
+  longer copies literal `null`.
 - The daemon-stopped banner no longer leaves the UI on a blank screen when the
   socket is unreachable.
 

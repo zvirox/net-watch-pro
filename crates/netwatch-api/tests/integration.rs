@@ -1141,6 +1141,56 @@ async fn usage_summary_reports_totals_gap_and_top_apps() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn usage_summary_never_reports_negative_unattributed() {
+    let db = test_db().await;
+    seed_history_schema(&db).await;
+    seed_usage_schema(&db).await;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        .cast_signed();
+    let bucket = now / 900 * 900;
+    sqlx::query("INSERT INTO apps (id, name) VALUES (1, 'Firefox')")
+        .execute(&db)
+        .await
+        .unwrap();
+    // Attributed bytes exceed interface counters — an upstream accounting
+    // inconsistency must never surface as negative traffic (D3a).
+    sqlx::query(
+        "INSERT INTO usage_interface_15m (interface_id, bucket_start, rx_bytes, tx_bytes)
+         VALUES (2, ?1, 100, 50)",
+    )
+    .bind(bucket)
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO usage_rollup_15m (app_id, bucket_start, bytes_up, bytes_down, connection_count)
+         VALUES (1, ?1, 200, 200, 0)",
+    )
+    .bind(bucket)
+    .execute(&db)
+    .await
+    .unwrap();
+    let (sock, _tx) = spawn_server_with(db).await;
+    let (status, body) = http_get(&sock, "/api/v1/usage/summary?range=24h").await;
+    assert_eq!(status, 200, "body: {body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    for field in ["today", "month", "range.totals"] {
+        let node = if field == "range.totals" {
+            &v["range"]["totals"]
+        } else {
+            &v[field]
+        };
+        assert!(
+            node["unattributed"].as_i64().is_some_and(|n| n >= 0),
+            "{field}: {body}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn usage_summary_empty_db_is_collecting() {
     let db = test_db().await;
     seed_history_schema(&db).await;

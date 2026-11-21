@@ -1,6 +1,9 @@
 // Shared byte formatter (DESIGN.md §4.3: mono, tabular, compact units).
 export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 1024) return `${String(Math.round(bytes))} B`;
+  // A negative byte count is invalid, never traffic; show "—" rather than
+  // dumping a raw negative integer into a headline card (D3a).
+  if (!Number.isFinite(bytes) || bytes < 0) return '—';
+  if (bytes < 1024) return `${String(Math.round(bytes))} B`;
   const units = ['KB', 'MB', 'GB', 'TB'];
   let value = bytes / 1024;
   let unit = 0;

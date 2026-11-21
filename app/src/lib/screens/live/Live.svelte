@@ -84,6 +84,7 @@
   }
 
   function fmtRate(bps: number): string {
+    if (!Number.isFinite(bps) || bps < 0) return '—';
     if (bps < 1024) return `${String(Math.round(bps))} B/s`;
     const units = ['KB/s', 'MB/s', 'GB/s', 'TB/s'];
     let value = bps / 1024;
@@ -97,8 +98,9 @@
   }
 
   function displayAppName(row: LiveConnectionRow): string {
-    if (!displayAppName(row) || displayAppName(row) === 'unknown') return 'Unknown process';
-    return displayAppName(row);
+    const name = row.app.name;
+    if (!name || name === 'unknown') return 'Unknown process';
+    return name;
   }
 
   function appInitial(row: LiveConnectionRow): string {

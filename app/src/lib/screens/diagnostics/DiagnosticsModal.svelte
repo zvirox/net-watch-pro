@@ -52,7 +52,11 @@
   }
 
   async function copyReport(): Promise<void> {
-    const text = JSON.stringify(diagnosticsStore.payload, null, 2);
+    const text = JSON.stringify(
+      diagnosticsStore.payload ?? { error: 'no diagnostics loaded' },
+      null,
+      2,
+    );
     try {
       await window.navigator.clipboard.writeText(text);
       copied = true;

@@ -159,7 +159,9 @@
   <article class="panel network-now" aria-label="Network now">
     <div class="network-now__head">
       <p class="eyebrow">NETWORK NOW</p>
-      {#if rates === null}
+      {#if rates === null && ratesStore.failed}
+        <span class="network-now__state network-now__state--stale" role="status">Unavailable</span>
+      {:else if rates === null}
         <span class="network-now__state" role="status">Loading…</span>
       {:else if rateStale}
         <span class="network-now__state network-now__state--stale" role="status">Stale</span>
@@ -348,6 +350,8 @@
           <p class="live-apps__note">
             Per-app live speed needs an eBPF collector; PC speed above still works.
           </p>
+        {:else if liveAppsStore.failed}
+          <p class="live-apps__note">Per-app live rates are unavailable right now.</p>
         {:else if liveApps.length === 0}
           <p class="live-apps__note">Waiting for the first per-app sample…</p>
         {:else}

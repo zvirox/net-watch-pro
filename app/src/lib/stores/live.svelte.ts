@@ -97,16 +97,37 @@ daemonStore.onFrame((frame) => {
   }
 });
 
+// REST C1 is the reliable first snapshot: a WS subscribe can fail (or arrive
+// before the client listener is ready), and swallowing that failure used to
+// leave the screen stuck on "Loading live data…" forever. Deltas still come
+// over WS once subscribed; the snapshot is replaced on every reconnect.
+async function loadSnapshot(): Promise<void> {
+  if (daemonStore.connection !== 'connected') return;
+  try {
+    const payload = (await daemonStore.request('GET', '/api/v1/connections/live')) as {
+      data: LiveConnectionRow[];
+    };
+    rowsById.clear();
+    for (const row of payload.data) {
+      rowsById.set(row.id, row);
+    }
+    loaded = true;
+  } catch {
+    // The connection chip carries the error; keep the last honest state.
+  }
+}
+
 // Server is the source of truth (§6.1): a lost connection clears the view;
-// on connect the fresh subscription delivers a new snapshot.
+// on connect we fetch a REST snapshot and then subscribe for deltas.
 daemonStore.onConnection((state) => {
   if (state !== 'connected') {
     rowsById.clear();
     loaded = false;
     return;
   }
+  void loadSnapshot();
   void daemonStore.subscribe('live.connections').catch(() => {
-    // Subscribe failure surfaces via the connection chip, not a screen error.
+    // REST snapshot above still gives the user real rows without WS.
   });
 });
 
@@ -122,6 +143,8 @@ export const liveStore = {
   get connection(): string {
     return daemonStore.connection;
   },
+  /** Refresh the snapshot (REST C1) without waiting for a reconnect. */
+  refresh: loadSnapshot,
 };
 
 function isLiveFrame(value: unknown): value is LiveFrame {

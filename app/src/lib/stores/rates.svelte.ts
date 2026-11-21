@@ -22,6 +22,7 @@ let now = $state(Date.now());
 let lastWall = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
 let unlisten: (() => void) | null = null;
+let failed = $state(false);
 
 function onFrame(frame: unknown): void {
   if (typeof frame !== 'object' || frame === null) return;
@@ -37,6 +38,7 @@ function onFrame(frame: unknown): void {
     return;
   }
   snapshot = data;
+  failed = false;
   lastWall = Date.now();
   now = lastWall;
   history = [...history.slice(-(HISTORY_POINTS - 1)), { down: data.down_bps, up: data.up_bps }];
@@ -44,7 +46,11 @@ function onFrame(frame: unknown): void {
 
 function start(): void {
   if (unlisten === null) unlisten = daemonStore.onFrame(onFrame);
-  void daemonStore.subscribe('net.rates').catch(() => undefined);
+  void daemonStore.subscribe('net.rates').catch(() => {
+    // No REST replacement exists for live rates; report the failure instead
+    // of leaving the card on "Loading…" forever.
+    failed = true;
+  });
   if (timer === null) {
     timer = setInterval(() => {
       now = Date.now();
@@ -60,6 +66,7 @@ function stop(): void {
   snapshot = null;
   history = [];
   lastWall = 0;
+  failed = false;
 }
 
 export const ratesStore = {
@@ -68,6 +75,9 @@ export const ratesStore = {
   },
   get history(): RatePoint[] {
     return history;
+  },
+  get failed(): boolean {
+    return failed;
   },
   get stale(): boolean {
     return snapshot !== null && now - lastWall > STALE_MS;

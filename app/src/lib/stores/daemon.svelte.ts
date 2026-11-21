@@ -96,6 +96,10 @@ export const daemonStore = {
   subscribe(
     channel: 'status' | 'live.connections' | 'usage.totals' | 'net.rates' | 'live.apps',
   ): Promise<void> {
+    // Screens mount before the socket is necessarily connected. Sending a
+    // subscribe too early makes client.send() throw and schedule a reconnect,
+    // which clears live state. onConnection() re-subscribes on 'connected'.
+    if (connection !== 'connected') return Promise.resolve();
     return client.send({ op: 'subscribe', channel });
   },
   request(method: string, path: string, body?: unknown): Promise<unknown> {

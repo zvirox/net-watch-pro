@@ -256,6 +256,9 @@
 | App resolution | cgroup id registered by the collector | row's `app.id` joins in `connections`; name matches `live.apps` |
 | No collector | `NETWATCH_DISABLE_EBPF=1` | Live empty state explains the missing collector; PC cards still work |
 | Real host | start a TCP download with the embedded collector | Live shows a row with remote host/port and non-zero rate; History shows a row after close |
+| Negative gap | attributed > interface counters | summary `unattributed` is `0`, never a negative raw byte string (regression test `usage_summary_never_reports_negative_unattributed`) |
+| Live render | any live row | `displayAppName` uses `row.app.name`; no stack overflow, row renders "Unknown process" for empty/unknown names |
+| WS subscribe failure | reject subscribe | Live uses REST C1 snapshot; rates/live-apps show honest "Unavailable"; no unhandled rejection |
 
 The real-host row is `[VERIFIED]` only after an owner run; unit/integration tests cover the rest.
 

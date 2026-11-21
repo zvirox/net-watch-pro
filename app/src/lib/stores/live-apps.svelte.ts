@@ -47,6 +47,7 @@ let lastWall = 0;
 let unlisten: (() => void) | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 let unsub: Promise<void> | null = null;
+let failed = $state(false);
 
 function onFrame(frame: unknown): void {
   if (typeof frame !== 'object' || frame === null) return;
@@ -56,6 +57,7 @@ function onFrame(frame: unknown): void {
   if (typeof raw !== 'object' || raw === null) return;
   const d = raw as Partial<LiveAppsData>;
   if (!Array.isArray(d.apps) || !d.unattributed || typeof d.ts !== 'number') return;
+  failed = false;
   data = {
     ts: d.ts,
     apps: d.apps,
@@ -67,7 +69,14 @@ function onFrame(frame: unknown): void {
 
 function start(): void {
   if (unlisten === null) unlisten = daemonStore.onFrame(onFrame);
-  if (unsub === null) unsub = daemonStore.subscribe('live.apps');
+  if (unsub === null) {
+    // A subscribe failure must not become an unhandled rejection: client.send()
+    // already flips the connection state, and the dashboard still has honest
+    // no-collector/empty states for missing live rates.
+    unsub = daemonStore.subscribe('live.apps').catch(() => {
+      failed = true;
+    });
+  }
   if (timer === null) {
     timer = setInterval(() => {
       now = Date.now();
@@ -82,7 +91,10 @@ function stop(): void {
   unlisten = null;
   data = null;
   lastWall = 0;
+  failed = false;
   unsub = null;
+  heldOrder = [];
+  heldAt = 0;
 }
 
 export const liveAppsStore = {
@@ -91,6 +103,9 @@ export const liveAppsStore = {
   },
   get rows(): LiveAppRow[] {
     return data?.apps ?? [];
+  },
+  get failed(): boolean {
+    return failed;
   },
   get stale(): boolean {
     return data !== null && now - lastWall > STALE_MS;

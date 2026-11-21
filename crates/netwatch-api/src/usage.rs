@@ -141,7 +141,9 @@ fn totals(total: i64, attributed: i64) -> Totals {
         attributed,
         // A non-zero gap is expected; a negative one means an upstream
         // accounting bug, not "negative traffic" (D3a).
-        unattributed: total.saturating_sub(attributed),
+        // saturating_sub only clamps at i64 bounds; a positive difference in
+        // the wrong direction must be clamped to zero here (D3a).
+        unattributed: total.saturating_sub(attributed).max(0),
     }
 }
 

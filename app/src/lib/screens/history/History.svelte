@@ -5,6 +5,7 @@
   // (fixed row height + spacers) and triggers the next page at the end.
   // Free tier: app search only; Pro filter chips are visibly locked and open
   // the upgrade modal (DESIGN.md §8.6). Errors/loading/empty per §7.9.
+  import { onDestroy, onMount } from 'svelte';
   import {
     Button,
     Input,
@@ -25,6 +26,23 @@
   // stable so window shifts and page appends never move the scroll position.
   const ROW_H = 44;
   const OVERSCAN = 4;
+  // Episodes can arrive after the first load (the daemon records them as
+  // flows close); refresh while this screen is visible instead of showing a
+  // stale empty state forever.
+  const REFRESH_MS = 15_000;
+  let refreshTimer: ReturnType<typeof window.setInterval> | undefined;
+
+  onMount(() => {
+    historyStore.load();
+    refreshTimer = window.setInterval(() => {
+      // A fresh page would reset the cursor and yank a reader out of older
+      // pages; only poll while the first page is still empty.
+      if (historyStore.rows.length === 0) historyStore.load();
+    }, REFRESH_MS);
+  });
+  onDestroy(() => {
+    if (refreshTimer !== undefined) window.clearInterval(refreshTimer);
+  });
 
   let scrollTop = $state(0);
   let viewportH = $state(480);
