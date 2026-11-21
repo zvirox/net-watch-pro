@@ -160,6 +160,56 @@ pub async fn persist_episodes(
     Ok(())
 }
 
+/// Register (or refresh) the app for a socket cgroup and return its registry
+/// id, display name and attribution confidence. Shared by the rollup writer
+/// and the per-socket episode producer so both resolve the same `app_id`.
+pub async fn ensure_cgroup_app(
+    pool: &SqlitePool,
+    cgroup_id: u64,
+    name: &str,
+    confidence: &str,
+    now: i64,
+) -> Result<(i64, String, String), DbError> {
+    let mut conn = pool.acquire().await?;
+    ensure_cgroup_app_in(&mut conn, cgroup_id, name, confidence, now).await
+}
+
+async fn ensure_cgroup_app_in(
+    executor: &mut sqlx::SqliteConnection,
+    cgroup_id: u64,
+    name: &str,
+    confidence: &str,
+    now: i64,
+) -> Result<(i64, String, String), DbError> {
+    let app_key = format!("cgroup:{cgroup_id}");
+    let attr_confidence = if confidence == "high" {
+        "exact"
+    } else {
+        "heuristic"
+    };
+    sqlx::query(
+        "INSERT INTO apps (name, app_key, identity_kind, exe_path, attribution_confidence, first_seen_at, last_seen_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+         ON CONFLICT(app_key) DO UPDATE SET
+            name = excluded.name,
+            last_seen_at = excluded.last_seen_at,
+            updated_at = strftime('%s','now')",
+    )
+    .bind(name)
+    .bind(&app_key)
+    .bind("cgroup_app")
+    .bind(name)
+    .bind(attr_confidence)
+    .bind(now)
+    .execute(&mut *executor)
+    .await?;
+    let app_id: i64 = sqlx::query_scalar("SELECT id FROM apps WHERE app_key = ?1")
+        .bind(&app_key)
+        .fetch_one(&mut *executor)
+        .await?;
+    Ok((app_id, name.to_string(), attr_confidence.to_string()))
+}
+
 /// Persist per-app byte deltas from the eBPF cgroup collector (Phase C C6).
 ///
 /// Each row is `(cgroup_id, bytes_down, bytes_up, name, confidence)`. The app
@@ -178,33 +228,8 @@ pub async fn persist_app_bytes(
     let bucket = (now / 900) * 900;
     let mut tx = pool.begin().await?;
     for (cgroup_id, down, up, name, confidence) in rows {
-        let app_key = format!("cgroup:{cgroup_id}");
-        let identity_kind = "cgroup_app";
-        let attr_confidence = if confidence == "high" {
-            "exact"
-        } else {
-            "heuristic"
-        };
-        sqlx::query(
-            "INSERT INTO apps (name, app_key, identity_kind, exe_path, attribution_confidence, first_seen_at, last_seen_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
-             ON CONFLICT(app_key) DO UPDATE SET
-                name = excluded.name,
-                last_seen_at = excluded.last_seen_at,
-                updated_at = strftime('%s','now')",
-        )
-        .bind(name)
-        .bind(&app_key)
-        .bind(identity_kind)
-        .bind(name)
-        .bind(attr_confidence)
-        .bind(now)
-        .execute(&mut *tx)
-        .await?;
-        let app_id: i64 = sqlx::query_scalar("SELECT id FROM apps WHERE app_key = ?1")
-            .bind(&app_key)
-            .fetch_one(&mut *tx)
-            .await?;
+        let (app_id, _name, _confidence) =
+            ensure_cgroup_app_in(&mut tx, *cgroup_id, name, confidence, now).await?;
         sqlx::query(
             "INSERT INTO usage_rollup_15m (app_id, bucket_start, bytes_down, bytes_up, connection_count)
              VALUES (?1, ?2, ?3, ?4, 0)

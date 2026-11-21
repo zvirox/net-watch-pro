@@ -241,7 +241,7 @@
                     </span>
                   </span>
                 </TableCell>
-                <TableCell mono class="col-pid">{row.pid}</TableCell>
+                <TableCell mono class="col-pid">{row.pid === 0 ? '—' : row.pid}</TableCell>
                 <TableCell mono class="proto-cell">{row.protocol.toUpperCase()}</TableCell>
                 <TableCell mono>
                   <span class="remote-cell">

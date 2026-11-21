@@ -14,7 +14,7 @@
 
 use aya_ebpf::{
     bindings::__sk_buff,
-    helpers::generated::bpf_skb_cgroup_id,
+    helpers::generated::{bpf_get_socket_cookie, bpf_skb_cgroup_id},
     macros::{cgroup_skb, map},
     maps::{Array, HashMap},
     programs::SkBuffContext,
@@ -40,6 +40,29 @@ pub struct Counts {
 
 #[map]
 static BYTES: HashMap<u64, Counts> = HashMap::with_max_entries(MAX_CGROUPS, 0);
+
+/// Per-socket flow identity and absolute counters, keyed by socket cookie.
+/// `bpf_get_socket_cookie` is measured-legal in cgroup_skb (spike report §Sixth);
+/// tuple fields come straight from `__sk_buff`. IPv4 only — IPv6 flows are
+/// still counted by BYTES for the per-app rollups but produce no episode.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Flow {
+    pub cgroup_id: u64,
+    pub local_ip4: u32,
+    pub remote_ip4: u32,
+    pub local_port: u32,
+    pub remote_port: u32,
+    pub protocol: u32,
+    pub bytes_up: u64,
+    pub bytes_down: u64,
+    pub packets_up: u32,
+    pub packets_down: u32,
+    pub family: u32,
+}
+
+#[map]
+static FLOWS: HashMap<u64, Flow> = HashMap::with_max_entries(MAX_CGROUPS, 0);
 
 /// STATS counters (indexes documented alongside the loader).
 /// 0 = packets seen, 1 = loopback packets skipped, 2 = map insert failures.
@@ -80,6 +103,45 @@ fn count_skb(ctx: &SkBuffContext, direction: u32) -> i32 {
     if cgroup_id == 0 {
         // Not attributable to a cgroup; the daemon's Unattributed row covers it.
         return CGROUP_SKB_ACCEPT;
+    }
+
+    // Per-socket flow for Live/History. `family == 2` is AF_INET; IPv6 bytes
+    // stay in BYTES only (honest — no invented tuple).
+    let cookie = unsafe { bpf_get_socket_cookie(skb_ptr) };
+    if cookie != 0 && skb.family == 2 {
+        let mut flow = match FLOWS.get_ptr_mut(&cookie) {
+            Some(ptr) => unsafe { *ptr },
+            None => Flow {
+                cgroup_id,
+                local_ip4: 0,
+                remote_ip4: 0,
+                local_port: 0,
+                remote_port: 0,
+                protocol: 0,
+                bytes_up: 0,
+                bytes_down: 0,
+                packets_up: 0,
+                packets_down: 0,
+                family: skb.family,
+            },
+        };
+        flow.cgroup_id = cgroup_id;
+        flow.local_ip4 = skb.local_ip4;
+        flow.remote_ip4 = skb.remote_ip4;
+        flow.local_port = skb.local_port;
+        flow.remote_port = skb.remote_port;
+        flow.protocol = skb.protocol;
+        flow.family = skb.family;
+        if direction == 0 {
+            flow.bytes_down = flow.bytes_down.saturating_add(len);
+            flow.packets_down = flow.packets_down.saturating_add(1);
+        } else {
+            flow.bytes_up = flow.bytes_up.saturating_add(len);
+            flow.packets_up = flow.packets_up.saturating_add(1);
+        }
+        if FLOWS.insert(&cookie, &flow, 0).is_err() {
+            bump_stat(2);
+        }
     }
 
     let mut counts = match BYTES.get_ptr_mut(&cgroup_id) {

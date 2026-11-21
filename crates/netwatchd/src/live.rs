@@ -29,12 +29,10 @@ pub struct LivePublishers {
 /// queue (backpressure policy §10: bounded queues, never block the kernel
 /// path; losses surface via diagnostics in a later task).
 #[derive(Clone)]
-#[allow(dead_code)] // collector wiring lands with the eBPF spike tasks
 pub struct LiveEventSender {
     tx: mpsc::Sender<EpisodeEvent>,
 }
 
-#[allow(dead_code)] // collector wiring lands with the eBPF spike tasks
 impl LiveEventSender {
     /// Wrap the events half of the collector channel.
     #[must_use]

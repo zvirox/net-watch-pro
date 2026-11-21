@@ -138,6 +138,8 @@ async fn boot_compaction(pool: &sqlx::SqlitePool, now: i64) {
 async fn start_collector(
     pool: &sqlx::SqlitePool,
     rates: watch::Receiver<std::sync::Arc<RateSnapshot>>,
+    names: Arc<netwatch_common::app_names::AppNames>,
+    events: crate::live::LiveEventSender,
 ) -> (
     EbpfState,
     ebpf::AppUsageRx,
@@ -145,7 +147,14 @@ async fn start_collector(
 ) {
     let disabled = std::env::var_os("NETWATCH_DISABLE_EBPF").is_some();
     let object_override = std::env::var_os("NETWATCH_EBPF_OBJECT").map(PathBuf::from);
-    let (state, rx, task) = ebpf::start(disabled, object_override, rates);
+    let (state, rx, task) = ebpf::start(
+        disabled,
+        object_override,
+        rates,
+        pool.clone(),
+        names,
+        Some(events),
+    );
     let ebpf_state = match state {
         ebpf::CollectorState::Attached => EbpfState::Attached,
         ebpf::CollectorState::Disabled => EbpfState::NoCollector,
@@ -196,9 +205,8 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
 
     // P2.5/P2.6 wiring: live service owns the episode store; the writer
     // task persists flush batches (≤ 1 tx/s); the API serves snapshot +
-    // deltas. Event senders are held for the collector task (P2.1–P2.3,
-    // gated on the eBPF spike) — until then nothing flows and the live
-    // view is honestly empty.
+    // deltas. The eBPF collector holds the event sender and emits per-socket
+    // Open/Bytes/Close events (P2.2).
     let start_id = db::max_connection_id(&pool)
         .await
         .map_err(StartupError::Db)?
@@ -208,7 +216,7 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
     let (delta_tx, _) = broadcast::channel(256);
     let delta_tx = delta_tx.clone();
     let (flush_tx, mut flush_rx) = mpsc::channel::<Vec<netwatch_core::episode::EpisodeRow>>(64);
-    let _events = live::LiveEventSender::new(event_tx); // collector takes this in P2.1–P2.3
+    let events = live::LiveEventSender::new(event_tx);
     tokio::spawn(live::run(
         event_rx,
         live::LivePublishers {
@@ -234,14 +242,12 @@ async fn run(cfg: config::Config) -> Result<(), StartupError> {
         tracing::info!("writer task stopped");
     });
 
-    // Phase C (C1/C6): start the collector; failures are degraded, never fatal.
+    // Phase C (C1/C6) + P2.2: start the collector; failures are degraded,
+    // never fatal. One shared name resolver serves rollups and episodes.
+    let names = Arc::new(netwatch_common::app_names::AppNames::default());
     let (ebpf_state, app_usage_rx, collector_task) =
-        start_collector(&pool, collector_rates_rx).await;
-    let app_usage_task = app_usage::spawn(
-        pool.clone(),
-        app_usage_rx.clone(),
-        Arc::new(netwatch_common::app_names::AppNames::default()),
-    );
+        start_collector(&pool, collector_rates_rx, Arc::clone(&names), events).await;
+    let app_usage_task = app_usage::spawn(pool.clone(), app_usage_rx.clone(), names);
 
     let (status_tx, _status_rx) = watch::channel(StatusSnapshot {
         daemon: DaemonState::Monitoring,

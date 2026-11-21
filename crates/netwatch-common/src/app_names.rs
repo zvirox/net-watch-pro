@@ -46,6 +46,25 @@ impl Default for AppNames {
 }
 
 impl AppNames {
+    /// Best-effort PID hint from the cgroup scope name (e.g.
+    /// `app-motrix-31433.scope` -> 31433). Returns 0 when no id is present.
+    /// This is a display hint only: measured in-kernel pid sources returned
+    /// the softirq thread, so a missing hint must render as "—", never 0.
+    #[must_use]
+    pub fn pid_hint(&self, cgroup_id: u64) -> u32 {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let path = inner.path(cgroup_id).unwrap_or_default();
+        let scope = path.rsplit('/').next().unwrap_or("");
+        let stem = scope.strip_suffix(".scope").unwrap_or(scope);
+        stem.rsplit('-')
+            .next()
+            .and_then(|part| part.parse::<u32>().ok())
+            .unwrap_or(0)
+    }
+
     /// Resolve one `AppUsage` row into a wire `LiveAppRate`.
     pub fn resolve(&self, cgroup_id: u64, down_bps: u64, up_bps: u64) -> LiveAppRate {
         let mut inner = self
