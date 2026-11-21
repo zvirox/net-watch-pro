@@ -172,7 +172,12 @@ Request body:
 { "id": "exp_7f3a", "state": "queued", "expires_in_s": 600,
   "estimated_rows": 48211 }
 ```
-Errors: 400 (empty/invalid filters), 401, 403 `EXPORT_PRO_REQUIRED`, 429, 500.
+Errors: 400 (empty/invalid filters, row cap exceeded), 401, 403 `EXPORT_PRO_REQUIRED`, 429, 500.
+
+**Export limits and search escaping:**
+- **Row limit:** Maximum **100,000 rows** per export job (measured: ~200B/row in CSV = ~20 MiB, ~300B/row in JSON = ~30 MiB; safely below the Tauri bridge's 64 MiB response ceiling). When the query yields more than 100,000 rows (detected via `LIMIT 100001`), the export fails with `400 QUERY_INVALID`: `{"error": "QUERY_INVALID", "message": "Export exceeds maximum of 100,000 rows. Narrow the date range or filter criteria."}`.
+- **In-memory job cap:** Maximum **48 MiB** total buffer per completed export job. Maximum **3 concurrent active jobs** daemon-wide; excess requests return `429 TOO_MANY_REQUESTS` with `Retry-After: 30`.
+- **Search wildcard escaping:** Text filters (such as `app`, `process`, `remote_host` on `GET /connections` and `POST /exports`) treat user input literally. Characters `%`, `_`, and `\` are escaped with a backslash and matched via SQL `LIKE ... ESCAPE '\'`. Searching `"100%"` matches literal `"100%"` only; searching `"a_b"` matches literal `"a_b"`, not `"axb"`.
 
 **E2 `GET /exports/{id}`** — job status. Success 200: `{"id":"exp_7f3a","state":"done","rows":48211,"size_bytes":2318541}` (`queued|running|done|expired`). Errors: 404, 403, 401, 429.
 

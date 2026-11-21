@@ -407,7 +407,8 @@ Covers Pro stories (PRD §7) + Flow 4.
 - **Key validation:** offline-only (embedded public key); expired/malformed/tampered → 403 `LICENSE_INVALID` with distinct messages.
 - **Double activation:** 409 `CONFLICT` (no-op offer in message).
 - **Deactivate mid-export:** started jobs complete (grace window), new ones 403; UI toast explains.
-- **Export size/timeouts:** 500-row preview estimate at creation; content endpoint streamed; job expiry 10 min → 404 with message.
+- **Export size/timeouts & caps:** 500-row preview estimate at creation; content endpoint streamed; job expiry 10 min → 404 with message. Maximum 100,000 rows per job (overflow detected via `LIMIT 100001` → 400 `QUERY_INVALID` with prompt to narrow date range/filters); maximum 48 MiB total in-memory job buffer; maximum 3 concurrent active jobs daemon-wide (excess → 429).
+- **Search wildcard escaping:** literal `%`, `_`, `\` escaped with `ESCAPE '\'` in history and export queries so searches for special characters do not turn into SQL wildcards.
 - **DB corruption of license row:** verifier falls back to free honestly (no crash, `daemon_events` warn).
 - **Buy button:** opens user-triggered external URL (the app itself never fetches it — zero-outbound preserved).
 

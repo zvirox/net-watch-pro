@@ -38,16 +38,26 @@ Out of scope (no surface): remote attackers, credential stuffing, session fixati
 No login screen exists; the equivalent is the daemon link, per ARCHITECTURE.md §5.3:
 
 1. Daemon boots (systemd) → creates Unix socket `/run/netwatch-pro/api.sock` (mode `0660`, dir `0750`, root-owned).
-2. Onboarding (one time, pkexec) → admin adds the current user's UID to the root-owned allowed-UID list at `/etc/netwatch-pro/allowed-uids` (one numeric UID per line, mode `0644`), points `NETWATCH_API_GID` at the user's primary group so the `0660` socket is immediately accessible without a re-login, and enables the systemd unit.
+2. Onboarding (one time, pkexec via dedicated helper) → admin authorizes the policy action `pro.netwatch.enable-monitoring`. The root helper `/usr/libexec/netwatch-pro/enable-monitoring` reads `PKEXEC_UID` from its environment, appends the user's UID to `/etc/netwatch-pro/allowed-uids` (one numeric UID per line, mode `0644`, root-owned), ensures the socket group allows connection, and runs `systemctl daemon-reload && systemctl enable --now netwatchd.service`.
 3. UI process launches (user context) → connects to the Unix socket → daemon checks the peer's UID via `SO_PEERCRED` against the allowed-UID list → authorized or refused.
 4. UI presents no token on requests — authorization is the socket peer-credential itself (API.md §1.1).
-5. Failure at any step (UID not in list, socket missing, permissions) → connection refused → honest "Stopped/Connecting" UI state (DESIGN.md §7.5), never a silent retry storm.
+5. Failure at any step (UID not in list, socket missing, permissions) → connection refused → honest "auth-invalid" or "Stopped/Connecting" UI state (DESIGN.md §7.5), never a silent retry storm.
 
-No token file, no Polkit token helper, no `NETWATCH_API_TOKEN_FILE`, no bearer header (D1a).
+No token file, no per-boot token helper, no `NETWATCH_API_TOKEN_FILE`, no bearer header (D1a).
 
-### 2.2 Polkit token helper — RETIRED (D1a)
+### 2.2 Polkit action & onboarding helper (`pro.netwatch.enable-monitoring`)
 
-The per-boot bearer token, `packaging/polkit/org.netwatchpro.token-helper.policy`, `/usr/bin/netwatch-token-helper`, and `NETWATCH_API_TOKEN_FILE` are removed. Authorization is now the one-time allowed-UID registration during onboarding pkexec (§2.1). `packaging/polkit/` directory is deleted after owner approval of D1a.
+Privilege escalation during onboarding is restricted to a dedicated Polkit action and a single-purpose root helper:
+
+- **Policy ID:** `pro.netwatch.enable-monitoring` (`packaging/polkit/pro.netwatch.enable-monitoring.policy`).
+- **Target executable:** `/usr/libexec/netwatch-pro/enable-monitoring` (mode `0755`, owned by `root:root`).
+- **Prompt text:** *"Allow Net Watch Pro to monitor network traffic"*.
+- **Authorization scope:** The prompt authorizes strictly:
+  1. Reading the caller's invoking UID from `PKEXEC_UID` (numeric integer `1 <= uid <= 4294967294`).
+  2. Appending this UID to `/etc/netwatch-pro/allowed-uids` idempotently (mode `0644`, atomic write via temp file + rename).
+  3. Configuring `/etc/systemd/system/netwatchd.service.d/10-socket-group.conf` and user group membership.
+  4. Executing `systemctl daemon-reload` and `systemctl enable --now netwatchd.service`.
+- **Hardening:** The helper accepts **no free-form command-line arguments** (rejects any arguments). The Tauri UI invokes `pkexec /usr/libexec/netwatch-pro/enable-monitoring` directly (no `sh -c`, no shell string interpolation). Exit status is non-zero with a short stderr message on any failure.
 
 ### 2.3 Signup — N/A (no accounts). Logout — UI-only action
 

@@ -51,6 +51,10 @@ legal action against good-faith research that respects user privacy.
 - The UI is **not** a security boundary; it never opens SQLite, never reads
   root-owned files or sysfs, and all data flows through the peer-credential
   Unix-socket API (`DATABASE.md` §6, `ARCHITECTURE.md` §5).
+- Privilege escalation during onboarding is restricted to the dedicated Polkit action
+  `pro.netwatch.enable-monitoring` and the single-purpose root helper
+  `/usr/libexec/netwatch-pro/enable-monitoring`. Running arbitrary shells or free-form
+  commands via `pkexec sh -c` is prohibited (`AUTH_SECURITY.md` §2.2).
 - There is no per-boot API token; authorization is the root-owned allowed-UID
   list, and license keys are verified offline and stored only as fingerprints
   (`AUTH_SECURITY.md` §2.3/§8).
