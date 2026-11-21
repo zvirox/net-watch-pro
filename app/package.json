@@ -1,7 +1,7 @@
 {
   "name": "net-watch-pro-ui",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.9.2-beta.4",
   "type": "module",
   "description": "Net Watch Pro UI (Svelte 5 + Vite) — ARCHITECTURE.md §4",
   "scripts": {

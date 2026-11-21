@@ -2,8 +2,8 @@
 # AUR dev channel: net-watch-pro-git (PLAN P8.4). Stable -/-bin packages land at GA.
 pkgname=net-watch-pro-git
 _pkgname=net-watch-pro
-pkgver=0.9.0.beta.1.r0.gbc9f33b
-pkgrel=3
+pkgver=0.9.2.beta.4.r0.g36fa710
+pkgrel=1
 pkgdesc='Local network-traffic monitor and per-app usage tracker (dev channel)'
 arch=('x86_64')
 url='https://github.com/zvirox/net-watch-pro'

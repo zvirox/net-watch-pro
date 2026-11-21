@@ -490,7 +490,9 @@
           <header class="card__head"><h2>About Net Watch Pro</h2></header>
           <dl class="about">
             <dt>Version</dt>
-            <dd class="mono">{version}</dd>
+            <dd class="mono">
+              {version === '—' ? '—' : version.startsWith('v') ? version : `v${version}`}
+            </dd>
             <dt>License</dt>
             <dd>AGPL-3.0-or-later / commercial</dd>
             <dt>Privacy</dt>

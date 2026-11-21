@@ -127,11 +127,12 @@ pub async fn diagnostics(
         ),
     };
 
-    // BEGIN IMMEDIATE acquires the write lock without changing any row: a real
-    // writability probe, not a guess from file permissions.
-    let database = match sqlx::query("BEGIN IMMEDIATE").execute(pool).await {
-        Ok(_) => {
-            let _ = sqlx::query("ROLLBACK").execute(pool).await;
+    // Acquire a transaction via pool.begin() and immediately roll it back;
+    // this tests writability without mutating rows and ensures the connection
+    // is safely returned to the pool without an uncommitted transaction.
+    let database = match pool.begin().await {
+        Ok(tx) => {
+            let _ = tx.rollback().await;
             Check {
                 name: "database",
                 result: "pass",

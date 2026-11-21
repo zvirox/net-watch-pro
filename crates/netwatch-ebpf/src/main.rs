@@ -107,9 +107,10 @@ fn count_skb(ctx: &SkBuffContext, direction: u32) -> i32 {
         return CGROUP_SKB_ACCEPT;
     }
 
-    // Per-socket flow for Live/History. Supports AF_INET (2) and AF_INET6 (10).
+    // Per-socket flow for Live/History. `family == 2` is AF_INET; IPv6 bytes
+    // stay in BYTES for per-app rollups (cgroup_skb cannot read local_ip6/remote_ip6).
     let cookie = unsafe { bpf_get_socket_cookie(skb_ptr) };
-    if cookie != 0 && (skb.family == 2 || skb.family == 10) {
+    if cookie != 0 && skb.family == 2 {
         let mut flow = match FLOWS.get_ptr_mut(&cookie) {
             Some(ptr) => unsafe { *ptr },
             None => Flow {
@@ -124,22 +125,17 @@ fn count_skb(ctx: &SkBuffContext, direction: u32) -> i32 {
                 bytes_down: 0,
                 packets_up: 0,
                 packets_down: 0,
-                family: skb.family,
+                family: 2,
                 _pad2: 0,
             },
         };
         flow.cgroup_id = cgroup_id;
-        if skb.family == 2 {
-            flow.local_ip = [skb.local_ip4, 0, 0, 0];
-            flow.remote_ip = [skb.remote_ip4, 0, 0, 0];
-        } else {
-            flow.local_ip = skb.local_ip6;
-            flow.remote_ip = skb.remote_ip6;
-        }
+        flow.local_ip = [skb.local_ip4, 0, 0, 0];
+        flow.remote_ip = [skb.remote_ip4, 0, 0, 0];
         flow.local_port = skb.local_port;
         flow.remote_port = skb.remote_port;
         flow.protocol = skb.protocol;
-        flow.family = skb.family;
+        flow.family = 2;
         if direction == 0 {
             flow.bytes_down = flow.bytes_down.saturating_add(len);
             flow.packets_down = flow.packets_down.saturating_add(1);
