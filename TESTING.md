@@ -351,7 +351,7 @@ just gate   # fmt+clippy+test+cov+lint+svelte-check+vitest+playwright+harness
 
 ## 7. Manual QA Checklist (pre-release; per PRD §11 + FEATURES.md)
 
-Run on clean VMs (Arch, Ubuntu LTS, Fedora) with the packaged build. Tick per distro.
+Run on clean VMs (Arch, Ubuntu LTS, Fedora) with the packaged build. Tick per distro. Commands, evidence template and pass conditions are in `docs/vm-matrix-runbook.md`.
 
 **Install & onboarding**
 - [ ] Install via each channel works; no dependency surprises

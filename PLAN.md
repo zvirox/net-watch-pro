@@ -271,7 +271,7 @@
 | P10.1 | Accuracy harness: daemon vs interface counters (≥95% attributed, totals equal kernel counters) | `tests/accuracy/` | CI job green over synthetic 50-conn load; moved into spike then Phase 2 | P4.2 |
 | P10.2 | Perf budget test: ≤3% CPU / ≤150 MB RSS p95 | `tests/integration/` | budget assertions in CI | P10.1 |
 | P10.3 | 1-year retention soak: size < 1.5 GB | `tests/integration/` | seeded volume profile matches ARCHITECTURE.md §9 | P7.1 |
-| P10.4 | Distro matrix smoke tests in CI **containers** (Arch, Ubuntu, Fedora) — **owner-approved deviation**: the plan required VMs, containers cannot validate kernel variance, so this is labelled a smoke test, not the VM matrix | `.github/workflows/` | container jobs green; real VM matrix remains pending | P8.2, P8.3 |
+| P10.4 | Distro matrix smoke tests in CI **containers** (Arch, Ubuntu, Fedora) — **owner-approved deviation**: the plan required VMs, containers cannot validate kernel variance, so this is labelled a smoke test, not the VM matrix. Owner runs the real matrix from `docs/vm-matrix-runbook.md` | `.github/workflows/`, `docs/vm-matrix-runbook.md` | container jobs green; real VM matrix evidence pasted into CHECKLIST.md | P8.2, P8.3 |
 | P10.5 | Security review: unit sandbox, socket peer-credential, API surface | daemon | review findings fixed/closed | P8.1 |
 | P10.6 | Beta feedback fixes (buffer; scope-tight only) | as needed | each fix tagged patch `v0.9.x-beta.N` | P9 |
 
