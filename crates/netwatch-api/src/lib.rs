@@ -26,6 +26,7 @@ pub mod range;
 pub mod ratelimit;
 pub mod routes;
 pub mod settings;
+pub mod starship_bridge;
 pub mod state;
 pub mod stream;
 pub mod timeline;
