@@ -57,3 +57,26 @@ removed — `peer.rs` is the single authorization authority.
 The distro matrix currently runs in CI **containers** (owner-approved deviation
 from PLAN P10.4). Containers cannot validate kernel/BPF variance; the real VM
 matrix (Arch/CachyOS, Ubuntu LTS, Fedora) remains pending and blocks DoD #1.
+
+## Future privileged components
+
+Per `docs/ROADMAP.md` §3 and `docs/decisions.md` D13, any future code that executes
+with root or `CAP_NET_ADMIN` privileges requires an explicit security review entry
+in this document before implementation begins. This includes:
+
+- **DNS packet observation (v1.2):** Passive capture of local DNS queries and responses
+  (UDP/TCP 53 or resolved monitor socket). Security evaluation must cover parser memory
+  safety, domain spoofing defenses, and preventing DNS leak vulnerabilities.
+- **Active network probes (v1.3):** ICMP echo or UDP latency/jitter/loss probes. Security
+  evaluation must verify restriction to unprivileged ping sockets (`IPPROTO_ICMP` via
+  `net.ipv4.ping_group_range`), strict rate limiting, and zero exposure as a local
+  amplification or scanning vector.
+- **Traffic control & blocking (`netwatch-guard`, v2.0):** If approved, application
+  network blocking will run as an isolated standalone daemon separate from `netwatchd`.
+  Security evaluation must cover dedicated polkit authorization rules, nftables ruleset
+  isolation, and fail-open guarantees ensuring network access cannot be severed by
+  monitoring failures.
+- **Plugins and extensions (v2.0):** No third-party or user-supplied code may run within
+  the root daemon context. Security review must validate that extensions execute
+  unprivileged in user context against the local Unix socket API.
+

@@ -10,9 +10,33 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ## [Unreleased]
 
+### Documentation
+
+- Roadmap to v1.0 (`docs/ROADMAP.md`): merged approved roadmap plan establishing
+  five data layers (L0–L4), priority rubric (P0–P4), testable release gates,
+  gated milestones from beta.5 to v1.0.0, and post-1.0 sequence (v1.1 to v2.0).
+- Feature catalogue (`docs/FEATURE-CATALOGUE.md`): indexed all 23 vision catalogue
+  sections mapped to their target releases.
+- Decision log (`docs/decisions.md`): corrected D8 (IPv6 per-connection flow tracking
+  reverted in commit 2249397; per-app byte accounting retained); recorded proposed
+  decisions D9 (upload accounting GSO spike), D10 (v1.0 no new data source), D11
+  (post-1.0 release sequence), D12 (reshaping catalogue items for truthful presentation),
+  D13 (separation of traffic controls/plugins to v2.0+), and D14 (free pricing through
+  v1.0; G8 key expiry recheck precondition).
+- Plan tracker (`CHECKLIST.md`): added Stage 0 (beta.5) tracking gaps G1–G8, added
+  sections for v0.9.3, v0.10, v0.11, v1.0.0-rc.1, and v1.0.0; reconciled L-C1–L-C8
+  and Phase S against real-host evidence in `docs/spike-ebpf-report.md`.
+- Live throughput plan (`docs/LIVE-THROUGHPUT-PLAN.md` §9): added Status column to
+  acceptance tests marking verified host checks and unrun tests (Stage 0 G5).
+- Security review (`docs/security-review.md`): added policy requiring security review
+  entry prior to implementing future privileged components (DNS observation, active
+  probes, `netwatch-guard`, plugins).
+- Readme overview (`README.md`): added Known limits section covering IPv6 flow scope,
+  upload undercount, and tested distribution matrix; linked `docs/ROADMAP.md`.
+
 ## [v0.9.2-beta.4] — 2026-11-21
 
-Public beta: security hardening, dedicated Polkit onboarding helper, Vitest UI test suite, export safety caps, and IPv6 live flows.
+Public beta: security hardening, dedicated Polkit onboarding helper, Vitest UI test suite, export safety caps, and per-app IPv6 accounting.
 
 ### Security
 
@@ -46,8 +70,8 @@ Public beta: security hardening, dedicated Polkit onboarding helper, Vitest UI t
   `QUERY_INVALID`), 48 MiB memory buffer cap, and max 5 concurrent export jobs (`RATE_LIMITED` 429).
 - Literal search escaping: escaped `%`, `_`, and `\` wildcards with `ESCAPE '\'` in
   History and Export queries.
-- IPv6 Live flow attribution: expanded eBPF `Flow` struct to 88 bytes (`[u32; 4]` IPs)
-  handling `skb.family == 10` alongside AF_INET, formatted canonically with RFC 5952 representation.
+- IPv6 traffic accounting: IPv6 bytes counted per app; per-connection IPv6 not tracked
+  (kernel verifier rejected cgroup_skb context reads; see docs/decisions.md D8).
 
 ### Fixed
 

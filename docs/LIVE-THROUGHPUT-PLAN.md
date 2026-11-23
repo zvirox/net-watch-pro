@@ -199,17 +199,17 @@ The feature is done when a Motrix download shows up live, at the right speed, in
 
 **Acceptance tests**
 
-| # | Scenario | Pass condition |
-| --- | --- | --- |
-| 1 | Large `curl` or `iperf3` download | PC card within about 10% of the tool's rate after a 3-second warm-up |
-| 2 | Network idle | PC card about 0, with no negative or flickering values |
-| 3 | Motrix HTTP download at a known speed | Apps list shows one row, "Motrix", with download near the Motrix figure and upload near its upload figure |
-| 4 | Motrix torrent download | UDP traffic is included, so the row is not far below the PC total |
-| 5 | Sum check | Sum of app rates plus Unattributed equals the PC total on each frame |
-| 6 | Daemon restart | Card and list recover within 5 seconds, no crash, no negative numbers |
-| 7 | No collector (attach fails or `NETWATCH_DISABLE_EBPF`) | Status chip is not green, Apps explains why, PC card still works |
-| 8 | Timezone `Asia/Kolkata` | "Today" resets at local midnight |
-| 9 | Zero outbound traffic | The app makes no network call, checked while the Live view is open |
+| # | Scenario | Pass condition | Status |
+| --- | --- | --- | --- |
+| 1 | Large `curl` or `iperf3` download | PC card within about 10% of the tool's rate after a 3-second warm-up | PASS [VERIFIED: `docs/spike-ebpf-report.md` §Phase C product collector & §Fourteenth owner run] |
+| 2 | Network idle | PC card about 0, with no negative or flickering values | PASS [VERIFIED: `docs/spike-ebpf-report.md` §Phase C product collector, idle ~2 kbps] |
+| 3 | Motrix HTTP download at a known speed | Apps list shows one row, "Motrix", with download near the Motrix figure and upload near its upload figure | PASS [VERIFIED: `docs/spike-ebpf-report.md` §Phase C product collector, Motrix ~87–100 Mbps] |
+| 4 | Motrix torrent download | UDP traffic is included, so the row is not far below the PC total | NOT RUN (Stage 0 G5) |
+| 5 | Sum check | Sum of app rates plus Unattributed equals the PC total on each frame | PASS [VERIFIED: `docs/spike-ebpf-report.md` §Follow-ups, atomic frame remainder non-negative] |
+| 6 | Daemon restart | Card and list recover within 5 seconds, no crash, no negative numbers | NOT RUN (Stage 0 G5) |
+| 7 | No collector (attach fails or `NETWATCH_DISABLE_EBPF`) | Status chip is not green, Apps explains why, PC card still works | PASS [VERIFIED: `docs/spike-ebpf-report.md` §Follow-ups, verify_degraded.sh & rendered UI] |
+| 8 | Timezone `Asia/Kolkata` | "Today" resets at local midnight | PASS [VERIFIED: `crates/netwatch-api/src/range.rs` unit tests & Asia/Kolkata midnight test] |
+| 9 | Zero outbound traffic | The app makes no network call, checked while the Live view is open | NOT RUN (Stage 0 G5) |
 
 **Unit tests**
 

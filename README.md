@@ -54,6 +54,14 @@ Per-task evidence lives in the
 Firewall features are **out of scope until after v1.0** (PRD §12). This is a
 monitor-first product promise, not a roadmap shortcut.
 
+### Known limits
+
+- **IPv6 per-connection flows:** not tracked; IPv6 traffic is aggregated in per-app totals, but individual IPv6 connection entries are omitted in Live and History (see [docs/decisions.md](docs/decisions.md) D8).
+- **Upload bytes undercount:** interface counters count wire packets with additional headers while the eBPF egress hook observes GSO frames (~42 B/packet gap; tx 57–66% attributed in spike report; see [docs/spike-ebpf-report.md](docs/spike-ebpf-report.md) and [docs/decisions.md](docs/decisions.md) D9).
+- **Tested distributions:** Arch / CachyOS verified on real hardware; Ubuntu LTS, Fedora, and Debian verification is pending the VM matrix runbook ([docs/vm-matrix-runbook.md](docs/vm-matrix-runbook.md)).
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the phased plan and milestones to v1.0.
+
 ## What works in the current checkout
 
 - **Live PC speed** at 1 Hz from interface counters, with a 60-second sparkline

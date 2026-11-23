@@ -117,13 +117,21 @@ never from a network call. Missing values are shown as "—", never invented.
 the target hardware, since some kernels expose a 0–100 link-quality value
 there instead (see ARCHITECTURE.md §5.1b).
 
-## D8 — IPv6 Flow Accounting in Live & History (2026-11-21) [VERIFIED: layout & tests on host]
+## D8 — IPv6 Flow Accounting in Live & History (2026-11-21)
 
-**Context:** Currently `ebpf.rs` skips `flow.family != 2` (`AF_INET`), so IPv6
-connections never appear in the Live connection table or History (though their bytes
-are still aggregated in per-cgroup / per-app totals via the `BYTES` map).
+**Status:** Reverted: IPv6 bytes are counted per app; per-connection IPv6 is not tracked.
+**Next step:** IPv6 header-parsing spike using `bpf_skb_load_bytes` (see `docs/ROADMAP.md` §2 / `docs/inbox/ROADMAP-PLAN-2026-11-23.md` §2).
 
-**Implemented Design:**
+**Context:** Commit `2249397` removed the IPv6 flow reader because the Linux kernel
+`cgroup_skb` verifier rejected reading `local_ip6` and `remote_ip6` context offsets
+with `Permission denied (os error 13)`. IPv6 traffic is aggregated in per-app totals
+via the `BYTES` cgroup map, but individual IPv6 connections are not tracked in Live
+or History.
+
+### Superseded design (Task 5)
+
+*(Retained for reference; reverted in commit 2249397)*
+
 1. **BPF `Flow` struct:** Expanded IP fields from 32-bit (`u32`) to 128-bit (`[u32; 4]`):
    ```rust
    #[repr(C)]
@@ -154,3 +162,134 @@ are still aggregated in per-cgroup / per-app totals via the `BYTES` map).
 4. **UI Display & Sorting:**
    - Formatted via standard canonical RFC 5952 representation (`std::net::Ipv6Addr::to_string()`).
    - Monospace tabular presentation with middle truncation or tooltip if width is constrained.
+
+---
+
+## D9 — Upload Accounting & GSO Segments (2026-11-23)
+
+**Status:** PROPOSED (owner approval pending; spike result pending)
+
+**Context:** The eBPF spike report (`docs/spike-ebpf-report.md`) identified an upload
+byte discrepancy: NIC interface statistics count ~42 bytes per packet more than
+`cgroup_skb` egress (tx attributed was measured at 57–66% of interface counters).
+
+**Hypothesis:** `cgroup_skb` egress observes large GSO (Generic Segmentation Offload)
+skbs before the network stack splits them into wire packets. The NIC counts Ethernet,
+IP, and TCP headers once per wire packet, whereas NWP currently counts them once per
+skb. If true, `skb->gso_segs` indicates the number of wire packets, and:
+`attributed_bytes = skb_len + (gso_segs * header_size)`
+should reconcile the difference.
+
+**Decision options:**
+1. Spike `gso_segs` and length logging during 60 s iperf3 upload against
+   `/sys/class/net/<if>/statistics/tx_bytes`.
+2. If `gso_segs` correction brings tx attribution within 5% of NIC, apply the
+   daemon correction.
+3. If not, openly document and display the known upload attribution gap in the UI
+   and rewrite the sum-check gate accordingly.
+
+---
+
+## D10 — Scope Boundary: v1.0 Has No New Data Source (2026-11-23)
+
+**Status:** PROPOSED (owner approval pending)
+
+**Context:** The feature catalogue contains over 300 line items across 23 sections,
+many requiring new privileged collectors or operating system hooks (DNS observation,
+active probes, process focus tracking, wireless nl80211, etc.).
+
+**Proposal:**
+1. v1.0 contains no new data source beyond what NWP currently collects (interface
+   counters via sysfs, per-cgroup/per-socket byte accounting via Aya eBPF,
+   process/desktop metadata via sysfs/procfs).
+2. v0.10 "Plan" adds user-value features on existing data: budgets, forecasting,
+   desktop notifications, leaderboard, heatmaps, CLI (`nwp status`, `nwp top`,
+   `nwp export`), and compact tray monitor.
+3. v0.11 "Explore" adds deep analysis on existing data: connection explorer (IPv4;
+   IPv6 if spike passes), app profile pages (sessions as cgroup lifetime),
+   comparison studio, basic network identity, smart history archive, and portable
+   backup/restore.
+4. Hardening (v1.0.0-rc.1 and v1.0.0) focuses strictly on packaging (.deb, .rpm,
+   PKGBUILD), VM matrix verification across 4 distros, and a 14-day soak test.
+
+---
+
+## D11 — Release Sequence for Post-1.0 Releases (2026-11-23)
+
+**Status:** PROPOSED (owner approval pending)
+
+**Context:** Staging features by data dependency (what the collector can truthfully
+know) prevents rework and premature complexity.
+
+**Proposed release order:**
+- **v1.1 "Insight":** Local baselines from existing rollups + logind idle/lock state
+  via D-Bus (anomaly detection, idle investigator, activity scores, fingerprint metrics).
+- **v1.2 "Destinations":** DNS observation (domain tracking, app-to-domain mapping,
+  offline geo lookup).
+- **v1.3 "Network Health":** Active probes + Wi-Fi/link stats (latency, jitter,
+  packet loss, gateway health, full network profiles).
+- **v1.4 "Time Machine":** Unified event store (timeline, correlation, replay,
+  PDF/scheduled reporting).
+- **v1.5 "Desktop":** Desktop adapters (layer-shell widgets, panel extensions, tray).
+- **v2.0 "Control and Extend":** Optional separate components for traffic control
+  and plugins (subject to explicit owner approval).
+
+---
+
+## D12 — Reshaping Catalogue Items for Truthful Presentation (2026-11-23)
+
+**Status:** PROPOSED (owner approval pending)
+
+**Context:** Certain vision catalogue items assume capabilities that cannot be
+accurately or privately delivered on Linux (especially Wayland).
+
+**Proposed reshaped specifications:**
+1. **Foreground vs. Background Usage:** Replace window focus tracking (unsupported/blocked
+   across Wayland compositors) with logind `IdleHint` and `LockedHint` D-Bus state
+   ("active", "idle", "locked"). Window focus is optionally tracked on X11 only, clearly labelled.
+2. **Application Sessions:** Define and label a session as the lifetime of an
+   application's cgroup (cgroup creation to destruction), not window or GUI sessions.
+3. **Traffic Classification:** Label classifications (e.g. streaming, background sync)
+   as "estimated", displaying the heuristic rule and confidence score.
+4. **Domain Intelligence:** Track domains exclusively from observed DNS responses;
+   DoH and DoT traffic are labelled "unknown" rather than guessed.
+5. **Geographic Lookup:** Optional, completely offline IP database bundled or
+   user-provided; off by default to protect the zero-outbound privacy promise.
+
+---
+
+## D13 — Separation of Traffic Controls and Plugins (2026-11-23)
+
+**Status:** PROPOSED (owner approval pending)
+
+**Context:** Section 12 (application network blocking / firewall rules) and Section 23
+(plugin system / custom scripts) transform NWP from a read-only passive monitor into
+an active controller with severe privilege escalation and network cutoff risks.
+
+**Proposal:**
+1. Traffic controls (app blocking, scheduled restrictions, pause mode) and plugins are
+   deferred to v2.0 or later and excluded from v1.0 scope.
+2. If implemented, app blocking must be built as a separate standalone privileged
+   component (for example `netwatch-guard`) with its own dedicated polkit action and
+   nftables cgroup filtering, isolated from `netwatchd` so a monitoring failure can
+   never break network connectivity.
+3. Plugins must never execute inside the root daemon context.
+4. Owner must explicitly decide whether traffic control belongs in the Net Watch Pro
+   product vision at all.
+
+---
+
+## D14 — Pricing and Key Expiry Recheck Precondition (2026-11-23)
+
+**Status:** PROPOSED (owner approval pending)
+
+**Context:** The current decision keeps Net Watch Pro completely free until other
+ecosystem applications reach beta. Audit gap G8 identified that offline Pro license keys
+are verified at activation but expiry is not rechecked periodically on daemon boot.
+
+**Proposal:**
+1. Net Watch Pro remains 100% free through v1.0. All v1.0 features (including export
+   and filters) remain accessible.
+2. Fixing gap G8 (periodic license expiration recheck in `netwatchd`) is logged as a
+   mandatory gate before any commercial or paid license key tier is introduced.
+

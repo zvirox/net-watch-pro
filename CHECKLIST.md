@@ -1,6 +1,6 @@
 # CHECKLIST.md — Plan Tracker
 
-**Companion to `PLAN.md`** (task details: what/files/verify/deps live there; this file is for ticking). Rules: tick only verified work; a phase is done when its **DoD and Release** boxes are both ticked — release is part of the phase, not a follow-up (owner directive, 2026-11-18; procedure in AGENTS.md §6).
+**Companion to `PLAN.md` and `docs/ROADMAP.md`** (task details: what/files/verify/deps live there; this file is for ticking). Rules: tick only verified work; **no tag before that phase's Definition of Done is fully ticked**; a phase is done when its **DoD and Release** boxes are both ticked — release is part of the phase, not a follow-up (owner directive, 2026-11-18; procedure in AGENTS.md §6).
 
 **Legend:** `[ ]` open · `[x]` done · `[~]` in progress · `[!]` blocked (note why inline)
 
@@ -20,11 +20,11 @@
 
 ## Phase S — eBPF Spike → time-boxed (~25 h)
 - [x] S.1 Spike setup: spikes/ebpf-accounting/ (nightly + bpf-linker; aya, aya-ebpf, bpf-linker) <!-- reconciled: spike crate + toolchain present -->
-- [!] S.2 Implement + compare Designs 1–3 (cgroup_skb cookie / function hooks / hybrid) <!-- BLOCKED: cgroup attach returns -EPERM on host (spike report) -->
-- [!] S.3 Measure Q1–Q10 <!-- BLOCKED: cannot attach eBPF on this kernel; claims remain [HYPOTHESIS] -->
-- [!] S.4 Workloads: curl, iperf3, browser QUIC, 5k short curls, 500 idle, WireGuard, Docker, IPv6, Flatpak, Python <!-- BLOCKED with S.3 -->
-- [!] S.5 Write docs/spike-ebpf-report.md; go/no-go on ±5% accuracy <!-- report written; go/no-go unresolved (-EPERM) -->
-- [ ] **DoD: spike report exists; every kernel claim [VERIFIED] or [HYPOTHESIS]** <!-- report exists; measurements blocked, see S.3 -->
+- [x] S.2 Implement + compare Designs 1–3 (cgroup_skb cookie / function hooks / hybrid) <!-- [VERIFIED: docs/spike-ebpf-report.md §First owner run & §Phase C product collector] Design 1 (cgroup_skb) attached; Design 2 kprobe refuted by verifier; Design 1+cgroup_id implemented -->
+- [x] S.3 Measure Q1–Q10 <!-- [VERIFIED: docs/spike-ebpf-report.md §Phase B & §Phase C] Q1–Q5, Q7–Q10 measured on CachyOS host; Q6 VM matrix skipped by owner -->
+- [x] S.4 Workloads: curl, iperf3, browser QUIC, 5k short curls, 500 idle, WireGuard, Docker, IPv6, Flatpak, Python <!-- [VERIFIED: docs/spike-ebpf-report.md §Phase B & §Phase C] curl, iperf3, Motrix/aria2c downloads measured on host; torrent/UDP pending Stage 0 G5 -->
+- [x] S.5 Write docs/spike-ebpf-report.md; go/no-go on ±5% accuracy <!-- [VERIFIED: docs/spike-ebpf-report.md §Status] report accepted by owner on 2026-11-20 with known gaps (tx 42 B/pkt undercount, Q6 skipped) -->
+- [x] **DoD: spike report exists; every kernel claim [VERIFIED] or [HYPOTHESIS]** <!-- report accepted by owner on 2026-11-20; Phase C unblocked -->
 
 ## Phase D — Doc Fixes → consistency pass done (~20 h)
 
@@ -153,7 +153,7 @@
 - [x] **DoD: PRD DoD #3/#5/#6 pass; zero a11y blockers; tag `v0.9.0-beta.1`** <!-- zero-outbound + ≤3% CPU/≤150 MB RSS previously host-verified; modern Svelte 5/ECharts/theme UI; contrast + Lighthouse green -->
 - [x] **Release: tag `v0.9.0-beta.1` + GitHub release** <!-- public beta; signing/packaging matrix from P8 -->
 
-## Phase 10 — Beta Hardening → `v0.9.x-beta.N` (~80 h)
+## Phase 10 — Beta Hardening → `v0.9.x-beta.N` (~80 h) *(Superseded by docs/ROADMAP.md (2026-11-23); see Stage 0 through v1.0 sections below)*
 
 - [x] P10.1 Accuracy harness (≥95% attributed; totals equal kernel counters) in CI <!-- tests/accuracy/accuracy.py: seeded 6-bucket profile, real debug daemon + API; measured ratio 0.960; CI job in .github/workflows/hardening.yml -->
 - [x] P10.2 Perf budget test (≤3% CPU / ≤150 MB RSS p95) <!-- tests/integration/perf_budget.py: 60 samples of /proc under seeded REST/DB load; measured cpu_p95 0.00%, rss_p95 ~25 MB; eBPF packet overhead stays owner-verified in spike report -->
@@ -164,7 +164,7 @@
 - [ ] **DoD: PRD §11 DoD #1–#8 signed off; final beta tag `v0.9.2-beta.4` (owner-approved, replaces `v0.9.9-beta.N`)**
 - [ ] **Release: final `v0.9.2-beta.4` release** <!-- final beta after DoD sign-off; patch-tags for feedback fixes -->
 
-## Phase 11 — Launch → `v1.0.0` (~40 h)
+## Phase 11 — Launch → `v1.0.0` (~40 h) *(Superseded by docs/ROADMAP.md (2026-11-23); see Stage 0 through v1.0 sections below)*
 
 - [ ] P11.1 Stable repos live (apt, dnf, AUR `-`/`-bin`)
 - [ ] P11.2 Final QA vs PRD §11 checklist
@@ -172,6 +172,79 @@
 - [ ] P11.4 Tag `v1.0.0` + release notes
 - [ ] **DoD: stable GA shipped; post-1.0 firewall roadmap opens**
 - [ ] **Release: tag `v1.0.0` + GitHub release (not pre-release)** <!-- stable repos live; release notes verify zero-outbound -->
+
+## Stage 0 (beta.5) — Close Current Plan (target Dec 6, 2026)
+
+- [x] G1 CHANGELOG v0.9.2-beta.4 and decisions D8 claim IPv6 live flows; commit 2249397 removed them <!-- [VERIFIED: docs/decisions.md D8, CHANGELOG.md, README.md] Rewritten to "IPv6 bytes counted per app; per-connection IPv6 not tracked"; Known limits documented in README -->
+  - Done when: No doc claims more than the code does; grep for "IPv6" finds no contradiction.
+- [x] G2 CHECKLIST stale: L-C1–L-C8 unticked, Phase S S.2–S.5 say BLOCKED, tag cut before DoD <!-- [VERIFIED: CHECKLIST.md, docs/spike-ebpf-report.md] Reconciled L-C1–L-C8 and Phase S against host spike evidence; added DoD-before-tag rule -->
+  - Done when: Checklist matches `docs/spike-ebpf-report.md` line by line.
+- [ ] G3 `accuracy.py`, `perf_budget.py`, `soak.py` run with eBPF off on seeded data <!-- tests/host/attribution.py pending -->
+  - Done when: Report prints attributed % and unattributed %; CPU and RSS measured with the collector running.
+- [ ] G4 Upload undercount: NIC counts about 42 B/packet more than `cgroup_skb` (tx 57–66% attributed) <!-- spike pending; see docs/decisions.md D9 -->
+  - Done when: tx attributed is within 5% of NIC on iperf3, or the UI states the known gap and the sum-check gate is rewritten.
+- [ ] G5 Plan §9 tests not run on host: #4 torrent/UDP, #6 restart recovery, #9 zero outbound with collector <!-- host run pending -->
+  - Done when: Three results recorded as pass or fail with numbers.
+- [ ] G6 VM matrix (Q6) pending; only CachyOS proven <!-- docs/vm-matrix-runbook.md execution pending -->
+  - Done when: Matrix table filled; any distro that fails has an issue and a README note.
+- [ ] G7 Polkit helper ignores `usermod` and drop-in failures <!-- hardening pending -->
+  - Done when: Helper test with a read-only `/etc/systemd` shows an error, not silence.
+- [ ] G8 Key expiry never rechecked after activation <!-- documented in docs/decisions.md D14 -->
+  - Done when: Entry exists in `docs/decisions.md` as a precondition for any paid tier.
+- [ ] **DoD: G1, G2, G5, G7, G8 closed; G3 harness verified on host; G4/G6 spiked**
+- [ ] **Release: tag `v0.9.2-beta.5` + GitHub pre-release**
+
+## Phase 10 — v0.9.3 "Trust" (target Dec 20, 2026)
+
+- [ ] P10-T.1 Finish G4 upload accounting correction or UI disclosure (`docs/decisions.md` D9)
+- [ ] P10-T.2 Complete G6 multi-distro VM matrix across Ubuntu LTS, Fedora, Debian (`docs/vm-matrix-runbook.md`)
+- [ ] P10-T.3 Incorporate IPv6 header parsing spike result (`bpf_skb_load_bytes`)
+- [ ] P10-T.4 Monitoring Health & Self-Diagnostics screen (Catalogue 23): collector status, attach mode, permission diagnostics in plain language
+- [ ] P10-T.5 Data Attribution Transparency view (Catalogue 23): in-app guide explaining socket packet accounting, loopback exclusions, and router discrepancies
+- [ ] P10-T.6 Data Integrity Validation command (Catalogue 22): `nwp check` CLI diagnostic verifying rollups vs raw counters
+- [ ] **DoD: user who breaks collector (no permission, no eBPF) sees what is wrong and fix on all 4 test distros**
+- [ ] **Release: tag `v0.9.3` + GitHub pre-release**
+
+## Phase 11 — v0.10 "Plan" (target Jan 24, 2027)
+
+- [ ] P11-P.1 Smart Budget System (Catalogue 7, 8): quotas (total, up, down), per-app and per-interface budgets, warning/critical/max thresholds, remaining/daily allowance
+- [ ] P11-P.2 Usage Forecasting (Catalogue 7): month-end, weekly, budget exhaustion date, overage cost, FUP tracking with visible formulas and inputs
+- [ ] P11-P.3 Desktop Notifications (Catalogue 11, 23): threshold crossing alerts, quiet hours, deduplication, projected overage warnings
+- [ ] P11-P.4 Usage Leaderboard (Catalogue 18): top apps ranked by total, upload, download, and peak throughput
+- [ ] P11-P.5 Usage Heatmaps (Catalogue 17): daily calendar heatmap, hourly distribution, weekday pattern from rollups
+- [ ] P11-P.6 CLI and Headless Export (Catalogue 13, 23): `nwp status`, `nwp top`, `nwp export` JSON/CSV
+- [ ] P11-P.7 Compact Monitor Mode & Tray Indicator (Catalogue 11): StatusNotifierItem tray menu and compact view
+- [ ] **DoD: Day 1 budget warns at right percentage on seeded cycle test; forecast error on 7-day replay displayed in UI**
+- [ ] **Release: tag `v0.10.0` + GitHub pre-release**
+
+## Phase 12 — v0.11 "Explore" (target Mar 7, 2027)
+
+- [ ] P12-E.1 Network Forensic Explorer (Catalogue 4): search/filter by app, IP, port, protocol, state, duration, volume; LAN/WAN; loopback filter; listening socket inventory; service names (IPv4; IPv6 if spike passed)
+- [ ] P12-E.2 App Network Profile Page (Catalogue 1, 2): total, daily average, peak, connection count, network-active time, trend, up/down ratio; sessions explicitly labelled as cgroup lifetime
+- [ ] P12-E.3 Traffic Comparison Studio (Catalogue 16): side-by-side comparison of apps, time periods, interfaces, up vs down
+- [ ] P12-E.4 Network Identity Basics (Catalogue 10): interface/network switching history, new network detection, user-set trust level / metered flag
+- [ ] P12-E.5 Smart History Archive (Catalogue 22): configurable retention per data type, tiered downsampling preserving totals, archive size view
+- [ ] P12-E.6 Portable Backup & Restore (Catalogue 13, 23): database backup with pre-restore integrity validation
+- [ ] **DoD: restoring backup on clean machine reproduces totals to the byte; connection table filters return correct rows on seeded 100k connections within perf budget**
+- [ ] **Release: tag `v0.11.0` + GitHub pre-release**
+
+## Phase 13 — v1.0.0-rc.1 Hardening (target Apr 4, 2027)
+
+- [ ] P13-H.1 Strict feature freeze (bug fixes only)
+- [ ] P13-H.2 Native packaging verification: Debian/Ubuntu `.deb`, Fedora `.rpm`, Arch PKGBUILD with embedded eBPF object; clean install/uninstall verified on VMs
+- [ ] P13-H.3 Security review refresh (`docs/security-review.md`) and rerun multi-distro VM matrix
+- [ ] P13-H.4 14-day continuous host soak test with eBPF attached; verify CPU <= 3% and RSS <= 150 MB under sustained load
+- [ ] P13-H.5 Documentation suite: complete User Guide, Known Limits, migration notes
+- [ ] **DoD: zero P0/P1 bugs; 14-day soak shows zero data loss across daemon restarts; CPU and RSS inside perf budget with eBPF on**
+- [ ] **Release: tag `v1.0.0-rc.1` + GitHub pre-release**
+
+## Phase 14 — v1.0.0 General Availability (target Apr 25, 2027)
+
+- [ ] P14-GA.1 Final sign-off on PRD §11 Definition of Done #1–#8 with physical hardware evidence
+- [ ] P14-GA.2 Signed production repositories live (apt, dnf, AUR)
+- [ ] P14-GA.3 Production release notes verifying zero-outbound guarantee
+- [ ] **DoD: all checklist items for Phases 0 through 14 fully ticked with evidence**
+- [ ] **Release: tag `v1.0.0` + GitHub release (stable GA, not pre-release)**
 
 ## Phase L — Live Throughput (F11; `docs/LIVE-THROUGHPUT-PLAN.md`)
 
@@ -187,14 +260,14 @@
 - [x] L-OQ1 60-sample one-minute in-memory history + `GET /usage/rate-history` (`in_memory:true`, lost-on-restart label) <!-- bounded VecDeque in netwatch-common, one point per minute fed by the 1 Hz task, 3 unit + 2 contract tests -->
 - [x] L-OQ4 Wi-Fi signal/link on U3 from local sysfs + Dashboard display ("—" when missing) <!-- injectable-root sysfs reader, wifi-only, 3 unit tests; TS types + demo fixture updated -->
 - [x] L-B1 Owner-run Aya eBPF spike with Motrix; accept `docs/spike-ebpf-report.md` <!-- owner ACCEPTED 2026-11-20 with known gaps: rx 95.8-97% PASS; tx gap 42 B/pkt measured (14 B header alone REFUTED, composition HYPOTHESIS); Q5 Motrix+aria2c grouping VERIFIED via cgroup id; kprobe identity REFUTED; loopback filter, safety gate, clean detach verified; Q6 VM matrix SKIPPED, 50/500-conn overhead unmeasured. Phase C unblocked. -->
-- [ ] L-C1 eBPF loader in `netwatch-ebpf` crate, attaches at daemon start with bounded caps; failed attach -> degraded, not crash
-- [ ] L-C2 Per-socket byte counters read each second + drop counters in Diagnostics
-- [ ] L-C3 Identity resolution cgroup-first (confirmed: socket cgroup via bpf_skb_cgroup_id, not `current`)
-- [ ] L-C4 Display names from `.desktop` entries + low-confidence fallback
-- [ ] L-C5 `live.apps` stream with per-second smoothed per-app rates
-- [ ] L-C6 Feed attributed bytes into episode store + rollups so Unattributed row shrinks
-- [ ] L-C7 Apps list live speed columns, sorted with ~2 s hold
-- [ ] L-C8 Live Connections screen shows real rows; empty state only when idle <!-- pending: per-socket FLOWS map -> EpisodeEvent producer (P2.2), app registry app_id + best-effort PID, idle-timeout close; F15 tests planned; UI renders PID 0 as "—" once implemented -->
+- [x] L-C1 eBPF loader in `netwatch-ebpf` crate, attaches at daemon start with bounded caps; failed attach -> degraded, not crash <!-- [VERIFIED: docs/spike-ebpf-report.md §Phase C product collector — real-host verification] attached at /sys/fs/cgroup with Single fallback; failed attach returns degraded -->
+- [x] L-C2 Per-socket byte counters read each second + drop counters in Diagnostics <!-- [VERIFIED: docs/spike-ebpf-report.md §Phase C product collector & §Follow-ups] BPF counters (packets_seen, loopback, map_errors) exposed in /status and diagnostics -->
+- [x] L-C3 Identity resolution cgroup-first (confirmed: socket cgroup via bpf_skb_cgroup_id, not `current`) <!-- [VERIFIED: docs/spike-ebpf-report.md §Phase C product collector] socket cgroup via bpf_skb_cgroup_id -->
+- [x] L-C4 Display names from `.desktop` entries + low-confidence fallback <!-- [VERIFIED: docs/spike-ebpf-report.md §Phase C product collector] resolved Motrix with high confidence from cgroup metadata -->
+- [x] L-C5 `live.apps` stream with per-second smoothed per-app rates <!-- [VERIFIED: docs/spike-ebpf-report.md §Phase C product collector] 95 frames in 20 s with motrix row at 87–100 Mbps -->
+- [x] L-C6 Feed attributed bytes into episode store + rollups so Unattributed row shrinks <!-- [VERIFIED: docs/spike-ebpf-report.md §Phase C product collector] rollups persist into usage_rollup_15m after 60 s checkpoint -->
+- [ ] L-C7 Apps list live speed columns, sorted with ~2 s hold <!-- pending real desktop GUI verification on host (in-browser mock verified in L-C9, host run pending Stage 0 G5) -->
+- [ ] L-C8 Live Connections screen shows real rows; empty state only when idle <!-- pending: per-socket FLOWS map -> EpisodeEvent producer (P2.2), app registry app_id + best-effort PID, idle-timeout close; F15 tests planned; UI renders PID 0 as "—" once implemented; host GUI verification pending Stage 0 G5 -->
 - [x] L-C9 Degraded path: `NETWATCH_DISABLE_EBPF` + failed attach honest everywhere <!-- daemon /status = no_collector, recording=false, zero drops [VERIFIED host]; rendered UI verified in-browser via mocked Tauri bridge driving real frames through actual stores: Degraded chip + tooltip, Dashboard live-speed note, Live empty state for both no_collector and failed variants; literal WebKit window not agent-verified (GL/AT-SPI/Wayland limits, pkexec prompt) -->
 - [x] L-D1 Range selector 1 h/24 h/7 d/30 d/cycle, remembered per user via `range_default` (DESIGN.md §7.13, §8.3; API.md §1.4) <!-- docs-first DESIGN 1.4/ARCHITECTURE 1.7/DATABASE 1.4+migration 0006/API 1.8/api-contract/TESTING F12; setting spec + range.rs tests green; browser-verified preset switch 24h→7d changes bucket label 15 min→Hour and reloads all three U-requests -->
 - [x] L-D2 Range totals from rollups in configured timezone with `billing_cycle_day` (Asia/Kolkata midnight test) (API.md U1) <!-- range::day_preset_resets_at_local_midnight_in_kolkata + cycle_preset_uses_configured_day_and_clamps_short_months + U1 integration test green -->
