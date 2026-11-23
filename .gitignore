@@ -24,3 +24,5 @@ packaging/arch/*.pkg.tar.zst
 # Editor/OS noise
 .DS_Store
 *.swp
+__pycache__/
+*.pyc

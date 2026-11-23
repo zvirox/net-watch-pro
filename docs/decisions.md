@@ -180,6 +180,11 @@ skb. If true, `skb->gso_segs` indicates the number of wire packets, and:
 `attributed_bytes = skb_len + (gso_segs * header_size)`
 should reconcile the difference.
 
+**Spike procedure:** `tests/host/gso-spike.py` (owner-run, root) repeats a
+60 s iperf3 upload with GSO on and off, comparing per-app attributed upload
+bytes from `GET /api/v1/apps?range=1h` with NIC `tx_bytes`. No collector code
+changes are needed to run it; the outcome selects option 2 or 3 below.
+
 **Decision options:**
 1. Spike `gso_segs` and length logging during 60 s iperf3 upload against
    `/sys/class/net/<if>/statistics/tx_bytes`.
@@ -281,15 +286,17 @@ an active controller with severe privilege escalation and network cutoff risks.
 
 ## D14 — Pricing and Key Expiry Recheck Precondition (2026-11-23)
 
-**Status:** PROPOSED (owner approval pending)
+**Status:** APPROVED (owner, 2026-11-23; included in the approved `docs/ROADMAP.md` §5.1 G8)
 
 **Context:** The current decision keeps Net Watch Pro completely free until other
 ecosystem applications reach beta. Audit gap G8 identified that offline Pro license keys
 are verified at activation but expiry is not rechecked periodically on daemon boot.
 
-**Proposal:**
+**Decision:**
 1. Net Watch Pro remains 100% free through v1.0. All v1.0 features (including export
    and filters) remain accessible.
-2. Fixing gap G8 (periodic license expiration recheck in `netwatchd`) is logged as a
-   mandatory gate before any commercial or paid license key tier is introduced.
+2. Fixing gap G8 (periodic license expiration recheck in `netwatchd`) is a **mandatory
+   precondition** before any commercial or paid license key tier is introduced. Until
+   that recheck ships, the free tier is the only tier and no paid key may be sold or
+   activated through a release build.
 

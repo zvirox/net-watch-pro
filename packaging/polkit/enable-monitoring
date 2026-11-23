@@ -2,68 +2,106 @@
 # Dedicated root helper for Net Watch Pro onboarding.
 # Executed via polkit: pkexec /usr/libexec/netwatch-pro/enable-monitoring
 # Takes NO arguments. Reads caller UID from PKEXEC_UID.
+#
+# Every privileged step fails loudly with a distinct exit code and a diagnostic
+# on stderr (Stage 0 G7). A silent `|| true` here would leave onboarding "done"
+# while the user is still unauthorized or the daemon still unconfigured.
 set -euo pipefail
 
+fail() {
+  printf 'error: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
 if [ "$#" -ne 0 ]; then
-  echo "error: enable-monitoring takes no arguments" >&2
-  exit 2
+  fail 'enable-monitoring takes no arguments' 2
 fi
 
 if [ -z "${PKEXEC_UID:-}" ]; then
-  echo "error: PKEXEC_UID is missing from environment" >&2
-  exit 1
+  fail 'PKEXEC_UID is missing from environment' 3
 fi
 
 case "$PKEXEC_UID" in
-  ''|*[!0-9]*)
-    echo "error: PKEXEC_UID must be an unsigned integer" >&2
-    exit 1
-    ;;
+  ''|*[!0-9]*) fail 'PKEXEC_UID must be an unsigned integer' 3 ;;
 esac
 
 if [ "$PKEXEC_UID" -le 0 ] || [ "$PKEXEC_UID" -gt 4294967294 ]; then
-  echo "error: PKEXEC_UID out of valid range (1..4294967294)" >&2
-  exit 1
+  fail 'PKEXEC_UID out of valid range (1..4294967294)' 3
 fi
-
 UID_INT="$PKEXEC_UID"
 
-# 1. Idempotently append UID to /etc/netwatch-pro/allowed-uids (atomic write)
-install -d -m 0755 -o root -g root /etc/netwatch-pro
+# Paths are overridable only for tests/host/polkit-helper.sh. pkexec resets the
+# environment, so a polkit caller cannot inject these in production.
+ETC_DIR="${NETWATCH_ETC_DIR:-/etc/netwatch-pro}"
+SYSTEMD_DIR="${NETWATCH_SYSTEMD_DIR:-/etc/systemd/system}"
+DROPIN_DIR="$SYSTEMD_DIR/netwatchd.service.d"
+DROPIN_FILE="$DROPIN_DIR/10-socket-group.conf"
 
-ALLOWED_FILE="/etc/netwatch-pro/allowed-uids"
+# Resolve the caller before touching anything else.
+USER_NAME="$(id -un "$UID_INT" 2>/dev/null)" || fail "no local user for UID $UID_INT" 4
+USER_GID="$(id -g "$UID_INT" 2>/dev/null)" || fail "no primary group for UID $UID_INT" 4
+[ -n "$USER_NAME" ] || fail "empty user name for UID $UID_INT" 4
+[ -n "$USER_GID" ] || fail "empty primary GID for UID $UID_INT" 4
+
+# 1. Idempotently append UID to /etc/netwatch-pro/allowed-uids (atomic write).
+if ! mkdir -p -- "$ETC_DIR"; then
+  fail "cannot create $ETC_DIR" 5
+fi
+if ! chmod 0755 -- "$ETC_DIR"; then
+  fail "cannot set permissions on $ETC_DIR" 5
+fi
+
+ALLOWED_FILE="$ETC_DIR/allowed-uids"
 ALREADY_ALLOWED=0
 if [ -f "$ALLOWED_FILE" ]; then
-  if grep -E "^[[:space:]]*${UID_INT}([[:space:]]+#.*|[[:space:]]*)$" "$ALLOWED_FILE" >/dev/null 2>&1; then
+  if grep -Eq "^[[:space:]]*${UID_INT}([[:space:]]+#.*|[[:space:]]*)$" "$ALLOWED_FILE"; then
     ALREADY_ALLOWED=1
   fi
 fi
 
 if [ "$ALREADY_ALLOWED" -eq 0 ]; then
-  TMP_FILE="$(mktemp "/etc/netwatch-pro/allowed-uids.tmp.XXXXXX")"
-  chmod 0644 "$TMP_FILE"
-  chown root:root "$TMP_FILE"
-  if [ -f "$ALLOWED_FILE" ]; then
-    cat "$ALLOWED_FILE" > "$TMP_FILE"
+  TMP_FILE="$(mktemp "$ETC_DIR/allowed-uids.tmp.XXXXXX")" || fail 'cannot create temporary allowlist' 6
+  if ! chmod 0644 "$TMP_FILE"; then
+    fail 'cannot set permissions on the temporary allowlist' 6
   fi
-  printf '%s\n' "$UID_INT" >> "$TMP_FILE"
-  mv -f "$TMP_FILE" "$ALLOWED_FILE"
+  if [ -f "$ALLOWED_FILE" ]; then
+    if ! cat "$ALLOWED_FILE" > "$TMP_FILE"; then
+      fail 'cannot copy the existing allowlist' 6
+    fi
+  fi
+  if ! printf '%s\n' "$UID_INT" >> "$TMP_FILE"; then
+    fail 'cannot append UID to the temporary allowlist' 6
+  fi
+  if ! mv -f "$TMP_FILE" "$ALLOWED_FILE"; then
+    fail 'cannot install the updated allowlist' 6
+  fi
 fi
 
-# 2. Write the drop-in for socket group and add user to netwatch group
-USER_GID="$(id -g "$UID_INT" 2>/dev/null || true)"
-USER_NAME="$(id -un "$UID_INT" 2>/dev/null || true)"
-
-if [ -n "$USER_NAME" ] && getent group netwatch >/dev/null 2>&1; then
-  usermod -aG netwatch "$USER_NAME" 2>/dev/null || true
+# 2. Add the caller to the socket group.
+if ! getent group netwatch >/dev/null 2>&1; then
+  fail 'netwatch socket group does not exist' 7
+fi
+if ! usermod -aG netwatch "$USER_NAME"; then
+  fail "cannot add '$USER_NAME' to the netwatch group" 8
 fi
 
-if [ -n "$USER_GID" ]; then
-  mkdir -p /etc/systemd/system/netwatchd.service.d
-  printf '[Service]\nEnvironment=NETWATCH_API_GID=%s\n' "$USER_GID" \
-    > /etc/systemd/system/netwatchd.service.d/10-socket-group.conf
+# 3. Write the drop-in that pins the daemon's API socket GID.
+if ! mkdir -p -- "$DROPIN_DIR"; then
+  fail "cannot create $DROPIN_DIR" 9
+fi
+if ! printf '[Service]\nEnvironment=NETWATCH_API_GID=%s\n' "$USER_GID" > "$DROPIN_FILE"; then
+  fail "cannot write $DROPIN_FILE" 10
+fi
+if ! grep -q "NETWATCH_API_GID=$USER_GID" "$DROPIN_FILE"; then
+  fail "drop-in $DROPIN_FILE did not contain the expected GID" 10
 fi
 
-# 3. Reload systemd and enable/start the service
-systemctl daemon-reload
-systemctl enable --now netwatchd.service
+# 4. Reload systemd and enable/start the service.
+if ! systemctl daemon-reload; then
+  fail 'systemctl daemon-reload failed' 11
+fi
+if ! systemctl enable --now netwatchd.service; then
+  fail 'systemctl enable --now netwatchd.service failed' 12
+fi
+
+printf 'onboarding complete for UID %s\n' "$UID_INT"

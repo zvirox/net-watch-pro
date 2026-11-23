@@ -179,17 +179,17 @@
   - Done when: No doc claims more than the code does; grep for "IPv6" finds no contradiction.
 - [x] G2 CHECKLIST stale: L-C1–L-C8 unticked, Phase S S.2–S.5 say BLOCKED, tag cut before DoD <!-- [VERIFIED: CHECKLIST.md, docs/spike-ebpf-report.md] Reconciled L-C1–L-C8 and Phase S against host spike evidence; added DoD-before-tag rule -->
   - Done when: Checklist matches `docs/spike-ebpf-report.md` line by line.
-- [ ] G3 `accuracy.py`, `perf_budget.py`, `soak.py` run with eBPF off on seeded data <!-- tests/host/attribution.py pending -->
+- [ ] G3 `accuracy.py`, `perf_budget.py`, `soak.py` run with eBPF off on seeded data <!-- tests/host/attribution.py PREPARED (syntax-checked); owner-run with root + live collector pending -->
   - Done when: Report prints attributed % and unattributed %; CPU and RSS measured with the collector running.
-- [ ] G4 Upload undercount: NIC counts about 42 B/packet more than `cgroup_skb` (tx 57–66% attributed) <!-- spike pending; see docs/decisions.md D9 -->
+- [ ] G4 Upload undercount: NIC counts about 42 B/packet more than `cgroup_skb` (tx 57–66% attributed) <!-- tests/host/gso-spike.py PREPARED (syntax-checked); owner-run root spike pending; see docs/decisions.md D9 -->
   - Done when: tx attributed is within 5% of NIC on iperf3, or the UI states the known gap and the sum-check gate is rewritten.
-- [ ] G5 Plan §9 tests not run on host: #4 torrent/UDP, #6 restart recovery, #9 zero outbound with collector <!-- host run pending -->
+- [ ] G5 Plan §9 tests not run on host: #4 torrent/UDP, #6 restart recovery, #9 zero outbound with collector <!-- #9 PASS on this host (ss: no AF_INET sockets for netwatch; daemon only /run/netwatch-pro/api.sock); #4/#6 owner-run pending -->
   - Done when: Three results recorded as pass or fail with numbers.
 - [ ] G6 VM matrix (Q6) pending; only CachyOS proven <!-- docs/vm-matrix-runbook.md execution pending -->
   - Done when: Matrix table filled; any distro that fails has an issue and a README note.
-- [ ] G7 Polkit helper ignores `usermod` and drop-in failures <!-- hardening pending -->
+- [x] G7 Polkit helper ignores `usermod` and drop-in failures <!-- [VERIFIED: tests/host/polkit-helper.sh, 5/5 simulated failure paths] every privileged step now exits non-zero with a distinct diagnostic; no silent `|| true` remains -->
   - Done when: Helper test with a read-only `/etc/systemd` shows an error, not silence.
-- [ ] G8 Key expiry never rechecked after activation <!-- documented in docs/decisions.md D14 -->
+- [x] G8 Key expiry never rechecked after activation <!-- [VERIFIED: docs/decisions.md D14] D14 APPROVED: expiry recheck is a mandatory precondition for any paid tier; free remains the only tier until it ships -->
   - Done when: Entry exists in `docs/decisions.md` as a precondition for any paid tier.
 - [ ] **DoD: G1, G2, G5, G7, G8 closed; G3 harness verified on host; G4/G6 spiked**
 - [ ] **Release: tag `v0.9.2-beta.5` + GitHub pre-release**
