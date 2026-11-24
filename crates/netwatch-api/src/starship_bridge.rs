@@ -5,9 +5,7 @@
 //! and publishes the manifest at `$XDG_DATA_HOME/starship/plugins/nwp.json`.
 
 use serde_json::json;
-use starship_plugin::{
-    bridge_dir, AppManifest, PluginBridge, PluginTool,
-};
+use starship_plugin::{AppManifest, PluginBridge, PluginTool, bridge_dir};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -43,8 +41,9 @@ pub fn build_nwp_bridge() -> PluginBridge {
     bridge.register_tool(
         PluginTool {
             name: "nwp.network.capture_packets".to_string(),
-            description: "Captures live network packets via eBPF probe for traffic latency analysis."
-                .to_string(),
+            description:
+                "Captures live network packets via eBPF probe for traffic latency analysis."
+                    .to_string(),
             risk_tier: 1,
             parameters: json!({
                 "type": "object",
@@ -81,8 +80,7 @@ pub fn build_nwp_bridge() -> PluginBridge {
     bridge.register_tool(
         PluginTool {
             name: "network.query_top_talkers".to_string(),
-            description: "Queries top bandwidth-consuming processes and endpoints."
-                .to_string(),
+            description: "Queries top bandwidth-consuming processes and endpoints.".to_string(),
             risk_tier: 1,
             parameters: json!({
                 "type": "object",
@@ -93,10 +91,7 @@ pub fn build_nwp_bridge() -> PluginBridge {
             resource_profile: None,
         },
         |params, _reporter| {
-            let limit = params
-                .get("limit")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(5);
+            let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(5);
 
             Ok(json!({
                 "topTalkers": [
@@ -113,8 +108,7 @@ pub fn build_nwp_bridge() -> PluginBridge {
     bridge.register_tool(
         PluginTool {
             name: "network.audit_connections".to_string(),
-            description: "Audits active and recent outbound network connections."
-                .to_string(),
+            description: "Audits active and recent outbound network connections.".to_string(),
             risk_tier: 1,
             parameters: json!({
                 "type": "object",
@@ -151,7 +145,9 @@ pub fn build_nwp_bridge() -> PluginBridge {
             if store.contains_key(ckpt_id) {
                 Ok(())
             } else {
-                Err(format!("Checkpoint '{ckpt_id}' not found in NWP capture session"))
+                Err(format!(
+                    "Checkpoint '{ckpt_id}' not found in NWP capture session"
+                ))
             }
         },
         move |ckpt_id| {
@@ -187,10 +183,26 @@ mod tests {
         let result = resp.get("result").expect("result field");
         assert_eq!(result.get("appId").and_then(|v| v.as_str()), Some("nwp"));
 
-        let tools = result.get("tools").and_then(|v| v.as_array()).expect("tools array");
-        assert!(tools.iter().any(|t| t.get("name").and_then(|v| v.as_str()) == Some("nwp.network.capture_packets")));
-        assert!(tools.iter().any(|t| t.get("name").and_then(|v| v.as_str()) == Some("network.query_top_talkers")));
-        assert!(tools.iter().any(|t| t.get("name").and_then(|v| v.as_str()) == Some("network.audit_connections")));
+        let tools = result
+            .get("tools")
+            .and_then(|v| v.as_array())
+            .expect("tools array");
+        assert!(
+            tools
+                .iter()
+                .any(|t| t.get("name").and_then(|v| v.as_str())
+                    == Some("nwp.network.capture_packets"))
+        );
+        assert!(
+            tools.iter().any(
+                |t| t.get("name").and_then(|v| v.as_str()) == Some("network.query_top_talkers")
+            )
+        );
+        assert!(
+            tools.iter().any(
+                |t| t.get("name").and_then(|v| v.as_str()) == Some("network.audit_connections")
+            )
+        );
     }
 
     #[test]
@@ -212,8 +224,14 @@ mod tests {
         let cap_resp_str = bridge.handle_request(&cap_req).expect("cap resp");
         let cap_resp: serde_json::Value = serde_json::from_str(&cap_resp_str).unwrap();
         let cap_res = cap_resp.get("result").expect("cap result");
-        assert_eq!(cap_res.get("status").and_then(|v| v.as_str()), Some("captured"));
-        assert_eq!(cap_res.get("interface").and_then(|v| v.as_str()), Some("eth0"));
+        assert_eq!(
+            cap_res.get("status").and_then(|v| v.as_str()),
+            Some("captured")
+        );
+        assert_eq!(
+            cap_res.get("interface").and_then(|v| v.as_str()),
+            Some("eth0")
+        );
 
         // 2. Query top talkers
         let top_req = json!({
@@ -247,7 +265,10 @@ mod tests {
         let ckpt_resp_str = bridge.handle_request(&ckpt_req).unwrap();
         let ckpt_resp: serde_json::Value = serde_json::from_str(&ckpt_resp_str).unwrap();
         let ckpt_res = ckpt_resp.get("result").unwrap();
-        let ckpt_id = ckpt_res.get("checkpointId").and_then(|v| v.as_str()).unwrap();
+        let ckpt_id = ckpt_res
+            .get("checkpointId")
+            .and_then(|v| v.as_str())
+            .unwrap();
 
         let restore_req = json!({
             "jsonrpc": "2.0",

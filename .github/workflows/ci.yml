@@ -60,8 +60,10 @@ jobs:
       # loop, reproducible locally). The lockfile is generated with the same
       # flag, so ci installs exactly what it pinned.
       - run: npm ci --legacy-peer-deps --no-audit --no-fund
-      - name: svelte-check
-        run: npm run check
+      - name: typecheck
+        run: npm run typecheck
+      - name: linear style check
+        run: npm run check:linear
       - name: lint
         run: npm run lint
       - name: unit tests
