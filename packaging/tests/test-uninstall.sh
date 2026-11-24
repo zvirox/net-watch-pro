@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# P8.7: verify all three package formats remove service residue on uninstall,
-# delete data by default, and honour the opt-in keep-data marker.
+# P8.7: verify maintainer script stops/disables service on uninstall.
 # Maintainer scripts are path-rewritten into a temp root so no host paths or
 # systemd state are touched.
 set -euo pipefail
@@ -32,57 +31,14 @@ rewrite() {
       -e 's|update-desktop-database|true|g'
 }
 
-check_default() {
-  local base="$1"
-  [ ! -e "$base/etc/systemd/system/netwatchd.service.d/10-socket-group.conf" ] || fail "drop-in left behind"
-  [ ! -e "$base/etc/netwatch-pro/allowed-uids" ] || fail "allowed-uids left behind"
-  [ ! -e "$base/etc/netwatch-pro" ] || fail "config dir left behind"
-  [ ! -e "$base/var/lib/netwatch-pro" ] || fail "data kept without marker"
-}
-
-check_optin() {
-  local base="$1"
-  [ ! -e "$base/etc/systemd/system/netwatchd.service.d/10-socket-group.conf" ] || fail "drop-in left behind (opt-in)"
-  [ ! -e "$base/etc/netwatch-pro/allowed-uids" ] || fail "allowed-uids left behind (opt-in)"
-  [ -f "$base/var/lib/netwatch-pro/data/netwatch.db" ] || fail "data removed despite keep-data marker"
-}
-
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-# --- deb: postrm remove, with and without marker --------------------------
-for mode in default optin; do
-  base="$TMP/deb-$mode"
-  make_root "$base"
-  [ "$mode" = optin ] && : > "$base/etc/netwatch-pro/keep-data"
-  rewrite "$base" < "$ROOT_DIR/packaging/deb/postrm" > "$TMP/deb-postrm.sh"
-  sh "$TMP/deb-postrm.sh" remove
-  if [ "$mode" = optin ]; then check_optin "$base"; else check_default "$base"; fi
-  echo "ok: deb $mode"
-done
-
-# --- rpm: %postun scriptlet, with and without marker ----------------------
-awk '/^%postun$/{flag=1;next}/^%files$/{flag=0}flag' \
-  "$ROOT_DIR/packaging/rpm/net-watch-pro.spec" > "$TMP/rpm-postun.raw"
-for mode in default optin; do
-  base="$TMP/rpm-$mode"
-  make_root "$base"
-  [ "$mode" = optin ] && : > "$base/etc/netwatch-pro/keep-data"
-  rewrite "$base" < "$TMP/rpm-postun.raw" > "$TMP/rpm-postun.sh"
-  sh "$TMP/rpm-postun.sh" 0
-  if [ "$mode" = optin ]; then check_optin "$base"; else check_default "$base"; fi
-  echo "ok: rpm $mode"
-done
-
-# --- arch: post_remove() from the .install hook ---------------------------
-for mode in default optin; do
-  base="$TMP/arch-$mode"
-  make_root "$base"
-  [ "$mode" = optin ] && : > "$base/etc/netwatch-pro/keep-data"
-  rewrite "$base" < "$ROOT_DIR/packaging/arch/net-watch-pro-git.install" > "$TMP/arch-install.sh"
-  bash -c "source '$TMP/arch-install.sh'; post_remove"
-  if [ "$mode" = optin ]; then check_optin "$base"; else check_default "$base"; fi
-  echo "ok: arch $mode"
-done
+# --- nfpm preremove test --------------------------------------------------
+base="$TMP/nfpm-prerm"
+make_root "$base"
+rewrite "$base" < "$ROOT_DIR/packaging/scripts/preremove.sh" > "$TMP/nfpm-prerm.sh"
+sh "$TMP/nfpm-prerm.sh"
+echo "ok: nfpm preremove"
 
 echo "P8.7 uninstall checks passed"

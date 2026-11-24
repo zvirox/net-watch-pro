@@ -48,7 +48,7 @@ Net Watch Pro runs entirely on your own machine. It pairs a root background daem
 
 Net Watch Pro is a fully standalone application. You can view speeds, inspect connection graphs, and review bandwidth history without installing any companion tools.
 
-To enable automated system monitoring, Net Watch Pro links seamlessly with **Starship Control**, the unified Linux desktop AI assistant.
+To enable automated system monitoring, Net Watch Pro links seamlessly with [Starship Control](https://github.com/zvirox/starship-control) ([Releases](https://github.com/zvirox/starship-control/releases)), the unified Linux desktop AI assistant.
 
 ### Why It Exists
 
@@ -67,7 +67,7 @@ Setup requires no manual configuration:
 1. **Automatic Discovery**: When Net Watch Pro starts, it registers its tool definition in `$XDG_DATA_HOME/starship/plugins/nwp.json`.
 2. **Private Local Socket**: Communication travels across a private Unix domain socket at `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock`.
 3. **Linux Kernel Peer Verification**: The connection checks Linux peer credentials (`SO_PEERCRED`) on every message. Only applications running under your exact user ID can view data. No network ports are opened, and your traffic logs remain strictly confidential.
-4. **Instant Assistant Access**: Summon Starship Control with `Super+Shift+Space`. It immediately detects Net Watch Pro and provides live network insights upon request.
+4. **Instant Assistant Access**: Summon Starship Control with `Super+Shift+Space`. It immediately detects Net Watch Pro and provides live network insights upon request. For setup guides and downloads, visit the [Starship Control repository](https://github.com/zvirox/starship-control) and [releases](https://github.com/zvirox/starship-control/releases).
 
 ---
 
