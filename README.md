@@ -102,36 +102,40 @@ SQLite; the unprivileged UI talks **only** to the peer-credential-authorized
 local API. Details in [ARCHITECTURE.md](ARCHITECTURE.md) and
 [AUTH_SECURITY.md](AUTH_SECURITY.md).
 
-## Install
+## 📦 Installation
 
-### From GitHub Releases (recommended)
+Download the appropriate package and `SHA256SUMS` from the [Latest Release](https://github.com/zvirox/net-watch-pro/releases/latest).
 
-Download the latest signed `.deb` or `.rpm` from the
-[releases page](https://github.com/zvirox/net-watch-pro/releases). Each release
-publishes `SHA256SUMS` and detached GPG signatures for every artifact.
+### Debian / Ubuntu (`.deb`)
 
-~~~bash
-# Debian / Ubuntu
-sudo apt install ./net-watch-pro-*.deb
+```bash
+sudo apt install ./net-watch-pro_<version>_amd64.deb
+```
 
-# Fedora / RHEL
-sudo dnf install ./net-watch-pro-*.rpm
-~~~
+### Fedora / RHEL (`.rpm`)
 
-Package installation creates the `netwatch` group, state directory, and socket
-GID drop-in, and leaves the daemon unit **disabled**. The first-run onboarding
-in the app asks for one root authorization (via `pkexec`) to register your UID
-in `/etc/netwatch-pro/allowed-uids` and enable the unit. No background
-privilege escalation happens without that prompt.
+```bash
+sudo dnf install ./net-watch-pro-<version>-1.x86_64.rpm
+```
 
-### Arch (AUR)
+### Arch Linux / Manjaro (`.pkg.tar.zst`)
 
-The `-git` package builds from source:
+```bash
+sudo pacman -U ./net-watch-pro-<version>-1-x86_64.pkg.tar.zst
+```
 
-~~~bash
-paru -S net-watch-pro-git
-# or: yay -S net-watch-pro-git
-~~~
+### Verify Checksums
+
+Verify file integrity against the release manifest:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+> [!NOTE]
+> **Packaging Update:** AUR source packages, generic tarballs, and Flatpak builds are retired in favor of native packages (`.deb`, `.rpm`, `.pkg.tar.zst`).
+
+Package installation creates the `netwatch` group, state directory, and socket GID drop-in, and leaves the daemon unit **disabled**. The first-run onboarding in the app asks for one root authorization (via `pkexec`) to register your UID in `/etc/netwatch-pro/allowed-uids` and enable the unit. No background privilege escalation happens without that prompt.
 
 ### From source
 

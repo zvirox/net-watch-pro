@@ -1,207 +1,26 @@
-# Release workflow — PLAN.md P8.8.
-# Triggered by a version tag (e.g. v0.8.0-alpha.8). Builds the installable
-# alpha artifacts, signs them with GPG keys supplied as CI secrets, publishes
-# them on GitHub Releases, and smoke-tests a clean deb install/uninstall.
-# No private key is ever stored in this repository.
-
-name: release
+name: Release
 
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Existing version tag to release (e.g. v0.8.0-alpha.8)
-        required: true
-        type: string
+      - "v*"
 
 permissions:
   contents: write
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
-  build-and-sign:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Resolve version
-        id: version
-        run: |
-          TAG="${{ inputs.tag || github.ref_name }}"
-          VERSION="${TAG#v}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.99.1
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: app/package-lock.json
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev \
-            libayatana-appindicator3-dev dpkg-dev fakeroot rpm
-
-      - name: Install eBPF build tools
-        run: |
-          rustup component add rust-src
-          # cargo install bpf-linker needs a matching llvm-config (LLVM 23),
-          # which the hosted runner does not provide. Use the upstream
-          # prebuilt static binary pinned to the spike-verified version.
-          curl -fsSL -o /tmp/bpf-linker.tar.zst \
-            https://github.com/aya-rs/bpf-linker/releases/download/v0.13.0/bpf-linker-x86_64-unknown-linux-musl.tar.zst
-          tar -xf /tmp/bpf-linker.tar.zst -C "$HOME/.cargo/bin"
-          bpf-linker --version
-
-      - name: Build eBPF object for embedding
-        run: cargo run -p xtask -- bpf
-
-      - name: Build UI
-        working-directory: app
-        run: |
-          npm ci --legacy-peer-deps --no-audit --no-fund
-          npm run build
-
-      - name: Build release binaries
-        run: |
-          cargo build --release -p netwatchd
-          # custom-protocol embeds frontendDist; without it Tauri stays in dev
-          # mode and tries to load the Vite dev URL at runtime.
-          cargo build --release -p netwatch-app --features tauri/custom-protocol
-
-      - name: Build packages
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          mkdir -p target/aur target/source
-          ./packaging/deb/build.sh "$VERSION"
-          ./packaging/rpm/build.sh "$VERSION"
-          tar -czf "target/source/net-watch-pro-$VERSION.tar.gz" \
-            --transform "s,^,net-watch-pro-$VERSION/," \
-            $(git ls-files | grep -v '^app/node_modules/')
-          tar -czf target/aur/net-watch-pro-git-src.tar.gz \
-            -C packaging/arch PKGBUILD .SRCINFO net-watch-pro-git.install README.md
-
-      - name: Extract release notes
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          awk -v tag="$TAG" '
-            $0 ~ "^## \\[" tag "\\]" { found=1; next }
-            found && /^## \[/ { exit }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
-          test -s release-notes.md
-
-      - name: Import signing key
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        run: echo "$SIGNING_KEY" | gpg --batch --import
-
-      - name: Sign artifacts
-        env:
-          SIGNING_KEY_ID: ${{ secrets.SIGNING_KEY_ID }}
-          SIGNING_PASSPHRASE: ${{ secrets.SIGNING_PASSPHRASE }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          set -euo pipefail
-          mkdir -p target/release-assets
-          cp target/debian/*.deb target/release-assets/
-          cp target/rpm/*.rpm target/release-assets/
-          cp target/source/*.tar.gz target/release-assets/
-          cp target/aur/*.tar.gz target/release-assets/
-          cd target/release-assets
-          # Ship the public key as the trust anchor users verify signatures with.
-          gpg --armor --export "$SIGNING_KEY_ID" > nwp-release-public.asc
-          sha256sum * > SHA256SUMS
-          for file in *; do
-            case "$file" in
-              *.asc|SHA256SUMS) continue ;;
-            esac
-            gpg --batch --yes --pinentry-mode loopback \
-              --passphrase "$SIGNING_PASSPHRASE" \
-              --local-user "$SIGNING_KEY_ID" \
-              --detach-sign --armor --output "$file.asc" "$file"
-          done
-          gpg --batch --yes --pinentry-mode loopback \
-            --passphrase "$SIGNING_PASSPHRASE" \
-            --local-user "$SIGNING_KEY_ID" \
-            --detach-sign --armor --output SHA256SUMS.asc SHA256SUMS
-          for sig in *.asc; do
-            case "$sig" in
-              nwp-release-public.asc) continue ;; # trust anchor, not a signature
-            esac
-            gpg --verify "$sig"
-          done
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-assets
-          path: target/release-assets/*
-
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          prerelease="--prerelease"
-          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            prerelease=""
-          fi
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" target/release-assets/* --clobber
-          else
-            # shellcheck disable=SC2086
-            gh release create "$TAG" \
-              --title "$TAG" \
-              --notes-file release-notes.md \
-              $prerelease \
-              target/release-assets/*
-          fi
-
-  verify-deb:
-    needs: build-and-sign
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-assets
-          path: artifacts
-      - name: Install and inspect package
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ./artifacts/net-watch-pro_*.deb
-          dpkg -L net-watch-pro | grep -q '/lib/systemd/system/netwatchd.service'
-          getent group netwatch
-          test -f /usr/share/applications/net-watch-pro.desktop
-          # The collector object is embedded; no runtime file may be needed.
-          ! test -e /usr/lib/netwatch-pro/netwatch_ebpf.o
-          # Package leaves the unit disabled for onboarding. GitHub runners
-          # have no systemd as PID 1, so accept unknown/static here too.
-          enabled="$(systemctl is-enabled netwatchd.service 2>/dev/null || true)"
-          case "$enabled" in
-            disabled|unknown|static|'') ;;
-            *) echo "unexpected unit enablement: $enabled" >&2; exit 1 ;;
-          esac
-      - name: Uninstall is complete and data is not kept by default
-        run: |
-          set -euo pipefail
-          sudo apt-get remove -y net-watch-pro
-          ! test -f /lib/systemd/system/netwatchd.service
-          ! test -d /var/lib/netwatch-pro
-          ! test -f /etc/netwatch-pro/allowed-uids
+  release:
+    uses: zvirox/release-workflows/.github/workflows/linux-release.yml@v1
+    with:
+      app_name: ${{ github.event.repository.name }}
+      frontend_dir: app
+      extra_binaries_cmd: |
+        rustup component add rust-src
+        curl -fsSL -o /tmp/bpf-linker.tar.zst https://github.com/aya-rs/bpf-linker/releases/download/v0.13.0/bpf-linker-x86_64-unknown-linux-musl.tar.zst
+        tar -xf /tmp/bpf-linker.tar.zst -C "$HOME/.cargo/bin"
+        cargo run -p xtask -- bpf
+        cargo build --release --locked -p netwatchd
+      build_cmd: cargo build --release --locked --manifest-path app/src-tauri/Cargo.toml --target-dir target --features tauri/custom-protocol
+      binary_path: target/release/net-watch-pro
+      nfpm_config: packaging/nfpm.yaml
+    secrets: inherit

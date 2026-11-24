@@ -1,0 +1,61 @@
+name: net-watch-pro
+arch: amd64
+platform: linux
+version: ${VERSION}
+release: "1"
+section: net
+maintainer: Prakash <zvirox@proton.me>
+description: Local network monitoring and per-app data usage tracker for Linux with eBPF
+homepage: https://github.com/zvirox/net-watch-pro
+license: AGPL-3.0-or-later
+
+contents:
+  - src: target/release/net-watch-pro
+    dst: /usr/bin/net-watch-pro
+    file_info: { mode: 0755 }
+  - src: target/release/netwatchd
+    dst: /usr/bin/netwatchd
+    file_info: { mode: 0755 }
+  - src: packaging/polkit/enable-monitoring
+    dst: /usr/libexec/netwatch-pro/enable-monitoring
+    file_info: { mode: 0755 }
+  - src: packaging/polkit/pro.netwatch.enable-monitoring.policy
+    dst: /usr/share/polkit-1/actions/pro.netwatch.enable-monitoring.policy
+  - src: packaging/systemd/netwatchd.service
+    dst: /usr/lib/systemd/system/netwatchd.service
+  - src: packaging/net-watch-pro.desktop
+    dst: /usr/share/applications/net-watch-pro.desktop
+  - src: packaging/icons/hicolor/32x32/apps/net-watch-pro.png
+    dst: /usr/share/icons/hicolor/32x32/apps/net-watch-pro.png
+  - src: packaging/icons/hicolor/128x128/apps/net-watch-pro.png
+    dst: /usr/share/icons/hicolor/128x128/apps/net-watch-pro.png
+  - src: packaging/icons/hicolor/256x256/apps/net-watch-pro.png
+    dst: /usr/share/icons/hicolor/256x256/apps/net-watch-pro.png
+  - src: packaging/icons/hicolor/512x512/apps/net-watch-pro.png
+    dst: /usr/share/icons/hicolor/512x512/apps/net-watch-pro.png
+  - src: LICENSE
+    dst: /usr/share/doc/net-watch-pro/LICENSE
+
+scripts:
+  postinstall: packaging/scripts/postinstall.sh
+  preremove: packaging/scripts/preremove.sh
+
+overrides:
+  deb:
+    depends:
+      - libwebkit2gtk-4.1-0
+      - libgtk-3-0
+      - libayatana-appindicator3-1
+      - polkit-1
+  rpm:
+    depends:
+      - webkit2gtk4.1
+      - gtk3
+      - libayatana-appindicator-gtk3
+      - polkit
+  archlinux:
+    depends:
+      - webkit2gtk-4.1
+      - gtk3
+      - libayatana-appindicator
+      - polkit

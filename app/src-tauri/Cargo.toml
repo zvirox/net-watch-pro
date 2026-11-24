@@ -6,6 +6,10 @@ license.workspace = true
 repository.workspace = true
 description = "Net Watch Pro UI shell (Tauri 2) — native daemon link and window lifecycle"
 
+[[bin]]
+name = "net-watch-pro"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
