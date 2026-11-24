@@ -1,10 +1,10 @@
 # Net Watch Pro — DESIGN.md (UI Design System)
 
-**Version:** 1.6 · **Date:** 2026-11-21
-**Source of truth:** `PRD.md` (scope, screens, flows) · `REAPM.md` (reference teardown) · `docs/decisions.md` (owner decisions D1–D7)
+**Version:** 2.0 · **Date:** 2026-11-24  
+**Source of truth:** `PRD.md` (scope, screens, flows) · `ARCHITECTURE.md` · `docs/decisions.md` (owner decisions D1–D7)
 
-**Version history:** 1.1 (2026-11-15): Dashboard §8.3 gains an "Unattributed / system" row + explanatory tooltip (F-03/D3a); settings §8.7 notes timezone + billing-cycle settings (F-04/D4a); App detail confidence badge stays per F4 (F-05/D5a). 1.2 (2026-11-19): add the "Network now" live-rate card with 60-second sparkline, Apps live-speed columns, `speed_unit` selector, and stale/no-collector states (live throughput plan, Phase A). 1.3 (2026-11-19): interfaces card shows Wi-Fi signal/link from local sysfs with "—" for missing values; last-hour rate history is labelled in-memory. 1.4 (2026-11-20): Phase D — range selector (§7.13), range-driven Dashboard totals and bar timeline plus billing-cycle card (§8.3), and the new Apps list screen (§8.10). 1.5 (2026-11-20): Phase 9 contrast fix — `border-strong`, light `text-disabled`, light chart series 3/4/muted and the light axis-label were recalculated to satisfy §9.1 (owner-approved; measured ratios recorded there). No new tokens. 1.6 (2026-11-21): Live/History connection rows are fed by the per-socket collector; `pid = 0` renders as "—" (unknown) and the empty state is reserved for genuinely idle periods.
-**Stack context:** Tauri 2 shell · Svelte 5 · shadcn-svelte components · ECharts · localhost WS data
+**Version history:** 1.1-1.6 (pre-v2.0): Svelte runes/shadcn baseline; 2.0 (2026-11-24): Major ecosystem unification to React 19 + Tailwind CSS v4 + Linear-Style Design System (Dark & Light). Complete retirement of backdrop glass blur in favor of 100% solid matte graphite & alabaster surfaces with 1px hairline precision borders and dual-shadow bevel illumination.
+**Stack context:** Tauri 2 shell · React 19 · Tailwind CSS v4 · @ui-sdk/react · ECharts · localhost WS data
 
 > **STRICT RULES — every UI built later must follow this file.**
 > 1. No colors outside §3. No fonts outside §4. No new primitives outside §7 without updating this file first.
@@ -20,11 +20,11 @@
 
 **Net Watch Pro feels like a precision instrument: calm, exact, trustworthy.**
 
-The product watches the user's network — a space where people feel watched *back*. The UI must feel like a clean lab readout, not a dashboard-metrics toy and not a security-scare booth: quiet dark and light surfaces, monospaced numerals that read like a terminal of truth, one confident accent color that means "the system is watching, so you don't have to." Data is the hero; chrome disappears. The single emotional promise of the brand — *everything local, nothing hidden* — is expressed through visible system status (a persistent, honest daemon state chip) and through restraint everywhere else.
+The product watches the user's network — a space where people feel watched *back*. The UI feels like a clean lab readout: quiet obsidian dark and alabaster light surfaces, monospaced numerals that read like a terminal of truth, and one confident accent color that means "the system is watching, so you don't have to." Data is the hero; chrome disappears. The single emotional promise of the brand — *everything local, nothing hidden* — is expressed through visible system status (a persistent, honest daemon state chip) and through restraint everywhere else.
 
 ### 3 Design Principles
 
-1. **Glass over calm (Calm Surface, Glass Overlay)** — The base UI is a modern-minimal, flat, matte system: solid surfaces, hairline borders, no decorative gradients. Only *transient, floating* layers (modals, toasts, dialogs over content) use a glass treatment: translucent surface with backdrop blur, so the live data stays perceptible underneath without ever competing with it. The app never shimmer-distorts; the glass is subtle (low blur, low alpha) and reserved.
+1. **Pure Solid Surfaces (Zero Glass Blur)** — The base UI and floating dialogs use 100% solid matte surfaces: `#08080a` (Dark canvas), `#121215` (Surface 1), `#17171c` (Surface 2), `#202026` (Surface 3); `#f7f7f8` (Light canvas), `#ffffff` (Surface 1), `#f2f2f4` (Surface 2). Zero `backdrop-filter: blur()`. Modals and floating elements use Linear dual-shadow illumination (`shadow-linear-dark` / `shadow-linear-light`) with 1px hairlines.
 2. **Numbers are the interface** — Every quantitative element (bytes, rates, IPs, ports, timestamps) is rendered in the mono numerals with tabular alignment so columns never jitter and values are comparable at a glance. Charts are the *summary* of the numbers, never a replacement; every chart has a data-table equivalent.
 3. **Honest status, always visible** — The system state (daemon running / degraded / stopped, eBPF attached, recording) is permanently surfaced as a status chip in the top bar and mirrored in the tray. No state is ever communicated by color alone, and no degraded mode is ever silently hidden. If data would be wrong or stale, the UI says so before showing it.
 

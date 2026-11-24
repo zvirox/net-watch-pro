@@ -75,7 +75,7 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 3. **Local-only data:** everything in a local SQLite database; no network calls by the app itself; default 90-day retention (configurable), automatic pruning; connection-level detail for the raw window (7 days default), endpoint-level aggregates (`app × remote host/port/proto per day`) for the full retention period (90 days free; up to 1 year Pro).
 4. **Effortless install:** one-command install on Arch/CachyOS (AUR), deb-based (apt repo), and rpm-based (dnf repo) distros; daemon runs as a systemd service; **UI is unprivileged and talks to the daemon over a Unix domain socket with peer-credential (UID allowlist) authorization — one admin prompt at enable-time during onboarding, never per launch** (D1a).
 5. **Low overhead:** < 3% CPU and < 150 MB RSS for the daemon under typical desktop load; negligible packet path cost (eBPF observe, no blocking). **[HYPOTHESIS]** the overhead budget's workload is undefined until the spike measures it (Appendix B, item 10).
-6. **Modern, fast UI:** Svelte 5 + shadcn-svelte design system, ECharts visualizations, dark/light themes.
+6. **Modern, fast UI:** React 19 + Tailwind CSS v4 + Zustand design system, ECharts visualizations, dark/light themes.
 7. **Freemium foundation:** free tier = full live monitoring + per-app usage + basic history (connection-level for raw window, endpoint-level aggregates beyond) **plus budgets & alerts**; Pro tier (license key) = advanced history search (multi-filter: app, date range, remote host/IP, port, protocol) + CSV/JSON export + retention beyond 90 days (up to 1 year). License validation ships in MVP.
 8. **Usage budgets & alerts:** per-app and total daily/monthly budgets with desktop notifications; metered-interface aware. Ships in MVP per the metered-connection positioning (D6a).
 
@@ -95,8 +95,8 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 | Layer | Choice | Notes |
 |---|---|---|
 | Desktop shell | **Tauri 2** | Unprivileged UI process; tray icon; window state; single-instance |
-| Frontend | **Svelte 5** | Fast, small bundle; runes-based state |
-| Components | **shadcn-svelte** | Design system, theming (dark/light), accessible primitives |
+| Frontend | **React 19** | Fast, modern component model with concurrent rendering |
+| Styling & Components | **Tailwind CSS v4 + @ui-sdk/react** | Linear-Style design system, dark/light themes, accessible primitives |
 | Charts | **ECharts** | Usage timelines, top-talker bars, sparklines |
 | Backend | **Rust + Tokio** | Daemon core; async pipeline; HTTP/WS local API for the UI |
 | Monitoring | **Aya eBPF** | Kernel-side traffic observation (cgroup/socket hooks), no packet rewriting |

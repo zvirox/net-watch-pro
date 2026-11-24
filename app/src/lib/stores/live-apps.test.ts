@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { holdOrder, liveAppsStore, type LiveAppRow } from './live-apps.svelte';
+import { holdOrder, liveAppsStore, type LiveAppRow } from './live-apps';
 
 describe('live-apps store holdOrder', () => {
   beforeEach(() => {

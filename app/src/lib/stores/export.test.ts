@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { exportStore } from './export.svelte';
-import { licenseStore } from './license.svelte';
+import { exportStore } from './export';
+import { licenseStore } from './license';
 
 describe('exportStore', () => {
   beforeEach(() => {

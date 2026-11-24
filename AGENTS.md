@@ -8,7 +8,7 @@
 ## 1. Project Summary (5 lines)
 
 1. **Net Watch Pro** is a Linux network-traffic monitor and per-app data-usage tracker — monitor-only MVP, firewall features come later, step by step (PRD §12).
-2. Two processes: a root systemd daemon (`netwatchd`, Rust + Tokio + Aya eBPF) that observes traffic and writes SQLite, and an unprivileged Tauri 2 + Svelte 5 UI. They talk only over a localhost Unix socket with peer-credential authorization (ARCHITECTURE.md; D1a).
+2. Two processes: a root systemd daemon (`netwatchd`, Rust + Tokio + Aya eBPF) that observes traffic and writes SQLite, and an unprivileged Tauri 2 + React 19 UI. They talk only over a localhost Unix socket with peer-credential authorization (ARCHITECTURE.md; D1a).
 3. Everything is local: no cloud, no telemetry, no outbound connections — this is a product promise and a hard constraint (PRD §1/§4).
 4. Freemium: free tier = live monitoring + per-app usage + 90-day history; Pro (offline license key) = advanced filters, CSV/JSON export, longer retention.
 5. The docs are the contract: UI follows DESIGN.md, schema follows DATABASE.md, endpoints follow API.md, structure follows ARCHITECTURE.md. Code that drifts from them is wrong.
@@ -73,7 +73,7 @@ Exception: if the docs contradict each other, the priority order in §2 decides 
 
 ## 5. DO NOT Rules
 
-- **Do not change the tech stack.** Tauri 2 / Svelte 5 / shadcn-svelte / ECharts / Rust + Tokio / Aya eBPF / SQLite are mandated (PRD §5, ARCHITECTURE.md §2). No substitutes, no additions "while we're at it".
+- **Do not change the tech stack.** Tauri 2 / React 19 / Tailwind CSS v4 / Zustand / ECharts / Rust + Tokio / Aya eBPF / SQLite are mandated (PRD §5, ARCHITECTURE.md §2). No substitutes, no additions "while we're at it".
 - **Do not add new libraries, dependencies, or tools without asking first.** This includes npm packages, Rust crates, and cargo/npm subcommands. Ask with: what it is, why the existing stack can't do it, size/maintenance cost. Wait for a yes.
 - **Do not modify the database schema without updating DATABASE.md.** No ad-hoc `ALTER TABLE`, no indexes without the named-query justification (DATABASE.md §5), no editing an applied migration — new forward-only migration files only (DATABASE.md §8).
 - **Do not delete or rewrite working code unless the task asks for it.** Refactors are only in-scope when explicitly requested, or when they remove duplication against §4.2. Leave comments and structure you don't understand alone — ask.

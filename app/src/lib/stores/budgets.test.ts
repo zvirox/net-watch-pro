@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { budgetsStore, type BudgetState } from './budgets.svelte';
+import { budgetsStore, type BudgetState } from './budgets';
 
 describe('budgetsStore.percent', () => {
   it('returns 0 when limit_bytes is zero or negative', () => {

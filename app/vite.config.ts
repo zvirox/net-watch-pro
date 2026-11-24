@@ -1,17 +1,17 @@
 import { defineConfig } from 'vite';
-import { svelte } from '@sveltejs/vite-plugin-svelte';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { fileURLToPath } from 'node:url';
 
-// ARCHITECTURE.md §4: app/ is the Svelte 5 frontend workspace.
-// Tauri integration (src-tauri, IPC) lands with task P0.4.
+// ARCHITECTURE.md §4: app/ is the React 19 + Tailwind v4 frontend workspace.
 export default defineConfig({
-  plugins: [svelte()],
-  // $lib alias (SvelteKit convention) for vendored component imports.
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      $lib: new URL('./src/lib', import.meta.url).pathname,
+      '$lib': fileURLToPath(new URL('./src/lib', import.meta.url)),
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-  // Strict TS lives in tsconfig.json; Vite serves app root only.
   server: {
     strictPort: true,
     port: 5173,

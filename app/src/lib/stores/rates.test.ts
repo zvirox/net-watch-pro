@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { ratesStore, onRatesFrame, tickRatesNow } from './rates.svelte';
+import { ratesStore, onRatesFrame, tickRatesNow } from './rates';
 
 describe('ratesStore', () => {
   beforeEach(() => {

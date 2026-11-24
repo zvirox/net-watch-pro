@@ -1,22 +1,90 @@
-// OQ4 decision (P8.6): small deterministic sample-data set for the read-only
-// demo mode. No daemon, no files, no network — all data lives in memory.
+// OQ4 decision (P8.6): small sample-data set for the read-only demo mode.
+// No daemon, no files, no network — all data lives in memory. Anchored to load
+// time so timestamps read as a recent, coherent 24 h window rather than 1970.
 
-import type { HistoryRow } from '$lib/stores/history.svelte';
-import type { InterfaceUsage, Summary, TimelinePoint } from '$lib/stores/usage.svelte';
+export interface HistoryRow {
+  id?: number;
+  pid?: number;
+  process_name?: string;
+  episode_id?: number;
+  app_id?: number;
+  app_name?: string;
+  app?: { id: number; name: string; icon: string | null };
+  binary_path?: string;
+  cmdline?: string;
+  remote_endpoint?: string;
+  local_ip?: string;
+  local_port?: number;
+  remote_ip?: string;
+  remote_host?: string | null;
+  remote_port?: number;
+  protocol?: string;
+  proto?: string;
+  bytes_up: number;
+  bytes_down: number;
+  packets_up?: number;
+  packets_down?: number;
+  connection_count?: number | null;
+  first_seen_at?: number;
+  last_seen_at?: number;
+  started_at?: number;
+  closed_at?: number;
+  duration_sec?: number;
+}
 
-const DAY = 86_400;
-const HOUR = 3_600;
+export interface InterfaceUsage {
+  id?: number;
+  name: string;
+  kind?: string;
+  is_metered?: boolean;
+  bytes?: { up: number; down: number };
+  signal_dbm?: number | null;
+  link_mbps?: number | null;
+  bytes_rx?: number;
+  bytes_tx?: number;
+}
+
+export interface TimelinePoint {
+  bucket_start: number;
+  up: number;
+  down: number;
+  connections: number;
+}
+
+export interface Summary {
+  state?: string;
+  today: { total: number; attributed: number; unattributed: number };
+  month: { total: number; attributed: number; unattributed: number };
+  range: {
+    preset: string;
+    start: number;
+    end: number;
+    totals: { total: number; attributed: number; unattributed: number };
+  };
+  cycle: { start: number; end: number; days_left: number; used_bytes: number };
+  budgets: {
+    total_daily: { used_bytes: number; limit_bytes: number; level: string };
+    total_monthly: { used_bytes: number; limit_bytes: number; level: string };
+  };
+  top_apps: { id: number; name: string; bytes_total: number }[];
+}
+
+const MINUTE = 60;
+const QUARTER = 15 * MINUTE;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+const NOW = Math.floor(Date.now() / 1000 / QUARTER) * QUARTER;
 
 export const DEMO_SUMMARY: Summary = {
   today: { total: 1_240_000_000, attributed: 1_080_000_000, unattributed: 160_000_000 },
   month: { total: 18_600_000_000, attributed: 16_900_000_000, unattributed: 1_700_000_000 },
   range: {
     preset: '24h',
-    start: 0,
-    end: DAY,
+    start: NOW - DAY,
+    end: NOW,
     totals: { total: 1_240_000_000, attributed: 1_080_000_000, unattributed: 160_000_000 },
   },
-  cycle: { start: 0, end: 30 * DAY, days_left: 8, used_bytes: 18_600_000_000 },
+  cycle: { start: NOW - 22 * DAY, end: NOW + 8 * DAY, days_left: 8, used_bytes: 18_600_000_000 },
   budgets: {
     total_daily: { used_bytes: 0, limit_bytes: 0, level: 'ok' },
     total_monthly: { used_bytes: 18_600_000_000, limit_bytes: 0, level: 'ok' },
@@ -29,12 +97,17 @@ export const DEMO_SUMMARY: Summary = {
   state: 'ok',
 };
 
-export const DEMO_TIMELINE: TimelinePoint[] = Array.from({ length: 14 }, (_, index) => ({
-  bucket_start: index * DAY,
-  up: 30_000_000 + index * 2_400_000,
-  down: 210_000_000 + index * 9_600_000,
-  connections: 120 + index * 14,
-}));
+// 96 × 15 min = 24 h. The gentle day/night wave keeps the summary's ~1.2 GB
+// total coherent and gives the axis advancing times instead of a repeated one.
+export const DEMO_TIMELINE: TimelinePoint[] = Array.from({ length: 96 }, (_, index) => {
+  const wave = Math.sin((index / 96) * Math.PI * 2 - Math.PI / 2);
+  return {
+    bucket_start: NOW - (95 - index) * QUARTER,
+    up: Math.round(1_200_000 + 500_000 * wave),
+    down: Math.round(9_000_000 + 4_000_000 * wave),
+    connections: 120 + Math.round(40 * wave),
+  };
+});
 
 export const DEMO_INTERFACES: InterfaceUsage[] = [
   {
@@ -74,8 +147,8 @@ export const DEMO_ROWS: HistoryRow[] = [
     packets_up: 1400,
     packets_down: 3200,
     connection_count: null,
-    first_seen_at: 10 * DAY,
-    last_seen_at: 10 * DAY + HOUR,
+    first_seen_at: NOW - 2 * HOUR,
+    last_seen_at: NOW - HOUR,
   },
   {
     id: 102,
@@ -93,7 +166,7 @@ export const DEMO_ROWS: HistoryRow[] = [
     packets_up: 600,
     packets_down: 1100,
     connection_count: null,
-    first_seen_at: 9 * DAY,
-    last_seen_at: 9 * DAY + 2 * HOUR,
+    first_seen_at: NOW - 5 * HOUR,
+    last_seen_at: NOW - 4 * HOUR,
   },
 ];

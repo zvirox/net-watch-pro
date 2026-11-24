@@ -69,8 +69,8 @@ export function buildChartTheme(): Record<string, unknown> {
       itemStyle: { borderRadius: [radiusPx, radiusPx, 0, 0] },
     },
     tooltip: {
-      backgroundColor: token('--nwp-glass-surface'),
-      borderColor: token('--nwp-glass-border'),
+      backgroundColor: token('--nwp-surface'),
+      borderColor: token('--nwp-border'),
       borderWidth: 1,
       padding: [8, 12],
       textStyle: { color: text, fontFamily: fontUi, fontSize: 12 },

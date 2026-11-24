@@ -25,8 +25,8 @@
 | Layer | Choice | One-line reason |
 |---|---|---|
 | Desktop shell | **Tauri 2** | Native window/tray/notifications with a tiny binary and a Rust core we can keep unprivileged by design. |
-| Frontend | **Svelte 5** | Runes give fine-grained reactivity for high-frequency live tables without a virtual-DOM tax. |
-| Components | **shadcn-svelte** | Accessible, vendorable primitives we style strictly via DESIGN.md tokens — no theme lock-in. |
+| Frontend | **React 19** | Modern declarative UI with concurrent rendering and unified ecosystem integration. |
+| Styling & Components | **Tailwind CSS v4 + @ui-sdk/react** | Linear-Style solid matte surfaces, 1px hairlines, and accessible primitives. |
 | Charts | **ECharts** | Battle-tested canvas charts that handle streaming/decimated time series and theming from our tokens. |
 | Daemon backend | **Rust + Tokio** | One language for eBPF loaders, async IPC, and DB I/O; memory safety in a root process is non-negotiable. |
 | Monitoring | **Aya eBPF** | Pure-Rust CO-RE eBPF: socket/cgroup hooks for per-process byte accounting without packet rewriting (monitor-only MVP). |
@@ -47,7 +47,7 @@ Explicitly **not** used (avoid over-engineering): Kubernetes/any server, GraphQL
 |---|---|---|---|
 | `netwatchd` | Rust/Tokio systemd service | root (bounded caps: `CAP_BPF`, `CAP_PERFMON`, `CAP_NET_ADMIN`) | Loads Aya programs, attributes traffic (cgroup-first identity, `/proc` fallback), writes SQLite, serves Unix-socket JSON API, 15 s interface-counter sampler, 1 Hz rate sampler for live PC speed, pruning, health endpoint |
 | eBPF layer | kernel (CO-RE, BTF) | — | Per-socket/per-cgroup byte + packet counters, process identity metadata; pushed to daemon via ring buffer |
-| UI process | Tauri 2 + Svelte 5 | user | All screens per DESIGN.md §8; connects to daemon Unix socket; tray; no root ever |
+| UI process | Tauri 2 + React 19 | user | All screens per DESIGN.md §8; connects to daemon Unix socket; tray; no root ever |
 | SQLite DB | file (WAL) | root-owned | Connections history, usage rollups (hour/day/15m + endpoint-day), app registry, settings cache, schema migrations |
 | IPC socket | `/run/netwatch-pro/api.sock` | root-owned dir, socket `0660` owned by `netwatch` group | Peer-credential check vs allowed-UID list at `/etc/netwatch-pro/allowed-uids` (one numeric UID per line, root-owned `0644`); written by the one-time onboarding pkexec step, none per launch |
 | Packaging | PKGBUILD / deb / rpm + systemd unit | installer | Registers hardened unit (ProtectSystem, PrivateTmp, RestrictAddressFamilies), installs DB dir `/var/lib/netwatch-pro` |
@@ -95,8 +95,8 @@ net-watch-pro/
 │   │   ├── Cargo.toml · tauri.conf.json
 │   │   ├── capabilities/            # Tauri permission grants (least privilege)
 │   │   └── src/{main.rs,tray,window_state,daemon_link}.rs   # token_link.rs removed (D1a)
-│   └── src/                         # Svelte 5 frontend
-│       ├── main.ts · App.svelte
+│   └── src/                         # React 19 frontend
+│       ├── main.tsx · App.tsx
 │       ├── lib/
 │       │   ├── api/                 # Unix-socket client, typed endpoint wrappers, reconnect logic
 │       │   ├── stores/              # runes-based shared state (§7)
@@ -149,7 +149,7 @@ Rules: no shared code by copy — shared types live in `netwatch-common`. The Ta
 ### 5.1 Runtime flow (happy path)
 
 ```
- Kernel                     netwatchd (root, Tokio)                      UI (user, Tauri 2 + Svelte 5)
+ Kernel                     netwatchd (root, Tokio)                      UI (user, Tauri 2 + React 19)
 ┌──────────────┐  ring    ┌──────────────────────────────┐  UDS/JSON  ┌────────────────────────────┐
 │ Aya eBPF     │ buffer   │ ebpf_loader → attribution →  │ ────────▶ │ socket client → stores →   │
 │ socket/cgrp  │ ─events▶ │ accounting → batch writer    │           │ screens (DESIGN.md §8)     │
@@ -244,10 +244,10 @@ Policy: raw `connections` older than the raw-window (7 days default) is compacte
 
 ## 6. State Management Approach
 
-### 6.1 UI (Svelte 5)
+### 6.1 UI (React 19 + Zustand)
 
-- **Runes are the store layer.** No external state library. Three state tiers:
-  - **Connection state** (`lib/stores/daemon.svelte.ts`): socket link, auth, chip state per DESIGN.md §7.5. Owns reconnect with capped backoff (target: UI auto-recovers ≤ 5 s per PRD metric).
+- **Zustand stores are the state layer.** Minimal boilerplate, direct hook access, and zero virtual-DOM overhead for streaming connections.
+  - **Connection state** (`lib/stores/daemon.ts`): socket link, auth, chip state per DESIGN.md §7.5. Owns reconnect with capped backoff (target: UI auto-recovers ≤ 5 s per PRD metric).
   - **Live data state** (`live.svelte.ts`, `usage.svelte.ts`): server-pushed data kept verbatim; stores expose *derived* sorted/filtered views so screens stay dumb.
   - **Local UI state** (`settings-ui.svelte.ts`): theme, sidebar collapse, frozen-snapshot flag — persisted via Tauri store, mirrors the reference app's `core:ui/v1` pattern (REAPM.md §8).
 - **Server is the source of truth** — no optimistic writes, no client-side reconciliation of usage numbers; stale/detached states render honest UI (chip "Connecting…", banners per DESIGN.md §7.9) instead of cached guesses.
@@ -299,8 +299,8 @@ Retry policy: user-initiated retries everywhere except WS reconnect (automatic, 
 | WS routes/channels | dot-namespaced kebab | `live.connections` |
 | Env vars | `NETWATCH_` + UPPER_SNAKE | `NETWATCH_DATA_DIR` |
 | TS files | kebab-case | `daemon-link.ts` |
-| Svelte components | PascalCase.svelte | `StatusChip.svelte` |
-| Stores | domain.svelte.ts, camelCase exports | `daemonStore` |
+| React components | PascalCase.tsx | `StatusChip.tsx` |
+| Stores | domain.ts, camelCase exports | `useDaemonStore` |
 | CSS | tokens only (DESIGN.md §3) | `--nwp-primary` |
 | API DTOs | camelCase JSON | `bytesUp` |
 | Git | Conventional Commits | `feat(dashboard): …` |
@@ -308,7 +308,7 @@ Retry policy: user-initiated retries everywhere except WS reconnect (automatic, 
 ### 8.2 Code style
 
 - **Rust:** rustfmt defaults + clippy `-D warnings`; `#![deny(unsafe_code)]` everywhere except `netwatch-ebpf` and the Aya loader; MSRV pinned in `rust-toolchain.toml`; public crate APIs documented (`missing_docs` warn).
-- **TS/Svelte:** ESLint + Prettier, strict TS (`noUncheckedIndexedAccess`), no `any`; Svelte 5 runes syntax only (no legacy `let` reactivity); components are presentational where stores exist.
+- **TS/React:** ESLint + Prettier, strict TS (`noUncheckedIndexedAccess`), no `any`; idiomatic React 19 hooks and Zustand state selectors; components are presentational where stores exist.
 - **SQL:** migrations only via sqlx `migrations/*.sql` (forward-only, never edit applied files); no business SQL outside `netwatch-core`/`netwatchd::db`.
 - **Comments:** explain *why*, not what; every public daemon setting and API field cross-references its PRD/DESIGN section.
 - **Reviews:** PR template checklist — "Does this follow DESIGN.md §7/§8 and ARCHITECTURE.md §4–§9?"
