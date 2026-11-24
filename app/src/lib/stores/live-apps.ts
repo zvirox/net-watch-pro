@@ -22,9 +22,7 @@ export const liveAppsStore = {
 
 export function holdOrder(newRows: LiveAppRow[], holdMs: number = 2000): LiveAppRow[] {
   const now = Date.now();
-  const sorted = [...newRows].sort(
-    (a, b) => (b.down_bps + b.up_bps) - (a.down_bps + a.up_bps)
-  );
+  const sorted = [...newRows].sort((a, b) => b.down_bps + b.up_bps - (a.down_bps + a.up_bps));
 
   if (heldOrderList.length === 0 || now - lastRefresh >= holdMs) {
     lastRefresh = now;

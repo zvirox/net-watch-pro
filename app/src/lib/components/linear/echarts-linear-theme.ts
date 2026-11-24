@@ -19,7 +19,7 @@ export const LINEAR_COLORS = {
 export const getLinearEChartsOption = (isDark: boolean = true) => ({
   backgroundColor: 'transparent',
   textStyle: {
-    fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
     color: isDark ? LINEAR_COLORS.textDark : LINEAR_COLORS.textLight,
   },
   grid: {
@@ -37,14 +37,16 @@ export const getLinearEChartsOption = (isDark: boolean = true) => ({
     textStyle: {
       color: isDark ? '#F5F5F6' : '#0F1115',
       fontSize: 12,
-      fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+      fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
     },
     extraCssText: isDark
       ? 'border-radius: 8px;'
       : 'box-shadow: 0 1px 2px rgb(16 24 40 / 5%); border-radius: 8px;',
   },
   xAxis: {
-    axisLine: { lineStyle: { color: isDark ? LINEAR_COLORS.borderDark : LINEAR_COLORS.borderLight } },
+    axisLine: {
+      lineStyle: { color: isDark ? LINEAR_COLORS.borderDark : LINEAR_COLORS.borderLight },
+    },
     splitLine: { show: false },
     axisTick: { show: false },
   },

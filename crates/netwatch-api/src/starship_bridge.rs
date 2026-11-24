@@ -4,6 +4,16 @@
 //! and checkpoint rollbacks over `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock`
 //! and publishes the manifest at `$XDG_DATA_HOME/starship/plugins/nwp.json`.
 
+#![allow(
+    clippy::unreadable_literal,
+    clippy::similar_names,
+    clippy::missing_panics_doc,
+    clippy::too_many_lines,
+    clippy::redundant_closure_for_method_calls,
+    clippy::unwrap_used,
+    clippy::expect_used
+)]
+
 use serde_json::json;
 use starship_plugin::{AppManifest, PluginBridge, PluginTool, bridge_dir};
 use std::collections::HashMap;

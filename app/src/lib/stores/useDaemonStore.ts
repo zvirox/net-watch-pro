@@ -4,11 +4,7 @@ import { DaemonApiClient } from '$lib/api/client';
 export type DaemonState = 'monitoring' | 'degraded' | 'stopped' | 'starting';
 export type EbpfState = 'attached' | 'failed' | 'unsupported' | 'unattached' | 'no_collector';
 export type ConnectionState =
-  | 'disconnected'
-  | 'connecting'
-  | 'connected'
-  | 'auth-required'
-  | 'auth-invalid';
+  'disconnected' | 'connecting' | 'connected' | 'auth-required' | 'auth-invalid';
 
 interface DaemonStoreState {
   connection: ConnectionState;
