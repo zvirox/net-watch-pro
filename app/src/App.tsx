@@ -29,7 +29,7 @@ export const App: React.FC = () => {
       {/* Universal 40px Linear TitleBar */}
       <TitleBar
         title="Net Watch Pro"
-        version="v0.9.2"
+        version="v0.9.2-beta.5"
         icon={
           <div className="size-4 rounded bg-[#3355FF] text-white flex items-center justify-center font-bold text-[9px]">
             NW

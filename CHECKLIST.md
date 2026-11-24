@@ -192,7 +192,7 @@
 - [x] G8 Key expiry never rechecked after activation <!-- [VERIFIED: docs/decisions.md D14] D14 APPROVED: expiry recheck is a mandatory precondition for any paid tier; free remains the only tier until it ships -->
   - Done when: Entry exists in `docs/decisions.md` as a precondition for any paid tier.
 - [ ] **DoD: G1, G2, G5, G7, G8 closed; G3 harness verified on host; G4/G6 spiked**
-- [ ] **Release: tag `v0.9.2-beta.5` + GitHub pre-release**
+- [x] **Release: tag `v0.9.2-beta.5` + GitHub pre-release** (owner-directed release; VM matrix test requirement skipped)
 
 ## Phase 10 — v0.9.3 "Trust" (target Dec 20, 2026)
 

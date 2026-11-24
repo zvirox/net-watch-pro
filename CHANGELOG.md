@@ -10,6 +10,14 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ## [Unreleased]
 
+## [v0.9.2-beta.5] — 2026-11-24
+
+### Added
+- **Unified Linear-Style Design System**: Migrated UI to solid elevated surfaces (`#121215`, `#17171c`, `#202026`), hairline precision borders (`#23232a`), and zero blur across all screens.
+- **ECharts Real-Time Visuals**: Integrated Linear-themed real-time bandwidth and traffic flow analytics charts.
+- **Packaging & CI Matrix**: Standardized reusable release pipeline producing .deb, .rpm, .apk, and .tar.gz distributions.
+- **Starship Control Integration**: Ecosystem orchestration bridge via `$XDG_DATA_HOME/starship/plugins/nwp.json` and Unix domain socket `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock`.
+
 ### Documentation
 
 - Roadmap to v1.0 (`docs/ROADMAP.md`): merged approved roadmap plan establishing
