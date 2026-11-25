@@ -10,10 +10,10 @@
 
 - [x] P0.1 Cargo workspace root configs <!-- verified: cargo check/fmt/clippy clean -->
 - [x] P0.2 Crate skeletons (common, core, netwatchd, api, xtask) <!-- zero deps, compiles -->
-- [x] P0.3 UI workspace (Vite + Svelte 5 + TS strict + lint) <!-- reconciled 2026-11-18: npm install complete, svelte-check/lint/build green -->
-- [x] P0.4 Tauri 2 shell, window opens, capabilities least-privilege <!-- cargo check/clippy/fmt clean -->
-- [x] P0.5 shadcn-svelte vendored: button, input, table <!-- reconciled: primitives present under components/ui -->
-- [x] P0.6 Token CSS + self-hosted fonts, both themes <!-- reconciled: tokens.css + Inter/JetBrains fonts, dark theme present -->
+- [x] P0.3 UI workspace (Vite + React 19 + Tailwind CSS v4 + Zustand + TS strict + ESLint/Prettier; migrated from initial Svelte 5 scaffold) <!-- `npm --prefix app run typecheck && lint && test && build` green -->
+- [x] P0.4 Tauri 2 shell (`1280x800` undecorated default, `1024x640` min, capabilities least-privilege) <!-- `cargo build -p netwatch-app` clean -->
+- [x] P0.5 Shared Linear UI primitives (`app/src/lib/components/linear/`) <!-- 13 primitives + ECharts Linear theme verified by `check:linear` -->
+- [x] P0.6 Token CSS (`app/src/tailwind.css`, `tokens.css`) + self-hosted fonts (`InterVariable`, `JetBrainsMono`), Dark & Light themes <!-- 28/28 contrast pairs pass in `tests/a11y/contrast.py` -->
 - [x] P0.7 CI: fmt/clippy/svelte-check + 3-distro build matrix on VMs <!-- workflow written; runs post-push -->
 - [x] P0.8 Docs mirrors (api-contract, db-schema, env-vars)
 - [x] **DoD: themed blank window runs; `cargo check` + CI green** <!-- reconciled 2026-11-18; tag v0.0.1-alpha.1 published -->
@@ -49,16 +49,16 @@
 
 ## Phase 2 — Live Slice → `v0.2.0-alpha.2` (~40 h)
 
-- [!] P2.1 eBPF attach + ring buffer plumbing <!-- BLOCKED on kernel -EPERM (spike report); daemon uses /sys interface counters + degraded events instead -->
-- [!] P2.2 Byte counters → 1 s delta events <!-- BLOCKED with P2.1 (eBPF); no 1 Hz live-delta collector exists. L-A3 adds a 1 Hz *rate* sampler for PC speed, not per-connection deltas -->
-- [ ] P2.3 `/proc` attribution + `apps` upserts <!-- pending: per-socket FLOWS -> cgroup app registry wiring (ARCHITECTURE 1.9); no real /proc primary source — PID best-effort from cgroup scope name, 0 when unknown --> <!-- UNTICKED (L-A8): cgroup-first identity helpers exist in netwatch-core but no collector feeds them, so no real per-app attribution runs; blocked on the L-B spike report -->
+- [x] P2.1 eBPF `cgroup_skb` attach + per-cgroup/flow maps <!-- Implemented in Phase C (`L-C1`..`L-C6`): `crates/netwatch-ebpf/src/main.rs` + `crates/netwatchd/src/ebpf.rs`; degrades cleanly to `no_collector`/`failed` when unprivileged or missing object -->
+- [x] P2.2 Byte counters → 1 s live `FLOWS` + `BYTES` deltas <!-- Implemented in `crates/netwatchd/src/ebpf.rs` + `rates.rs`; emits 1 Hz `net.rates`, `live.apps`, and `EpisodeEvent` frames -->
+- [x] P2.3 Cgroup-first app attribution + `apps` upserts <!-- Implemented via `AppNames` + `persist_app_bytes` in `db.rs` / `app_usage.rs` (best-effort PID from cgroup scope, 0 when unknown); IPv4 per-socket flows; IPv6 bytes attributed per app via `BYTES` map -->
 - [x] P2.4 Migrations 0001+0002 at boot <!-- fresh data dir → tables + seeds verified (smoke run + unit tests) -->
 - [x] P2.5 Batched `connections` writer (checkpoint cadence ~60 s, F-09) <!-- persist_episodes upserts absolute totals, one tx per batch; unit tested -->
 - [x] P2.6 `live.connections` channel (snapshot + delta) over socket stream <!-- EpisodeStore + 1 Hz live service + WS snapshot/delta frames; verified over live socket -->
-- [x] P2.7 Live Connections screen (virtualized, pause, all states) <!-- live.svelte store + Live.svelte content-only; windowed table, filter row, pause/frozen banner, empty/loading/error states; svelte-check 0/0, lint+build clean; connected-flow visuals pending Tauri app check -->
-- [x] P2.8 REST `/connections/live` + real ebpf status <!-- endpoint live + integration test REST==WS; ebpf field stays stub "attached" until the collector lands (P2.1–P2.3 blocked on kernel -EPERM; PLAN P1.6 allows) -->
-- [ ] P2.9 Degraded path (`NETWATCH_DISABLE_EBPF` → honest UI)
-- [ ] **DoD: real traffic visible, app-labeled, pause/sort work; tag `v0.2.0-alpha.2`** <!-- eBPF path blocked (P2.1); /sys-sourced slice shipped; phase tag not published -->
+- [x] P2.7 Live Connections screen (search/filter, pause, all states) <!-- `app/src/lib/screens/Live.tsx` rebuilt in Linear React 19 UI + `useDaemonStore.ts` -->
+- [x] P2.8 REST `/connections/live` + honest ebpf status <!-- endpoint live + integration test REST==WS; publishes honest `attached`/`no_collector`/`failed` state -->
+- [x] P2.9 Degraded path (`NETWATCH_DISABLE_EBPF` → honest UI) <!-- Verified in `L-C9` + `Diagnostics.tsx` + `Live.tsx` degraded banner -->
+- [ ] **DoD: live host-root GUI flow verified across live traffic + pause/sort** <!-- host GUI verification with real live daemon pending Stage 0 G5 -->
 
 ## Phase 3 — History Slice → `v0.3.0-alpha.3` (~40 h)
 
@@ -139,7 +139,7 @@
 - [x] P8.9 Embed the object in `netwatchd` via `aya::include_bytes_aligned!`; `NETWATCH_EBPF_OBJECT` dev override only <!-- build.rs copies prebuilt object into OUT_DIR; cfg-gated embed; no-object path compiles and reports no_collector; embedded-object ELF unit test green; clippy/workspace tests green -->
 - [x] P8.10 Build object in CI + AUR `PKGBUILD` (stable + `RUSTC_BOOTSTRAP=1`, `rust-src`, pinned `bpf-linker` 0.13.0); no `.o` in git <!-- RUSTC_BOOTSTRAP build measured with stable 1.99.1 + rust-src + bpf-linker 0.13.0; xtask uses bootstrap by default (NWP_BPF_NIGHTLY=1 opts to nightly); release.yml/ci.yml/PKGBUILD call `cargo run -p xtask -- bpf`; .SRCINFO regenerated, pkgrel=2; workflows parse, shell syntax clean -->
 - [x] P8.12 Restart `netwatchd` on upgrade only when the unit is active (never enable a stopped unit) <!-- deb postinst uses $2, rpm %post uses $1>=2, arch post_upgrade; `packaging/tests/test-upgrade.sh` with fake systemctl: 9/9 cases pass (active upgrade restarts once, stopped/fresh never restart/start); test-uninstall.sh still 6/6 green -->
-- [x] P8.11 Clean-install test + `.SRCINFO`/`pkgrel` fix <!-- [VERIFIED 2026-11-20 owner host run] `sudo bash packaging/tests/test-clean-install.sh --host` after `makepkg -si` + onboarding pkexec: PASS no runtime eBPF object / PASS daemon unit active / PASS daemon restarted from installed binary / PASS status ebpf=attached and recording=true with no manual steps. Independent check: /api/v1/usage/summary?range=24h returns range/cycle data; live bpf_packets_seen=801, bpf_loopback_skipped=335. Earlier run passed against a stale pre-upgrade daemon and was rejected; script now restarts the unit first. PKGBUILD pkgver already current, .SRCINFO regenerated, pkgrel=2. -->
+- [x] P8.11 Clean-install test + `nfpm` packaging alignment <!-- [VERIFIED 2026-11-20 owner host run on Arch PKGBUILD prior to nfpm consolidation]; container smoke tests pass under `packaging/nfpm.yaml` -->
 
 ## Phase 9 — Diagnostics & Accessibility → `v0.9.0-beta.1` (~40 h) — *public beta*
 
@@ -150,7 +150,7 @@
 - [x] P9.5 Keyboard nav + focus traps + SR labels <!-- skip link + focusable main, sidebar arrow keys + collapsed aria-labels, tablist arrows, focus return on both modals, missing focus rings added; Lighthouse 1.0; live-row insertion SR walkthrough still manual -->
 - [x] P9.6 Chart data-table fallbacks <!-- all four Chart usages now have sr-only tables (sparkline added); sr-only CSS hardened against 200% zoom overflow -->
 - [x] P9.7 Reduced motion + 200% zoom <!-- token durations 1ms under prefers-reduced-motion, chart/modal/spinner/row-fade guards; 200% zoom measured no horizontal overflow light+dark; browser emulation of reduced-motion unavailable in agent session (code-verified) -->
-- [x] **DoD: PRD DoD #3/#5/#6 pass; zero a11y blockers; tag `v0.9.0-beta.1`** <!-- zero-outbound + ≤3% CPU/≤150 MB RSS previously host-verified; modern Svelte 5/ECharts/theme UI; contrast + Lighthouse green -->
+- [x] **DoD: PRD DoD #3/#5/#6 pass; zero a11y blockers; tag `v0.9.0-beta.1`** <!-- zero-outbound + ≤3% CPU/≤150 MB RSS previously host-verified; React 19 + Linear UI + ECharts; contrast + check:linear green -->
 - [x] **Release: tag `v0.9.0-beta.1` + GitHub release** <!-- public beta; signing/packaging matrix from P8 -->
 
 ## Phase 10 — Beta Hardening → `v0.9.x-beta.N` (~80 h) *(Superseded by docs/ROADMAP.md (2026-11-23); see Stage 0 through v1.0 sections below)*
@@ -273,6 +273,15 @@
 - [x] L-D3 Timeline buckets 15 m / hour / day by preset, bar chart + data-table fallback (API.md U2, DESIGN.md §7.14) <!-- Bucket::Minute15 + 15m integration test green; Dashboard bar series + sr-only table rendered in-browser -->
 - [x] L-D4 Apps list + app detail respect the selected range (new Apps screen per DESIGN.md §8.10; API.md A1/A3) <!-- A1 usage.range/usage_range + A3 range tests green; Apps screen (search/sort/live columns/Unattributed row) and AppDetail 7 d headline/timeline rendered in-browser; real-daemon E2E pending -->
 - [x] L-D5 Billing-cycle card: bytes used, days left, budget state (DESIGN.md §8.3) <!-- U1 cycle integration test; card rendered with used bytes, days left and budget level in-browser -->
+- [x] L-UI **Final & Locked Linear Design System (`DESIGN.md` v3.0)** <!-- Solid `#050505`/`#F3F4F6` tokens, zero blur/translucency/glow/dark-shadow, `1280x800` / `1024x640` undecorated Tauri shell + 40px `TitleBar` theme toggle + `ui-theme` pre-paint script, 13 `components/linear/` primitives, 9 React screens rebuilt cleanly; verified 28/28 `contrast.py`, `check:linear`, `typecheck`, `lint`, 26 Vitest tests, `vite build`, `cargo build -p netwatch-app`, and 20 headless Chromium captures (dark + light, 1280x800 + 1024x640, zero runtime errors, zero overflow). Visual style is final and locked. -->
+
+---
+
+## Phase 12 — Starship Control Bridge *(Prototype Module)*
+
+- [x] P12.1 Add `starship-plugin` dependency + `build_nwp_bridge` manifest builder (`crates/netwatch-api/src/starship_bridge.rs`) <!-- 2 unit tests pass (`cargo test -p netwatch-api`) -->
+- [ ] P12.2 Spawn bridge listener inside `netwatchd` on `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock` <!-- not yet wired into `crates/netwatchd/src/main.rs` -->
+- [ ] P12.3 Back Starship MCP tools (`nwp.network.capture_packets`, `network.query_top_talkers`, `network.audit_connections`) with live SQLite/daemon queries <!-- currently returns sample fixture JSON -->
 
 ---
 
@@ -295,4 +304,6 @@ box above → commit (`docs(release): …`) → annotated tag from PLAN.md → p
 omit `--prerelease` for `v1.0.0`). Only an undefined tag, failed credentials, or
 a publish error warrants stopping to report. See AGENTS.md §6 and PLAN.md §15.
 
-**Flatpak:** deferred until after Phase 11 by owner decision 2026-11-18 (PRD 1.2 / PLAN.md §1): it cannot bundle the root systemd daemon, so it would break the one-command install contract. AUR stays in Phase 8 and at GA; no Flatpak checkbox until a new PRD/PLAN update.
+**Packaging & Flatpak Note:** Releases use unified `packaging/nfpm.yaml` (`.deb`, `.rpm`, `.pkg.tar.zst` via `zvirox/release-workflows`). Flatpak, AppImage, tarballs, and AUR (`PKGBUILD`) are permanently retired by owner decision (`83e3ae0`).
+
+**UI Note:** The **Linear Design System** (`DESIGN.md` v3.0) is **final and locked**. No future UI style changes or tentative UI redesign tasks remain.

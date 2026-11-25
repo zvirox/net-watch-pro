@@ -26,7 +26,7 @@
 |---|---|---|
 | Desktop shell | **Tauri 2** | Native window/tray/notifications with a tiny binary and a Rust core we can keep unprivileged by design. |
 | Frontend | **React 19** | Modern declarative UI with concurrent rendering and unified ecosystem integration. |
-| Styling & Components | **Tailwind CSS v4 + @ui-sdk/react** | Linear-Style solid matte surfaces, 1px hairlines, and accessible primitives. |
+| Styling & Components | **Tailwind CSS v4 + Linear primitives** | Strict locked Linear-style matte surfaces, 1px hairlines, and reusable components in `app/src/lib/components/linear/`. |
 | Charts | **ECharts** | Battle-tested canvas charts that handle streaming/decimated time series and theming from our tokens. |
 | Daemon backend | **Rust + Tokio** | One language for eBPF loaders, async IPC, and DB I/O; memory safety in a root process is non-negotiable. |
 | Monitoring | **Aya eBPF** | Pure-Rust CO-RE eBPF: socket/cgroup hooks for per-process byte accounting without packet rewriting (monitor-only MVP). |
@@ -72,21 +72,13 @@ net-watch-pro/
 │   ├── netwatch-common/             # shared types: events, IDs, error codes, API DTOs
 │   │   └── src/lib.rs
 │   ├── netwatch-ebpf/               # eBPF programs (no_std, aya-bpf) — compiled to BPF object; SEPARATE build (nightly + bpf-linker), NOT a Cargo workspace member (F-01/F-11)
-│   │   ├── src/main.rs              # program entrypoints (socket/cgroup hooks)
+│   │   ├── src/main.rs              # program entrypoints (cgroup_skb ingress/egress)
 │   │   └── Cargo.toml
-│   ├── netwatch-core/               # daemon domain logic (no I/O deps): accounting, attribution, retention, rollups
-│   │   ├── src/lib.rs
-│   │   └── src/{accounting,attribution,retention,rates,settings}.rs
+│   ├── netwatch-core/               # daemon domain logic (no I/O deps): accounting, attribution, episode, interfaces, license, rates, retention, settings
 │   ├── netwatchd/                   # daemon binary: composition root
-│   │   ├── build.rs                 # copies prebuilt BPF object into OUT_DIR for embedding (P8.9)
-│   │   ├── src/main.rs
-│   │   ├── src/{ebpf_loader,db,api,health,config,rates,sampler,pruner,service}.rs
-│   │   ├── src/db/migrations/*.sql  # embedded by sqlx
-│   │   └── src/bin/                 # CLI verbs: --export-config, --recover-fw (future)
-│   ├── netwatch-api/                # API server: Unix-socket JSON routes, peer-cred auth, request/validation types
-│   │   └── src/lib.rs
-│   └── netwatch-token-helper/       # REMOVED (D1a): Unix-socket + peer-credential replaces token helper; deleted after owner approval
-│       └── src/main.rs              # (placeholder pending deletion)
+│   │   ├── build.rs                 # copies target/netwatch_ebpf.o into OUT_DIR for embedding (P8.9)
+│   │   └── src/{app_usage,config,db,ebpf,live,main,pruner,rates,sampler,service,usage}.rs
+│   └── netwatch-api/                # API server: Unix-socket JSON routes, peer-cred auth (`peer.rs`), prototype `starship_bridge.rs` (standalone unit-tested module; not yet spawned in `netwatchd`)
 │
 ├── app/                             # UI workspace (npm)
 │   ├── package.json · vite.config.ts · tsconfig.json
@@ -95,37 +87,27 @@ net-watch-pro/
 │   │   ├── Cargo.toml · tauri.conf.json
 │   │   ├── capabilities/            # Tauri permission grants (least privilege)
 │   │   └── src/{main.rs,tray,window_state,daemon_link}.rs   # token_link.rs removed (D1a)
-│   └── src/                         # React 19 frontend
-│       ├── main.tsx · App.tsx
-│       ├── lib/
-│       │   ├── api/                 # Unix-socket client, typed endpoint wrappers, reconnect logic
-│       │   ├── stores/              # runes-based shared state (§7)
-│       │   │   ├── range.svelte.ts  # shared range preset + auto bucket (Phase D)
-│       │   │   └── apps.svelte.ts   # A1 ranking screen data (Phase D)
-│       │   ├── components/          # shadcn-svelte vendored + adapted per DESIGN.md §7
-│       │   │   ├── ui/              # primitives (button, input, table, toast, …)
-│       │   │   └── charts/          # ECharts wrappers (theme-registered)
-│       │   ├── theme/               # token CSS (DESIGN.md §3–6 generated vars)
-│       │   ├── screens/             # one folder per DESIGN.md §8 page
-│       │   │   ├── onboarding/ · dashboard/ · live/ · apps/ · app-detail/
-│       │   │   ├── history/ · settings/ · upgrade/ · diagnostics/
-│       │   └── utils/               # formatters (bytes/rates per DESIGN.md §4.3)
-│       └── tests/
+│   └── src/                         # React 19 + TypeScript strict frontend
+│       ├── main.tsx · App.tsx · tailwind.css
+│       ├── scripts/check-linear.mjs # Locked Linear UI static verification gate
+│       └── lib/
+│           ├── api/                 # Unix-socket HTTP/WS client (`DaemonApiClient`), Tauri transport
+│           ├── stores/              # `useDaemonStore.ts` (Zustand) + `rates.ts`, `budgets.ts`, `live-apps.ts`, `export.ts`, `license.ts`
+│           ├── components/          # `linear/` (13 Linear primitives + ECharts theme), `charts/` (`TrafficChart`, `AppUsageChart`), `StatusChip`
+│           ├── theme/               # `tokens.css` compatibility vars & self-hosted `Inter`/`JetBrainsMono` fonts
+│           ├── screens/             # 9 flat React screens (`Onboarding`, `Dashboard`, `Live`, `Apps`, `AppDetail`, `History`, `Settings`, `Upgrade`, `Diagnostics`)
+│           ├── fixtures/demo.ts     # In-memory read-only demo dataset
+│           └── utils/               # byte/rate/date formatters (`format.ts`)
 │
-├── spikes/                          # throwaway spike code (outside Cargo workspace)
-│   └── ebpf-accounting/             # eBPF accounting spike (F-01 Part A); own Cargo.toml/rust-toolchain.toml
-│
-├── xtask/                           # build automation crate: BPF compile, package, release
+├── xtask/                           # build automation crate: BPF compile (`cargo run -p xtask -- bpf`), dev license key helper
 │
 ├── packaging/
-│   ├── arch/PKGBUILD
-│   ├── deb/                         # debian control + repo tooling
-│   ├── rpm/                         # spec file + repo tooling
-│   ├── systemd/netwatchd.service    # hardened release unit (PRD §5 contract)
-│   │   └── netwatchd-dev.service     # unhardened local dev unit (P1.8)
-│   ├── licenses/                    # offline license-key public key + verifier
-│   └── tests/                       # package maintainer-script checks (P8.7)
-│   # packaging/polkit/ REMOVED (D1a): no per-launch Polkit token helper
+│   ├── nfpm.yaml                    # Unified `.deb` / `.rpm` / `.pkg.tar.zst` package manifest
+│   ├── scripts/{postinstall,preremove}.sh
+│   ├── polkit/                      # `enable-monitoring` helper + `pro.netwatch.enable-monitoring.policy`
+│   ├── systemd/netwatchd.service    # hardened systemd service unit
+│   ├── licenses/                    # offline Ed25519 license public key & tooling
+│   └── tests/                       # maintainer-script & helper checks (`test-{clean-install,helper,uninstall,upgrade}.sh`)
 │
 ├── docs/
 │   ├── api-contract.md              # WS/HTTP API: routes, DTOs, error codes (§6 binding)
@@ -171,7 +153,7 @@ Rules: no shared code by copy — shared types live in `netwatch-common`. The Ta
 3. **Persist:** open-episode state is kept **in memory**; persisted on episode close and at a checkpoint interval (default ~60 s — crash-loss window ≤ one interval). Writer batches inserts into `connections` + updates rollup tables; retention pruner runs on schedule (90-day default, configurable). **[HYPOTHESIS]** per-second persistence of hundreds of open connections is materially more expensive than checkpoint cadence (Appendix B, item 10 — to be measured in spike Q10).
 4. **Interface-counter sampler:** a daemon task reads per-interface kernel counters (`/sys/class/net/*/statistics` or netlink stats) for the headline total; `lo` excluded; tunnel interfaces (VPN/WireGuard) handled to avoid double-counting (PRD R6). A separate **1 Hz rate task** reads the same counters for `net.rates` live speed (Phase A); it uses measured elapsed time and EMA smoothing, and never writes SQLite. **[HYPOTHESIS]** header/ACK overhead is "a few percent" of payload (Appendix B, item 6).
 5. **Serve:** API server streams live snapshots/updates over the Unix socket; history queries are plain requests with pagination.
-6. **UI:** Svelte stores render per DESIGN.md; every screen subscribes only to what it shows.
+6. **UI:** React 19 screens & `useDaemonStore` (Zustand) render per locked `DESIGN.md` v3.0; every screen subscribes only to the slices it displays.
 7. **Implemented per-socket path (P2.2/P2.3, 2026-11-21):** the cgroup_skb programs also maintain a `FLOWS` map keyed by `bpf_get_socket_cookie` (measured-legal in cgroup_skb) with IPv4 tuple, cgroup id and absolute byte/packet counters. The daemon reads it at 1 Hz, resolves the cgroup to an app via `AppNames`, registers the app (`app_key = cgroup:<id>`) to obtain `app_id`, and emits `Open`/`Bytes`/`Close` `EpisodeEvent`s into `live::run`. Limitations, all honest: IPv6 flows are counted only in the cgroup rollups; `pid` is parsed best-effort from the cgroup scope name and is `0` (rendered "—") when unknown because every measured in-kernel source returned the softirq thread; `Close` is emitted after an idle timeout since no reliable close callback was measured. No new attach type or ring buffer is required.
 
 ### 5.1a Kernel collection design (contract — pending spike verification)
@@ -246,11 +228,10 @@ Policy: raw `connections` older than the raw-window (7 days default) is compacte
 
 ### 6.1 UI (React 19 + Zustand)
 
-- **Zustand stores are the state layer.** Minimal boilerplate, direct hook access, and zero virtual-DOM overhead for streaming connections.
-  - **Connection state** (`lib/stores/daemon.ts`): socket link, auth, chip state per DESIGN.md §7.5. Owns reconnect with capped backoff (target: UI auto-recovers ≤ 5 s per PRD metric).
-  - **Live data state** (`live.svelte.ts`, `usage.svelte.ts`): server-pushed data kept verbatim; stores expose *derived* sorted/filtered views so screens stay dumb.
-  - **Local UI state** (`settings-ui.svelte.ts`): theme, sidebar collapse, frozen-snapshot flag — persisted via Tauri store, mirrors the reference app's `core:ui/v1` pattern (REAPM.md §8).
-- **Server is the source of truth** — no optimistic writes, no client-side reconciliation of usage numbers; stale/detached states render honest UI (chip "Connecting…", banners per DESIGN.md §7.9) instead of cached guesses.
+- **Zustand stores are the state layer (`useDaemonStore.ts`).** Minimal boilerplate, direct hook access, and zero unnecessary re-renders for streaming connections.
+  - **Connection, Live & Usage state** (`app/src/lib/stores/useDaemonStore.ts`, `rates.ts`, `live-apps.ts`, `budgets.ts`): socket link, auth, chip state, `net.rates`, `live.apps`, and `live.connections` kept verbatim with derived views and stale detection (`> 3 s`). Owns reconnect with capped backoff (target: auto-recovery `<= 5 s` per PRD metric).
+  - **Local UI preferences** (`localStorage` key `ui-theme` for Dark/Light in `TitleBar`, sidebar collapsed flag, frozen snapshot toggle).
+- **Server is the source of truth** — no optimistic writes, no client-side reconciliation of usage numbers; stale/detached states render honest UI (`StatusChip`, banners per locked `DESIGN.md` v3.0) instead of cached guesses.
 - Screens never touch the WS client directly; they read stores. Stores never import screens.
 
 ### 6.2 Daemon (Rust)

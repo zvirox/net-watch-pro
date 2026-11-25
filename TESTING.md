@@ -1,7 +1,7 @@
 # TESTING.md — Test Plan
 
-**Version:** 1.2 · **Date:** 2026-11-19
-**Sources:** `PRD.md` §9/§11 (metrics, DoD) · `FEATURES.md` (per-feature behavior + acceptance criteria) · `API.md` §1–2 (contracts, error codes) · `ARCHITECTURE.md` §4/§9 (tests/ layout, budgets) · `docs/decisions.md` (owner decisions D1–D7)
+**Version:** 1.3 · **Date:** 2026-11-25
+**Sources:** `PRD.md` §9/§11 (metrics, DoD) · `FEATURES.md` (per-feature behavior + acceptance criteria) · `API.md` §1–2 (contracts, error codes) · `ARCHITECTURE.md` §4/§9 (tests/ layout, budgets) · `DESIGN.md` v3.0 (locked Linear UI invariants) · `docs/decisions.md` (owner decisions D1–D14)
 
 **Version history:** 1.1 (2026-11-15): apply plan-fix findings — accuracy harness redefined (F-03/D3a), auth matrix → UID allowlist (F-06/D1a), timezone/billing-cycle cases (F-04/D4a), cgroup identity cases (F-05/D5a), kernel VM matrix not containers (F-08), write-rate test (F-09). 1.2 (2026-11-19): F11 live-throughput unit and acceptance cases from `docs/LIVE-THROUGHPUT-PLAN.md` §9.
 
@@ -19,13 +19,14 @@
 | Mocks (Rust) | Hand-rolled fakes + `mockall` (dev-dep) for traits | Traits are few (future `PaymentsProvider`, clock, collector); mockall is the popular default. |
 | API/integration tests | Rust integration tests in `tests/integration/` driving the real daemon binary + temp SQLite | Tests the真实 process boundary — real migrations, real token file, real WS. |
 | DB tests | sqlx test macros against temp DBs + `VACUUM INTO` snapshots | Forward-only migrations exercised exactly as in production (DATABASE.md §8). |
-| UI unit tests | Vitest + `@testing-library/svelte` | Standard Svelte 5 stack; stores/components tested with runes. |
-| UI e2e | Playwright (already in MCP.md §3.4) driving the `tauri dev` webview | Real app, real WS, real states — screenshots double as DESIGN.md review artifacts. |
-| Accuracy harness | Custom binary in `tests/accuracy/` + synthetic traffic generator | Proves PRD accuracy: totals equal kernel interface counters by construction; ≥95% of bytes attributed (DoD #2) repeatably in CI. |
-| Performance | Perf assertions inside integration tests (CPU/RSS sampled) | Budgets are gates, not vibes (PRD ≤3% CPU / ≤150 MB RSS). |
-| Static gates | `cargo fmt --check`, `cargo clippy -D warnings`, `svelte-check`, eslint, `cargo deny`, `npm audit` | Already mandated by ARCHITECTURE.md §8.2 / P0.7. |
+| UI unit tests | Vitest 5 (`app/src/lib/**/*.test.ts`) + TypeScript (`tsc --noEmit`) + ESLint/Prettier | React 19 + Zustand + ECharts stack; tests stores, transport/API client, formatters, budgets, and CSV export escaping. |
+| UI design & a11y gates | `npm --prefix app run check:linear` + `python3 tests/a11y/contrast.py` | Enforces locked Linear Design System invariants (zero blur/translucency/glow/dark-shadow) and 28 WCAG AA contrast pairs across dark & light modes. |
+| UI visual verification | Headless Chromium CDP screenshot capture across all 9 screens (`1280x800` & `1024x640`, dark & light) | Confirms zero runtime exceptions, `scrollWidth <= clientWidth`, and layout integrity across all views. |
+| Accuracy harness | `tests/accuracy/accuracy.py` | Proves accounting accuracy & attribution invariants against test daemon runs (run in `.github/workflows/hardening.yml`). |
+| Performance & soak | `tests/integration/perf_budget.py`, `tests/integration/soak.py` | Automated CI harnesses in `.github/workflows/hardening.yml`; live 14-day host soak remains a manual Stage 0 gate. |
+| Static gates | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `check:linear`, `eslint`, `prettier` | Enforced in `.github/workflows/ci.yml` and local pre-commit/PR verification. |
 
-**Dev-dependency note:** `proptest`, `mockall`, `cargo-llvm-cov`, `reqwest` (test client), `@testing-library/svelte`, `vitest` are new dependencies → added per feature with user approval (AGENTS.md §5), tracked in this file.
+**Dev-dependency note:** `vitest`, `eslint`, `prettier`, and TypeScript strict checking cover `app/`; Rust tests use workspace dev-deps (`tempfile`, etc.) — added per AGENTS.md §5.
 
 ---
 
@@ -48,9 +49,9 @@
 | History volumes | `tests/fixtures/db/seed_*.sql`: 10 k rows (UI virtualization), 90-day spread (pagination), 1-year soak profile (P10.3), empty db, single-row db. |
 | Clock | Injectable `Clock` trait in `netwatch-core`; tests pin `now` — rollup buckets, retention pruning, month boundaries all deterministic (F2 timezone cases). |
 | Daemon down / errors | Kill/deferred-start in integration tests; UI e2e uses a **mock socket server** serving canned snapshots/deltas/errors from fixtures (F1 frozen/disconnect states). Auth is peer-credential — tests run as allowed UID vs denied UID. |
-| Kernel matrix | **VMs** (QEMU/virtme-ng/Vagrant) for Arch/CachyOS, Ubuntu LTS, Fedora — containers share the host kernel and cannot catch kernel-specific eBPF failures (F-08). Containers only for userspace tests. |
+| Kernel matrix | **Linux host + distro containers**: eBPF verification requires host kernel testing (`docs/vm-matrix-runbook.md` updated for post-beta host runs); container smoke (`ubuntu:24.04`, `archlinux:latest`, `fedora:41` in `.github/workflows/hardening.yml`) tests maintainer scripts. |
 | Rate limits | Integration tests fire 6th export / 121st read and assert 429 + `Retry-After` shape. |
-| Theme/screenshots | Playwright runs in light+dark; baseline screenshots stored per breakpoint (960/1280/1600 widths) for DESIGN.md §5.4 reflow review. |
+| Theme/screenshots | Headless Chromium capture runs in light + dark at `1280x800` and `1024x640` (minimum window dimensions) covering all 9 locked Linear UI screens. |
 
 ---
 
@@ -178,7 +179,7 @@
 
 | Scenario | Input | Expected |
 |---|---|---|
-| Install matrix | deb/rpm/AUR on 3 distro families | Working app each path |
+| Install matrix | `.deb` / `.rpm` / `.pkg.tar.zst` via `nfpm` (`packaging/nfpm.yaml`) across Debian/Ubuntu, Fedora/RHEL, Arch/CachyOS | Clean install, upgrade, and uninstall scripts pass |
 | Upgrade path | v0.8 → v0.9 package update | Migrations forward-only; history intact |
 | Version skew | UI newer than daemon | Honest "updating" state; destructive ops refused |
 | Signature check | tampered artifact | Package manager rejects (CI verifies) |
@@ -314,44 +315,43 @@ The real-host row is `[VERIFIED]` only after an owner run; unit/integration test
 | `netwatchd` + `netwatch-api` | **≥ 80%** | CI gate |
 | `netwatch-common` | ≥ 90% (small, pure) | CI gate |
 | TS stores/formatters (`lib/stores`, `lib/utils`) | ≥ 85% | CI gate |
-| Svelte components | best-effort (state coverage via e2e) | tracked, not gated |
-| Overall (Rust) | ≥ 80% | reported per PR |
+| React 19 UI + Linear gates | `check:linear`, `contrast.py`, `typecheck`, `lint`, `build` | Enforced on every PR & pre-release |
+| Overall (Rust) | ≥ 80% | target per crate |
 
-### Commands (single source — also mirrored into `docs/env-vars.md` sibling `docs/testing.md` when scaffolded)
+### Commands
 
 ```bash
-# Rust: everything
+# Rust: everything (build netwatchd before running restart_persistence)
+cargo build -p netwatchd -p netwatch-app
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace                      # unit + integration
-cargo llvm-cov --workspace --html           # coverage report
+cargo test --workspace
 
-# A11y tokens (P9.4 — implemented, stdlib only, no new dependencies)
+# A11y contrast & locked Linear UI gate
 python3 tests/a11y/contrast.py
+npm --prefix app run check:linear
 
-# UI: everything (from app/)
-npm run lint && npm run svelte-check
-npm run test                                # vitest unit + component
-npm run test:e2e                            # playwright (light+dark, 3 widths)
+# UI: typecheck, lint, unit tests, production bundle
+npm --prefix app run typecheck && npm --prefix app run lint
+npm --prefix app test
+npm --prefix app run build
 
-# Accuracy & budgets (gates for DoD)
-cargo run -p accuracy-harness -- --profile 50conn   # totals equal kernel counters, ≥95% attributed (P10.1)
-cargo run -p accuracy-harness -- --budget           # CPU/RSS p95 (P10.2)
-
-# Full pre-release gate (CI = same order)
-just gate   # fmt+clippy+test+cov+lint+svelte-check+vitest+playwright+harness
+# Hardening & packaging smoke harnesses (run in CI hardening.yml)
+python3 tests/accuracy/accuracy.py
+python3 tests/integration/perf_budget.py
+python3 tests/integration/soak.py
+bash packaging/tests/test-upgrade.sh && bash packaging/tests/test-uninstall.sh
 ```
 
-### CI wiring (extends P0.7)
+### CI wiring
 
-- **On every PR:** fmt, clippy, unit tests, svelte/vitest, contract tests — minutes, cheap.
-- **On merge to main:** + integration suite, e2e (light+dark), coverage gates.
-- **Nightly:** 3-distro matrix on VMs, accuracy + budget harnesses, soak profile, `cargo deny`/`npm audit`.
+- **On every PR (`ci.yml`):** `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `check:linear`, `contrast.py`, `typecheck`, `lint`, `vitest`, `vite build`.
+- **Hardening (`hardening.yml`):** accuracy, perf budget, retention soak harnesses, and clean-container maintainer-script smoke (`ubuntu:24.04`, `archlinux:latest`, `fedora:41`).
 
 ---
 
-## 7. Manual QA Checklist (pre-release; per PRD §11 + FEATURES.md)
+## 7. Host Acceptance Checklist (pre-release; per PRD §11 + FEATURES.md)
 
-Run on clean VMs (Arch, Ubuntu LTS, Fedora) with the packaged build. Tick per distro. Commands, evidence template and pass conditions are in `docs/vm-matrix-runbook.md`.
+Run on physical Linux host hardware with real eBPF attached (`docs/vm-matrix-runbook.md` updated for post-beta host runs; VM release-package tests retired).
 
 **Install & onboarding**
 - [ ] Install via each channel works; no dependency surprises

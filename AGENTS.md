@@ -1,6 +1,6 @@
 # AGENTS.md — Rulebook for AI Coding Assistants
 
-**Version:** 1.3 · **Date:** 2026-11-19
+**Version:** 1.4 · **Date:** 2026-11-25
 **Every AI assistant working in this repo must follow these rules.** They are binding, not suggestions. When a rule is unclear, ask the user. When a rule conflicts with a source-of-truth file, see §3.
 
 ---
@@ -8,11 +8,11 @@
 ## 1. Project Summary (5 lines)
 
 1. **Net Watch Pro** is a Linux network-traffic monitor and per-app data-usage tracker — monitor-only MVP, firewall features come later, step by step (PRD §12).
-2. Two processes: a root systemd daemon (`netwatchd`, Rust + Tokio + Aya eBPF) that observes traffic and writes SQLite, and an unprivileged Tauri 2 + React 19 UI. They talk only over a localhost Unix socket with peer-credential authorization (ARCHITECTURE.md; D1a).
+2. Two processes: a root systemd daemon (`netwatchd`, Rust + Tokio + Aya eBPF) that observes traffic and writes SQLite, and an unprivileged **Tauri 2 + React 19 + Tailwind CSS v4 + Zustand + ECharts** UI using the **final & locked Linear Design System** (`DESIGN.md` v3.0). They talk only over a localhost Unix socket with `SO_PEERCRED` peer-credential authorization (ARCHITECTURE.md; D1a).
 3. Everything is local: no cloud, no telemetry, no outbound connections — this is a product promise and a hard constraint (PRD §1/§4).
 4. Freemium: free tier = live monitoring + per-app usage + 90-day history; Pro (offline license key) = advanced filters, CSV/JSON export, longer retention.
-5. The docs are the contract: UI follows DESIGN.md, schema follows DATABASE.md, endpoints follow API.md, structure follows ARCHITECTURE.md. Code that drifts from them is wrong.
-6. **Starship Control Ecosystem**: NWP integrates into the Mother Ship ecosystem via the shared `starship-plugin` SDK, exposing read-only network inspection tools to **Starship Control** (`https://github.com/zvirox/starship-control`) over `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock`.
+5. The docs are the contract: UI follows DESIGN.md (locked Linear UI), schema follows DATABASE.md, endpoints follow API.md, structure follows ARCHITECTURE.md. Code that drifts from them is wrong.
+6. **Starship Control Ecosystem (Prototype Bridge)**: `crates/netwatch-api/src/starship_bridge.rs` provides the `starship-plugin` JSON-RPC bridge library (`build_nwp_bridge`), currently tested standalone with sample responses and not yet spawned inside `netwatchd`.
 
 ## 2. Source of Truth — Priority Order
 
@@ -45,9 +45,9 @@ Exception: if the docs contradict each other, the priority order in §2 decides 
 - **Follow the folder structure in ARCHITECTURE.md §4 exactly.** New files go where the tree says; no new top-level dirs without updating the doc first.
 - One concern per module. Daemon logic stays in `crates/netwatch-*`; the Tauri crate stays thin (window/tray/link only); screens never import the WS client directly (ARCHITECTURE.md §6.1).
 
-### 4.2 Reuse
-- **Reuse existing components before writing new ones.** Check `app/src/lib/components/` first; a second button variant or a third table implementation is a bug.
-- New UI components must be built from DESIGN.md §7 specs and vendored shadcn-svelte primitives, using only DESIGN.md §3–§6 tokens. Never inline hex values, raw font names, or magic spacing.
+### 4.2 Reuse & Locked UI
+- **Reuse existing components before writing new ones.** Check `app/src/lib/components/linear/` and `app/src/lib/components/` first; a second button variant or a third table implementation is a bug.
+- **Linear UI Style Is Final & Locked (`DESIGN.md` v3.0):** All UI components must preserve the flat, opaque Linear design system (`app/src/tailwind.css` tokens, `1px` hairline borders, zero blur/translucency/glow/dark-shadow) and pass `npm --prefix app run check:linear` and `python3 tests/a11y/contrast.py`. Never inline hex values, raw font names, or magic spacing.
 - Shared types go in `netwatch-common`; never copy types between crates or between TS and Rust by hand-editing two sources (ARCHITECTURE.md §4).
 
 ### 4.3 Code quality
@@ -88,7 +88,7 @@ Exception: if the docs contradict each other, the priority order in §2 decides 
 ## 6. Workflow (every task)
 
 1. **Plan first.** Before writing code: restate the goal in one or two sentences, list the files you will touch, and name the doc sections that govern the change (e.g. "DESIGN.md §7.2, API.md §2.7"). If the plan touches a source-of-truth file, say so explicitly and apply §3.
-2. **Code second.** Implement in small steps. Run the relevant checks as you go: `cargo fmt && cargo clippy` for Rust, lint + `svelte-check` for the UI, tests for anything with a test harness (`tests/accuracy/` for accounting changes).
+2. **Code second.** Implement in small steps. Run the relevant checks as you go: `cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace` for Rust; `python3 tests/a11y/contrast.py`, `npm --prefix app run check:linear`, `npm --prefix app run typecheck`, `npm --prefix app run lint`, `npm --prefix app test`, and `npm --prefix app run build` for the UI; tests for anything with a test harness (`tests/accuracy/` for accounting changes).
 3. **Summarize third.** After coding, give a short summary: what changed (files + one line each), which docs (if any) you updated, what you verified (commands run / tests), and anything left open. Keep it brief — no essays.
 
 Additional standing rules:

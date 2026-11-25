@@ -134,7 +134,7 @@ Applied *analog* discipline, so the rule "never store plain-text secrets" still 
 | **Rate limiting** | Yes | API.md §1.5: 600 req/min reads, 5/min export creation, 10/min writes/downloads → minimal limits for a single trusted local client; 429 + `Retry-After`. |
 | **CORS** | **N/A** | Unix socket, not HTTP — browsers cannot reach it; no `Access-Control-Allow-Origin` headers needed (D1a). |
 | **CSRF** | **N/A** | No cookie auth; pure `SO_PEERCRED` on a Unix socket — a malicious web page cannot open the socket (D1a). |
-| **XSS** | Yes | All UI content is local + Svelte-escaped; **no remote HTML/Markdown is ever rendered**; strict Tauri CSP (`default-src 'self'`, no `unsafe-inline` scripts), no `eval`, remote-content Tauri capability disabled. |
+| **XSS** | Yes | All UI content is local + React-escaped; **no remote HTML/Markdown is ever rendered**; strict Tauri CSP (`default-src 'self'`, no `unsafe-inline` scripts), no `eval`, remote-content Tauri capability disabled. |
 | Clickjacking | N/A | Tauri window, not a browser frame; no third-party framing surface. |
 
 ---

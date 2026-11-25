@@ -208,8 +208,7 @@ fn desktop_names() -> Vec<(String, String)> {
             }
             let stem = path
                 .file_stem()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default();
+                .map_or_default(|s| s.to_string_lossy().into_owned());
             if let Some((exe, display)) = exec.zip(display.clone()) {
                 let first = exe.split_whitespace().next().unwrap_or("");
                 let hint = Path::new(first)

@@ -1,11 +1,13 @@
 # PLAN.md — Implementation Roadmap
 
-**Version:** 1.4 · **Date:** 2026-11-21
-**Sources:** `PRD.md` §6 (features), `ARCHITECTURE.md` §4 (structure), `DATABASE.md` §8 (migrations), `API.md` §2 (endpoints) · `docs/decisions.md` (owner decisions D1–D7)
+**Version:** 1.5 · **Date:** 2026-11-25
+**Sources:** `PRD.md` §6 (features), `ARCHITECTURE.md` §4 (structure), `DESIGN.md` v3.0 (Final & Locked Linear UI), `DATABASE.md` §8 (migrations), `API.md` §2 (endpoints) · `docs/decisions.md` (owner decisions D1–D14) · `docs/ROADMAP.md` (post-beta sequencing)
 
 **Companion tracker:** `CHECKLIST.md` (same task IDs, ticked live)
 
-**Version history:** 1.2 (2026-11-15): apply plan-fix findings — insert Phase S (eBPF spike) and Phase D (doc fixes); reorder phases per Part 5; replace week targets with effort estimates (D7: 40+ h/week); rewrite P1.1–P1.5 for Unix-socket + peer-credential transport (D1a); defer self-hosted apt/dnf repos until after beta (F-10). 1.3 (2026-11-19): add Phase L (Live Throughput, F11) with tasks A1–A8, owner-run spike B, collector C and range presets D; full detail in `docs/LIVE-THROUGHPUT-PLAN.md`. 1.4 (2026-11-21): Phase 10 scope — CI **container** matrix instead of VMs (owner-approved deviation from P10.4), and final beta tag continues the sequence at `v0.9.2-beta.4` instead of `v0.9.9-beta.N`.
+**Version history:** 1.2 (2026-11-15): apply plan-fix findings. 1.3 (2026-11-19): add Phase L (`docs/LIVE-THROUGHPUT-PLAN.md`). 1.4 (2026-11-21): CI container matrix + beta sequence. 1.5 (2026-11-25): synchronized with React 19 + Tailwind CSS v4 + Zustand migration, **final & locked Linear UI (`DESIGN.md` v3.0)**, locked `nfpm` packaging, and actual Stage 0 / Starship prototype status.
+
+> **UI Design Lock:** No tentative UI planning remains. The Linear Design System (`DESIGN.md` v3.0) is implemented and locked across all 9 React screens; see `app/scripts/check-linear.mjs` and `tests/a11y/contrast.py`. Remaining milestones (`docs/ROADMAP.md`) focus strictly on accounting accuracy, diagnostics, data features, and GA hardening.
 
 > **Ordering rules:** vertical slices only — every phase ends with a runnable app; never all-backend-then-all-frontend. Each task ≤ 2 hours. Dependencies use task IDs (e.g. `dep: P1.3`). A task may start when its deps are done.
 
@@ -50,11 +52,11 @@
 |---|---|---|---|---|
 | P0.1 | Cargo workspace: root `Cargo.toml` (members), `rust-toolchain.toml`, `deny.toml`, `clippy.toml` | root configs | `cargo check` passes on empty workspace | — |
 | P0.2 | Create crates as empty skeletons: `netwatch-common`, `netwatch-core`, `netwatchd`, `netwatch-api` (+ `xtask`) | `crates/*/` | `cargo build` compiles all members | P0.1 |
-| P0.3 | UI workspace: `app/` with Vite + Svelte 5 + TS strict + ESLint/Prettier; empty `App.svelte` | `app/*` | `npm run dev` serves; `svelte-check` clean | — |
-| P0.4 | Tauri 2 shell added to `app/src-tauri/`, window opens; `capabilities/` least-privilege | `app/src-tauri/*` | `tauri dev` opens blank window (DESIGN.md bg) | P0.3 |
-| P0.5 | Vendored shadcn-svelte primitives: button, input, table only | `app/src/lib/components/ui/` | storyless smoke: button renders in App.svelte | P0.4 |
-| P0.6 | Token CSS layer: DESIGN.md §3–§6 tokens as CSS vars + fonts (self-hosted Inter/JetBrains Mono) | `app/src/lib/theme/` | window shows both themes on toggle | P0.5 |
-| P0.7 | CI: fmt, clippy `-D warnings`, svelte-check, build matrix (arch/deb/rpm images) | `.github/workflows/ci.yml` | CI green on empty repo | P0.2, P0.3 |
+| P0.3 | UI workspace: `app/` with Vite + React 19 + TS strict + Tailwind CSS v4 + Zustand + ESLint/Prettier | `app/*` | `npm --prefix app run build` + `check:linear` clean | — |
+| P0.4 | Tauri 2 shell added to `app/src-tauri/` (`1280x800` undecorated, min `1024x640`); `capabilities/` least-privilege | `app/src-tauri/*` | `cargo build -p netwatch-app` + Tauri window opens | P0.3 |
+| P0.5 | Shared Linear UI primitives (`LinearCard`, `LinearButton`, `DataTable`, `StatCard`, `TitleBar`, `Sidebar`, etc.) | `app/src/lib/components/linear/` | `npm --prefix app run check:linear` passes | P0.4 |
+| P0.6 | Token CSS layer: locked Linear dark (`#050505`) & light (`#F3F4F6`) tokens + self-hosted Inter & JetBrains Mono | `app/src/tailwind.css` | 28/28 `tests/a11y/contrast.py` pairs pass | P0.5 |
+| P0.7 | CI: fmt, clippy `-D warnings`, `check:linear`, contrast, typecheck/lint/test, container smoke | `.github/workflows/{ci,hardening,release}.yml` | CI green on `main` | P0.2, P0.3 |
 | P0.8 | Docs mirror: `docs/api-contract.md`, `docs/db-schema.md`, `docs/env-vars.md` generated from API.md/DATABASE.md | `docs/*` | mirrors match; drift check stub | — |
 
 **DoD:** `tauri dev` shows a themed blank window; `cargo check` + CI green; AGENTS.md checklist passes for all files.
@@ -213,10 +215,10 @@
 |---|---|---|---|---|
 | P7.1 | Retention pruner (90-day default, Pro ceiling from license) | `netwatch-core/src/retention.rs` | backdated rows vanish; rollups survive | P4.1, P6.2 |
 | P7.2 | `GET/PUT /settings` with type/bounds validation | `crates/netwatch-api/src/` | bad type/range → 400; free retention > 90 → 403 | P6.4 |
-| P7.3 | Settings screen: general/data/daemon sections (§8.7) | `app/src/lib/screens/settings/` | retention change reflects in Diagnostics | P7.2 |
-| P7.4 | Interfaces table + metered labeling (I1/I2 + UI) | `netwatchd/src/db.rs`, API, screens/settings | toggle metered → dashboard card updates | P4.4 |
+| P7.3 | Settings screen: general/data/budgets/interfaces/daemon/license/about tabs (§5) | `app/src/lib/screens/Settings.tsx` | retention change reflects in Diagnostics | P7.2 |
+| P7.4 | Interfaces table + metered labeling (I1/I2 + UI) | `netwatchd/src/db.rs`, API, `Settings.tsx` | toggle metered → dashboard card updates | P4.4 |
 | P7.5 | Tray icon + menu: today usage tooltip, open, quit-not-daemon | `app/src-tauri/src/tray.rs` | tray quit keeps daemon running (PRD Flow 6) | P1.8 |
-| P7.6 | Theme switching (light/dark/system) persisted | `app/src/lib/stores/settings-ui.svelte.ts` | theme survives restart; ECharts re-theme | P4.5 |
+| P7.6 | Theme switching (dark/light) in `TitleBar` + pre-paint `index.html` script persisted via `ui-theme` | `TitleBar.tsx`, `ThemeToggle.tsx`, `app/index.html` | theme survives restart; ECharts re-theme | P4.5 |
 | P7.7 | Metered-policy + start_on_boot settings plumbed | settings screens + daemon | behavior changes match settings | P7.2, P7.4 |
 
 **DoD:** tray-quit test passes; retention math correct for free/pro; settings persist; tag `v0.7.0-alpha.7`.
@@ -228,15 +230,13 @@
 | ID | Task | Files | Verify | Deps |
 |---|---|---|---|---|
 | P8.1 | Hardened systemd unit: sandboxing + capability bounding (PRD §5) | `packaging/systemd/netwatchd.service` | `systemd-analyze security` score acceptable | P1.8 |
-| P8.2 | `.deb` package + post-install (register unit, disabled-by-default) | `packaging/deb/` | clean VM install → menu entry, unit present | P8.1 |
-| P8.3 | `.rpm` package parity | `packaging/rpm/` | clean VM install on Fedora | P8.2 |
-| P8.4 | AUR `net-watch-pro-git` PKGBUILD (dev channel) | `packaging/arch/` | `paru -S net-watch-pro-git` builds | P8.2 |
-| P8.5 | Onboarding flow: pkexec enable, health checks, 3 cards (§8.2) | `app/src/lib/screens/onboarding/` | fresh install → enabled in < 3 min | P8.2, P1.6 |
-| P8.6 | Failure path: actionable error card + retry + demo-mode stub decision (OQ4) | onboarding screen | blocked kernel → guidance, not a dead end | P8.5 |
-| P8.7 | Uninstall completeness: unit + data opt-in (PRD metric) | `packaging/*` | remove package → no service residue | P8.2 |
-| P8.8 | Signing: package signing + release workflow (hosted build services preferred over self-hosted repos until after beta) | `.github/workflows/release.yml` | artifacts signed; clean-VM install works | P8.2, P8.3 |
+| P8.2–P8.4 | Unified `packaging/nfpm.yaml` package manifest (`.deb`, `.rpm`, `.pkg.tar.zst`) + postinstall/preremove + Polkit `enable-monitoring` *(AUR PKGBUILD retired)* | `packaging/nfpm.yaml`, `packaging/{scripts,polkit}/` | CI clean-container install/upgrade/uninstall smoke passes | P8.1 |
+| P8.5 | Onboarding flow: pkexec `enable-monitoring`, health checks, 3 cards (`Onboarding.tsx`) | `app/src/lib/screens/Onboarding.tsx` | fresh install → enabled in < 3 min | P8.2, P1.6 |
+| P8.6 | Failure path: actionable error card + retry + in-memory demo mode (`fixtures/demo.ts`) | `Onboarding.tsx`, `fixtures/demo.ts` | blocked kernel → guidance, not a dead end | P8.5 |
+| P8.7 | Uninstall completeness: unit + helper + policy + cleanup scripts | `packaging/*`, `packaging/tests/` | remove package → zero service residue | P8.2 |
+| P8.8 | Signing: release workflow (`zvirox/release-workflows`) producing `.deb`/`.rpm`/`.pkg.tar.zst` + `SHA256SUMS` / `.sig` | `.github/workflows/release.yml` | artifacts published on GitHub Releases | P8.2, P8.3 |
 | P8.9 | Embed the BPF object in `netwatchd` via `aya::include_bytes_aligned!`; keep `NETWATCH_EBPF_OBJECT` as a dev override only (owner-approved 2026-11-20) | `crates/netwatchd/build.rs`, `ebpf.rs`, `xtask` | no runtime object file needed; dev override still works | P8.1 |
-| P8.10 | Build the object in CI and the AUR `PKGBUILD` (stable + `RUSTC_BOOTSTRAP=1` + `rust-src` + pinned `bpf-linker` 0.13.0); no `.o` in git | `release.yml`, `ci.yml`, `packaging/arch/` | binaries carry the object from a clean build | P8.9 |
+| P8.10 | Build the object in CI release workflow (`stable` + `RUSTC_BOOTSTRAP=1` + `rust-src` + pinned `bpf-linker` 0.13.0); no `.o` in git | `.github/workflows/release.yml`, `xtask` | release binaries embed `netwatch_ebpf.o` cleanly | P8.9 |
 | P8.11 | Clean-install test (fresh `makepkg -si` → one pkexec → `/status` `ebpf=attached`) and fix stale `.SRCINFO`/`pkgrel` | `packaging/tests/`, `packaging/arch/` | `[VERIFIED]` only from a real host run | P8.10 |
 | P8.12 | Restart `netwatchd` on package upgrade so a new binary replaces the running one; never enable a stopped unit (owner-approved 2026-11-20) | `packaging/{arch,deb,rpm}` | upgrade test: restart only when the unit was active | P8.11 |
 
@@ -288,37 +288,30 @@
 
 ---
 
-## 14. Phase 12 — Starship Control & `starship-plugin` SDK Integration
+## 14. Phase 12 — Starship Control & `starship-plugin` SDK Integration *(Prototype Bridge Module)*
 
 | ID | Task | Files | Verify | Deps |
 |---|---|---|---|---|
-| P12.1 | Embed `starship-plugin` crate & publish manifest | `crates/netwatchd/`, `starship-plugin` | Manifest at `$XDG_DATA_HOME/starship/plugins/nwp.json` | P8.1 |
-| P12.2 | Unix socket bridge listener with `SO_PEERCRED` | `crates/netwatchd/src/bridge.rs` | Socket at `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock` verified | P12.1 |
-| P12.3 | Expose MCP telemetry tools to Starship Control (`network.query_top_talkers`, `network.query_app_usage`, `network.audit_connections`) | `crates/netwatchd/src/mcp.rs` | Starship Control queries network state read-only | P12.2 |
+| P12.1 | Add `starship-plugin` dependency & `build_nwp_bridge` manifest builder (`[x]` standalone module in `netwatch-api`) | `crates/netwatch-api/src/starship_bridge.rs` | unit tests pass for hello/list/call/checkpoint | P8.1 |
+| P12.2 | Spawn bridge listener inside `netwatchd` over `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock` (`[ ]` open — not yet wired into `netwatchd`) | `crates/netwatchd/src/main.rs` | live bridge socket serves Starship requests | P12.1 |
+| P12.3 | Wire Starship MCP telemetry tools (`nwp.network.capture_packets`, `network.query_top_talkers`, `network.audit_connections`) to live SQLite/daemon state (`[ ]` open — currently static placeholder JSON in `starship_bridge.rs`) | `crates/netwatch-api/src/starship_bridge.rs` | Starship Control queries real daemon data read-only | P12.2 |
 
-**DoD:** Net Watch Pro is auto-discovered by Starship Control; autonomous agents can audit network leaks and per-app usage over the local Unix domain socket bridge.
+**DoD:** Net Watch Pro spawns the local bridge inside `netwatchd` and backs every exposed Starship tool with live read-only daemon queries.
 
 ---
 
-## 15. Phase L — Live Throughput (F11)
+## 15. Phase L — Live Throughput (F11) & Final Linear UI
 
-**Full contract:** `docs/LIVE-THROUGHPUT-PLAN.md` (owner-approved scope change). Phase A is agent work; stop for approval afterwards. Phase B is owner-run on real hardware; Phase C starts only after the accepted spike report; Phase D can run in parallel with B.
+**Full contract:** `docs/LIVE-THROUGHPUT-PLAN.md` + locked UI specification `DESIGN.md` v3.0.
 
 | ID | Task | Files | Verify | Deps |
 |---|---|---|---|---|
-| L-A1 | Docs first, with version bumps | PRD, API, ARCHITECTURE, api-contract, env-vars, DATABASE, DESIGN, FEATURES, TESTING, PLAN, CHECKLIST | Contract docs merged before code | — |
-| L-A2 | Pure rate math + tests | `netwatch-core/src/rates.rs` | counter reset/decrease, churn, late tick, smoothing | L-A1 |
-| L-A3 | 1 Hz sysfs rate task + degraded path | `netwatchd/src/rates.rs`, `main.rs` | survives read errors, records degraded event | L-A2 |
-| L-A4 | `net.rates` stream + shared payload | `netwatch-common`, `netwatch-api/src/stream.rs` | snapshot on subscribe, 1 Hz, unsubscribed gets none | L-A3 |
-| L-A5 | Network now card + rates store | `app/src/lib/stores/`, `Dashboard.svelte` | loading/idle/stale/error states | L-A4 |
-| L-A6 | `speed_unit` setting + migration 0005 | `DATABASE.md`, migration, `settings.rs`, settings screen | toggle applies without restart | L-A1 |
-| L-A7 | Honest `/status` + chip | `netwatchd/src/main.rs`, `netwatch-common`, `StatusChip.svelte` | no collector → not green; chip explains why | L-A1 |
-| L-A8 | Correct stale tracker claims | `CHECKLIST.md`, `PLAN.md` | P2.3 unticked, 1 Hz note fixed | L-A3 |
-| L-OQ1 | 60-sample one-minute in-memory history + U4 endpoint | `netwatchd/src/rates.rs`, `netwatch-api` | 60 one-minute samples (last hour), `in_memory:true`, lost-on-restart label | L-A3 |
-| L-OQ4 | Wi-Fi signal/link from local sysfs on U3 | `netwatch-api/src/interfaces_usage.rs`, Dashboard, TS types | injectable-root tests; "—" when missing | L-A1 |
-| L-B1 | eBPF spike in Aya, Motrix workloads | `spikes/ebpf-aya/`, `docs/spike-ebpf-report.md` | scaffold builds + env diagnostics verified 2026-11-19; owner-run with real root still pending; `[VERIFIED]`/`[REFUTED]` claims | L-A |
-| L-C1–C9 | Collector, identity, display names, `live.apps`, per-app speeds, sum check | `netwatch-ebpf/`, daemon, Apps/Live screens | accepted spike report | L-B1 |
-| L-D1–D5 | Range presets 1 h/24 h/7 d/30 d/cycle, remembered via `range_default`; adds the Apps list screen and a forward-only settings migration (owner approved 2026-11-20) | usage/apps APIs, Dashboard, new `screens/apps/`, `stores/range.svelte.ts`, migration 0006 | timezone and cycle tests (F12) | L-A1 |
+| L-A1–A8 | Docs, 1 Hz rate math & sysfs sampler, `net.rates`, Dashboard rates card, `speed_unit` (migration 0005), honest `/status` (`no_collector`) | `netwatch-core`, `netwatchd`, `app/src/` | unit + contract tests green (`[x]`) | — |
+| L-OQ1, OQ4 | 60-sample in-memory rate history + Wi-Fi sysfs metrics on U3 | `netwatch-common`, `netwatch-api`, `app/src/` | unit + contract tests green (`[x]`) | L-A3 |
+| L-B1 | eBPF spike in Aya (`spikes/ebpf-accounting/` + `docs/spike-ebpf-report.md`) | `docs/spike-ebpf-report.md` | owner-accepted report (`[x]`) | L-A |
+| L-C1–C9 | Collector, cgroup identity, `live.apps`, `FLOWS` episodes (`live.connections`), degraded paths | `netwatch-ebpf/`, `netwatchd`, `app/src/` | collector + degraded tests green; host GUI run open on C7/C8 | L-B1 |
+| L-D1–D5 | Range presets `1h`/`24h`/`7d`/`30d`/`cycle`, `range_default` (migration 0006), `Apps.tsx`, billing-cycle card | `netwatch-api`, `useDaemonStore.ts`, `Dashboard.tsx`, `Apps.tsx` | timezone/cycle/API tests green (`[x]`) | L-A1 |
+| L-UI | **Final & Locked Linear Design System**: `#050505`/`#F3F4F6`, solid opaque cards, zero blur/glow/dark-shadow, 13 primitives, 9 React screens, `1024x640` min window, headless capture across 9 screens light+dark | `DESIGN.md` v3.0, `app/src/`, `app/scripts/check-linear.mjs`, `tests/a11y/contrast.py` | 28/28 contrast + `check:linear` + typecheck/lint/test/build + 20 Chromium captures green (`[x]`) | — |
 
 **DoD (Phase A):** live PC speed matches a known rate within ~10%, idle ~0, stale/no-collector states honest, zero outbound, unit + contract tests green. **Stop for owner approval before L-B/L-C.**
 

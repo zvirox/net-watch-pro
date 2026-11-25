@@ -10,13 +10,26 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ## [Unreleased]
 
+## [v0.9.2-beta.6] — 2026-11-25
+
+### Added / Changed
+- **Final & Locked Linear Design System (`DESIGN.md` v3.0)**: Completed full UI implementation on React 19 + Tailwind CSS v4 + Zustand + ECharts using strict solid matte surfaces (`#050505` / `#111213` / `#1A1B1E` / `#202128` dark, `#F3F4F6` / `#FFFFFF` / `#F4F5F7` light), 1px hairline borders, zero blur/translucency/glow/dark-shadow, `1280x800` default / `1024x640` minimum undecorated Tauri window, `TitleBar`-only `ThemeToggle` with pre-paint `ui-theme` script, 13 primitives in `app/src/lib/components/linear/`, and all 9 React screens (`Onboarding`, `Dashboard`, `Live`, `History`, `Apps`, `AppDetail`, `Diagnostics`, `Settings`, `Upgrade`).
+- **Automated Linear & Accessibility Gates**: Added `npm --prefix app run check:linear` (`app/scripts/check-linear.mjs`) and updated `tests/a11y/contrast.py` to enforce all 28 light/dark contrast pairs cleanly.
+
+### Fixed
+- Fixed `useDaemonStore` synchronous initial listener registration so browser/preview startup no longer triggers `TypeError: Cannot read properties of undefined (reading 'onboardingDismissed')`.
+- Fixed demo fixture totals, `Apps.tsx` traffic-share clamping (`<= 100%`), `History.tsx` sub-day timestamp formatting on bar charts, and `AppUsageChart.tsx` stacked donut legend layout preventing label clipping.
+
+### Documentation
+- Audited and synchronized `DESIGN.md` (locked v3.0 spec; removed Svelte/glass/tentative UI planning), `AGENTS.md`, `CHECKLIST.md`, `PLAN.md`, `FEATURES.md`, `ARCHITECTURE.md`, `PRD.md`, `SETUP.md`, `TESTING.md`, `CONTRIBUTING.md`, `MCP.md`, `AUTH_SECURITY.md`, `docs/ROADMAP.md`, and `README.md` with verified codebase state (including clarifying that `crates/netwatch-api/src/starship_bridge.rs` is a standalone prototype library module not yet spawned by `netwatchd`).
+
 ## [v0.9.2-beta.5] — 2026-11-24
 
 ### Added
-- **Unified Linear-Style Design System**: Migrated UI to solid elevated surfaces (`#121215`, `#17171c`, `#202026`), hairline precision borders (`#23232a`), and zero blur across all screens.
+- **Linear UI Foundation & Migration**: Migrated frontend shell to React 19 + Tailwind CSS v4 + Zustand with custom undecorated window chrome and dark/light tokens (`DESIGN.md`).
 - **ECharts Real-Time Visuals**: Integrated Linear-themed real-time bandwidth and traffic flow analytics charts.
-- **Packaging & CI Matrix**: Standardized reusable release pipeline producing .deb, .rpm, .apk, and .tar.gz distributions.
-- **Starship Control Integration**: Ecosystem orchestration bridge via `$XDG_DATA_HOME/starship/plugins/nwp.json` and Unix domain socket `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock`.
+- **Packaging & CI Matrix**: Standardized reusable release pipeline (`packaging/nfpm.yaml` + `zvirox/release-workflows`) producing `.deb`, `.rpm`, and `.pkg.tar.zst` distributions alongside `SHA256SUMS`.
+- **Starship Control Bridge Module (Prototype)**: Added `starship-plugin` JSON-RPC bridge module (`crates/netwatch-api/src/starship_bridge.rs`) with unit tests (not yet spawned inside `netwatchd` runtime).
 
 ### Documentation
 

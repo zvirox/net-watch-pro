@@ -2600,7 +2600,7 @@ dependencies = [
 
 [[package]]
 name = "netwatch-api"
-version = "0.9.2-beta.5"
+version = "0.9.2-beta.6"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -2624,7 +2624,7 @@ dependencies = [
 
 [[package]]
 name = "netwatch-app"
-version = "0.9.2-beta.5"
+version = "0.9.2-beta.6"
 dependencies = [
  "futures-util",
  "serde",
@@ -2640,7 +2640,7 @@ dependencies = [
 
 [[package]]
 name = "netwatch-common"
-version = "0.9.2-beta.5"
+version = "0.9.2-beta.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -2648,7 +2648,7 @@ dependencies = [
 
 [[package]]
 name = "netwatch-core"
-version = "0.9.2-beta.5"
+version = "0.9.2-beta.6"
 dependencies = [
  "base64 0.23.1",
  "ed25519-dalek",
@@ -2659,7 +2659,7 @@ dependencies = [
 
 [[package]]
 name = "netwatch-integration-tests"
-version = "0.9.2-beta.5"
+version = "0.9.2-beta.6"
 dependencies = [
  "serde_json",
  "sqlx",
@@ -2668,7 +2668,7 @@ dependencies = [
 
 [[package]]
 name = "netwatchd"
-version = "0.9.2-beta.5"
+version = "0.9.2-beta.6"
 dependencies = [
  "aya",
  "getrandom 0.4.3",
@@ -6181,7 +6181,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.9.2-beta.5"
+version = "0.9.2-beta.6"
 dependencies = [
  "base64 0.23.1",
  "ed25519-dalek",

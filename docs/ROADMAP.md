@@ -1,7 +1,7 @@
 # Net Watch Pro Roadmap to v1.0 and Beyond
 
-**Version:** 1.0 · **Date:** 2026-11-23  
-**Status:** Approved for documentation merge (implementation governed by `AGENTS.md`)
+**Version:** 1.1 · **Date:** 2026-11-25  
+**Status:** Synchronized with `DESIGN.md` v3.0 (Linear UI Final & Locked) and `v0.9.2-beta.5` implementation state
 
 ---
 
@@ -10,6 +10,8 @@
 The vision for Net Watch Pro is a comprehensive, offline, explainable network ledger for Linux. Most Linux tools show either live totals (bandwidth meters) or low-level packet captures (Wireshark-style); few provide per-app history, budgets, and evidence-backed explanations together without relying on cloud services.
 
 The vision document spans 23 catalogue sections containing over 300 line items. To maintain software stability, security boundaries, and high test coverage, implementation is structured strictly by **data dependency** (what the collector can truthfully know) rather than catalogue order.
+
+> **UI Style Lock (`DESIGN.md` v3.0):** The **Linear Design System** (`#050505` / `#111213` dark, `#F3F4F6` / `#FFFFFF` light, solid matte surfaces, 1px hairline borders, zero blur/glow/dark-shadow) is implemented and **permanently locked** across all 9 React screens. Future milestones add data, diagnostics, and integration features using these existing Linear primitives without changing the UI style.
 
 ### Core Architecture Rule: "v1.0 Contains No New Data Source"
 
@@ -72,7 +74,7 @@ Every proposed feature is evaluated against four ordered questions. If a feature
 | **P0** | Essential fixes to current plan | Stage 0 gaps (IPv6 accuracy, upload spike, locked packaging alignment) | v0.9.2-beta.5, beta.6 |
 | **P1** | Trustworthy v1.0 daily monitor | Budgets, forecasting, alerts, connection explorer, heatmaps, CLI | v0.10, v0.11 |
 | **P2** | Standout intelligence (each adds 1 data source) | Anomaly detection, idle investigator, domain intelligence, health | v1.1 to v1.4 |
-| **P3** | Platform reach and UI polish | Desktop adapters, panel widgets, custom dashboards | v1.5, v2.0 |
+| **P3** | Desktop shell integration & composition (using locked Linear UI) | Desktop adapters, panel widgets, configurable views | v1.5, v2.0 |
 | **P4** | Architectural trust model changes | Application blocking, root plugin execution | v2.0+ (requires owner approval) |
 
 ### Mandatory Release Gates
@@ -306,4 +308,4 @@ To maintain strict truthfulness in reporting and honor technical sandbox constra
 
 - **Traffic Control & Firewalling (Catalogue 12):** Network blocking, bandwidth throttling, and pause controls are deferred to v2.0. If approved by the project owner, this capability will be implemented as an independent privileged daemon (`netwatch-guard`) interacting with nftables, keeping `netwatchd` strictly read-only.
 - **Root Plugins & Custom Scripts (Catalogue 23):** Arbitrary script execution inside the root daemon creates a severe privilege escalation vector. Extension mechanisms will be restricted to unprivileged user-space webhooks fed by the local REST/WebSocket API.
-- **Custom Visual Dashboards (Catalogue 23):** Deferred to v2.0 to allow UI component APIs to stabilize.
+- **Custom Visual Dashboards (Catalogue 23):** Deferred to v2.0 as layout/widget composition over the locked Linear component primitives (`DESIGN.md` v3.0).

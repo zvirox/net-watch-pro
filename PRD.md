@@ -186,7 +186,7 @@ The reference app analyzed in REAPM.md proves demand for a polished desktop UI o
 
 ### Flow 1 — First-run install & onboarding (target: < 3 minutes to a working dashboard)
 
-1. User installs via AUR (`paru -S net-watch-pro`), or adds the apt/dnf repo and installs the package.
+1. User installs the native package (`.deb`, `.rpm`, or `.pkg.tar.zst` produced via `nfpm`) from GitHub Releases or distro package manager.
 2. Package post-install registers `netwatchd.service` (disabled by default) and the desktop entry.
 3. User launches Net Watch Pro from the app menu.
 4. UI detects daemon not active → onboarding card explains monitoring requires a system service → user clicks "Enable monitoring" → `pkexec` prompt (one admin authorization) → daemon installed/enabled/started **and the current user's UID added to the root-owned allowed-UID list**; subsequent UI launches connect over the Unix socket with no further prompt.

@@ -1,103 +1,172 @@
 import React, { useEffect } from 'react';
+import { AlertTriangle } from 'lucide-react';
+import {
+    BreadcrumbBar,
+    LinearButton,
+    LinearCard,
+    Sidebar,
+    TitleBar,
+    type BreadcrumbSegment,
+    type NavScreenId,
+} from '$lib/components/linear';
 import { useDaemonStore } from '$lib/stores/useDaemonStore';
-import { StatusChip } from '$lib/components/StatusChip';
-import { TitleBar } from '$lib/components/linear/TitleBar';
 import { Dashboard } from '$lib/screens/Dashboard';
 import { Live } from '$lib/screens/Live';
-import { Apps } from '$lib/screens/Apps';
 import { History } from '$lib/screens/History';
+import { Apps } from '$lib/screens/Apps';
+import { AppDetail } from '$lib/screens/AppDetail';
+import { Diagnostics } from '$lib/screens/Diagnostics';
 import { Settings } from '$lib/screens/Settings';
-import {
-    LayoutDashboard,
-    Radio,
-    Package,
-    History as HistoryIcon,
-    Settings as SettingsIcon,
-} from 'lucide-react';
+import { Upgrade } from '$lib/screens/Upgrade';
+import { Onboarding } from '$lib/screens/Onboarding';
+
+const SCREEN_TITLES: Record<string, string> = {
+    dashboard: 'Dashboard',
+    live: 'Live Traffic',
+    history: 'History',
+    apps: 'Apps',
+    'app-detail': 'App Detail',
+    diagnostics: 'Diagnostics',
+    settings: 'Settings',
+};
 
 export const App: React.FC = () => {
-    const { activeScreen, setActiveScreen, start } = useDaemonStore();
+    const {
+        activeScreen,
+        selectedAppId,
+        appsList,
+        sidebarCollapsed,
+        connection,
+        demoMode,
+        onboardingDismissed,
+        isPro,
+        enablingMonitoring,
+        setActiveScreen,
+        toggleSidebar,
+        openUpgrade,
+        exitDemo,
+        triggerEnableMonitoring,
+        start,
+    } = useDaemonStore();
 
     useEffect(() => {
         start();
     }, [start]);
 
-    const navItems = [
-        { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { key: 'live', label: 'Live Traffic', icon: Radio },
-        { key: 'apps', label: 'Apps', icon: Package },
-        { key: 'history', label: 'History', icon: HistoryIcon },
-        { key: 'settings', label: 'Settings', icon: SettingsIcon },
+    const showOnboarding =
+        !demoMode &&
+        !onboardingDismissed &&
+        (connection === 'auth-required' || connection === 'auth-invalid');
+
+    const daemonStoppedBanner =
+        !demoMode &&
+        onboardingDismissed &&
+        connection !== 'connected' &&
+        connection !== 'connecting';
+
+    const selectedAppName =
+        selectedAppId !== null
+            ? (appsList.find((a) => a.id === selectedAppId)?.name ??
+              `App #${String(selectedAppId)}`)
+            : 'Detail';
+
+    const breadcrumbSegments: BreadcrumbSegment[] = [
+        { label: 'Net Watch Pro', onClick: () => setActiveScreen('dashboard') },
+        ...(activeScreen === 'app-detail'
+            ? [
+                  { label: 'Apps', onClick: () => setActiveScreen('apps') },
+                  { label: selectedAppName },
+              ]
+            : [{ label: SCREEN_TITLES[activeScreen] ?? 'Dashboard' }]),
     ];
 
     return (
         <div className="flex flex-col h-screen w-screen bg-[var(--bg-app)] text-[var(--text)] overflow-hidden">
-            {/* Universal 40px Linear TitleBar */}
-            <TitleBar
-                title="Net Watch Pro"
-                version="v0.9.2-beta.5"
-                icon={
-                    <div className="size-4 rounded bg-[#3355FF] text-white flex items-center justify-center font-bold text-[9px]">
-                        NW
-                    </div>
-                }
-            >
-                <span className="text-[11px] font-mono text-[var(--text-muted)] hidden sm:inline">
-                    UDS: /run/netwatch-pro/api.sock
-                </span>
-            </TitleBar>
+            <TitleBar title="Net Watch Pro" />
 
-            <div className="flex flex-1 overflow-hidden">
-                {/* Sidebar Navigation */}
-                <aside className="w-56 border-r border-[var(--border)] bg-[var(--bg-surface)] flex flex-col justify-between p-3 select-none">
-                    <nav className="space-y-1">
-                        {navItems.map((item) => {
-                            const Icon = item.icon;
-                            const isActive = activeScreen === item.key;
-                            return (
-                                <button
-                                    key={item.key}
-                                    onClick={() => setActiveScreen(item.key)}
-                                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                                        isActive
-                                            ? 'bg-[var(--bg-surface-2)] text-[var(--text)] border border-[var(--border-strong)]'
-                                            : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-surface-2)] border border-transparent'
-                                    }`}
+            {showOnboarding ? (
+                <Onboarding />
+            ) : (
+                <div className="flex flex-1 min-h-0 overflow-hidden">
+                    <Sidebar
+                        activeScreen={activeScreen}
+                        collapsed={sidebarCollapsed}
+                        isPro={isPro}
+                        demoMode={demoMode}
+                        onSelectScreen={(screen: NavScreenId) => setActiveScreen(screen)}
+                        onToggleCollapse={toggleSidebar}
+                        onOpenUpgrade={openUpgrade}
+                    />
+
+                    <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[var(--bg-app)]">
+                        <BreadcrumbBar
+                            segments={breadcrumbSegments}
+                            rightSlot={
+                                demoMode ? (
+                                    <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 rounded bg-[var(--tint-blue)] text-[var(--tint-blue-fg)] text-xs font-medium">
+                                            Demo mode
+                                        </span>
+                                        <LinearButton variant="ghost" size="sm" onClick={exitDemo}>
+                                            Exit demo
+                                        </LinearButton>
+                                    </div>
+                                ) : null
+                            }
+                        />
+
+                        {daemonStoppedBanner && (
+                            <div className="px-5 pt-4 shrink-0">
+                                <LinearCard
+                                    level={1}
+                                    className="px-4 py-3 border-[var(--accent-amber)] bg-[var(--tint-amber)] flex flex-wrap items-center justify-between gap-3"
+                                    role="alert"
                                 >
-                                    <Icon
-                                        className={`size-4 ${isActive ? 'text-[#3355FF]' : 'text-[var(--text-muted)]'}`}
-                                    />
-                                    <span>{item.label}</span>
-                                </button>
-                            );
-                        })}
-                    </nav>
+                                    <div className="flex items-center gap-2 text-xs text-[var(--text)]">
+                                        <AlertTriangle
+                                            className="size-4 text-[var(--tint-amber-fg)] shrink-0"
+                                            aria-hidden="true"
+                                        />
+                                        <span>
+                                            Monitoring stopped — netwatchd is unreachable over the
+                                            local Unix socket.
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <LinearButton
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() => setActiveScreen('diagnostics')}
+                                        >
+                                            Open diagnostics
+                                        </LinearButton>
+                                        <LinearButton
+                                            variant="primary"
+                                            size="sm"
+                                            disabled={enablingMonitoring}
+                                            onClick={() => void triggerEnableMonitoring()}
+                                        >
+                                            {enablingMonitoring ? 'Starting...' : 'Start daemon'}
+                                        </LinearButton>
+                                    </div>
+                                </LinearCard>
+                            </div>
+                        )}
 
-                    {/* Footer System Status */}
-                    <div className="pt-3 border-t border-[var(--border)] px-1">
-                        <StatusChip />
-                    </div>
-                </aside>
+                        <div className="flex-1 overflow-y-auto p-5">
+                            {activeScreen === 'dashboard' && <Dashboard />}
+                            {activeScreen === 'live' && <Live />}
+                            {activeScreen === 'history' && <History />}
+                            {activeScreen === 'apps' && <Apps />}
+                            {activeScreen === 'app-detail' && <AppDetail />}
+                            {activeScreen === 'diagnostics' && <Diagnostics />}
+                            {activeScreen === 'settings' && <Settings />}
+                        </div>
+                    </main>
+                </div>
+            )}
 
-                {/* Main Content Area */}
-                <main className="flex-1 flex flex-col overflow-hidden bg-[var(--bg-app)]">
-                    {/* Top Section Header */}
-                    <header className="h-10 border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 flex items-center justify-between select-none">
-                        <h2 className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">
-                            {navItems.find((n) => n.key === activeScreen)?.label || 'Overview'}
-                        </h2>
-                    </header>
-
-                    {/* Screen Content View */}
-                    <div className="flex-1 overflow-y-auto p-6">
-                        {activeScreen === 'dashboard' && <Dashboard />}
-                        {activeScreen === 'live' && <Live />}
-                        {activeScreen === 'apps' && <Apps />}
-                        {activeScreen === 'history' && <History />}
-                        {activeScreen === 'settings' && <Settings />}
-                    </div>
-                </main>
-            </div>
+            <Upgrade />
         </div>
     );
 };

@@ -63,8 +63,16 @@ export interface Summary {
   };
   cycle: { start: number; end: number; days_left: number; used_bytes: number };
   budgets: {
-    total_daily: { used_bytes: number; limit_bytes: number; level: string };
-    total_monthly: { used_bytes: number; limit_bytes: number; level: string };
+    total_daily: {
+      used_bytes: number;
+      limit_bytes: number;
+      level: 'ok' | 'warning' | 'critical' | 'breach';
+    };
+    total_monthly: {
+      used_bytes: number;
+      limit_bytes: number;
+      level: 'ok' | 'warning' | 'critical' | 'breach';
+    };
   };
   top_apps: { id: number; name: string; bytes_total: number }[];
 }
@@ -90,9 +98,9 @@ export const DEMO_SUMMARY: Summary = {
     total_monthly: { used_bytes: 18_600_000_000, limit_bytes: 0, level: 'ok' },
   },
   top_apps: [
-    { id: 1, name: 'Firefox', bytes_total: 7_400_000_000 },
-    { id: 2, name: 'Chrome', bytes_total: 4_100_000_000 },
-    { id: 3, name: 'Signal', bytes_total: 1_300_000_000 },
+    { id: 1, name: 'Firefox', bytes_total: 600_000_000 },
+    { id: 2, name: 'Chrome', bytes_total: 300_000_000 },
+    { id: 3, name: 'Signal', bytes_total: 150_000_000 },
   ],
   state: 'ok',
 };

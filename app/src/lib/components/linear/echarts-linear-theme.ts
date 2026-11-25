@@ -1,3 +1,5 @@
+import * as echarts from 'echarts';
+
 export const LINEAR_COLORS = {
   blue: '#3355FF',
   sky: '#38B6F0',
@@ -10,64 +12,104 @@ export const LINEAR_COLORS = {
   orange: '#F97316',
   idleDark: '#202128',
   idleLight: '#EAF0FF',
+  surfaceDark: '#111213',
+  surfaceLight: '#FFFFFF',
   borderDark: '#1F2125',
   borderLight: '#E5E7EB',
-  textDark: '#8A8B91',
-  textLight: '#6B7280',
-};
+  textDark: '#F5F5F6',
+  textLight: '#0F1115',
+  mutedDark: '#8A8B91',
+  mutedLight: '#6B7280',
+} as const;
 
-export const getLinearEChartsOption = (isDark: boolean = true) => ({
-  backgroundColor: 'transparent',
-  textStyle: {
-    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-    color: isDark ? LINEAR_COLORS.textDark : LINEAR_COLORS.textLight,
-  },
-  grid: {
-    top: 24,
-    right: 16,
-    bottom: 24,
-    left: 48,
-    borderColor: isDark ? LINEAR_COLORS.borderDark : LINEAR_COLORS.borderLight,
-  },
-  tooltip: {
-    backgroundColor: isDark ? '#111213' : '#FFFFFF',
-    borderColor: isDark ? LINEAR_COLORS.borderDark : LINEAR_COLORS.borderLight,
+export const LINEAR_SERIES_ORDER = [
+  LINEAR_COLORS.blue,
+  LINEAR_COLORS.sky,
+  LINEAR_COLORS.green,
+  LINEAR_COLORS.amber,
+  LINEAR_COLORS.teal,
+  LINEAR_COLORS.pink,
+  LINEAR_COLORS.purple,
+  LINEAR_COLORS.orange,
+] as const;
+
+export function lineAreaGradient(hex: string) {
+  return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+    { offset: 0, color: `${hex}38` },
+    { offset: 1, color: `${hex}00` },
+  ]);
+}
+
+export function getLinearTooltipConfig(isDark: boolean) {
+  const bg = isDark ? LINEAR_COLORS.surfaceDark : LINEAR_COLORS.surfaceLight;
+  const border = isDark ? LINEAR_COLORS.borderDark : LINEAR_COLORS.borderLight;
+  const text = isDark ? LINEAR_COLORS.textDark : LINEAR_COLORS.textLight;
+
+  return {
+    backgroundColor: bg,
+    borderColor: border,
     borderWidth: 1,
     padding: [8, 12],
     textStyle: {
-      color: isDark ? '#F5F5F6' : '#0F1115',
+      color: text,
       fontSize: 12,
       fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
     },
     extraCssText: isDark
-      ? 'border-radius: 8px;'
-      : 'box-shadow: 0 1px 2px rgb(16 24 40 / 5%); border-radius: 8px;',
-  },
-  xAxis: {
-    axisLine: {
-      lineStyle: { color: isDark ? LINEAR_COLORS.borderDark : LINEAR_COLORS.borderLight },
+      ? 'border-radius: 4px; box-shadow: none;'
+      : 'border-radius: 4px; box-shadow: 0 1px 2px rgb(16 24 40 / 5%);',
+  };
+}
+
+export function getLinearEChartsOption(isDark: boolean = true) {
+  const border = isDark ? LINEAR_COLORS.borderDark : LINEAR_COLORS.borderLight;
+  const muted = isDark ? LINEAR_COLORS.mutedDark : LINEAR_COLORS.mutedLight;
+
+  return {
+    animation: false,
+    backgroundColor: 'transparent',
+    textStyle: {
+      fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+      fontSize: 12,
+      color: muted,
     },
-    splitLine: { show: false },
-    axisTick: { show: false },
-  },
-  yAxis: {
-    axisLine: { show: false },
-    splitLine: {
-      lineStyle: {
-        type: 'dotted' as const,
-        color: isDark ? LINEAR_COLORS.borderDark : LINEAR_COLORS.borderLight,
+    grid: {
+      top: 16,
+      right: 12,
+      bottom: 24,
+      left: 8,
+      containLabel: true,
+      borderColor: border,
+    },
+    tooltip: getLinearTooltipConfig(isDark),
+    xAxis: {
+      axisLine: {
+        lineStyle: { color: border },
+      },
+      splitLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: {
+        color: muted,
+        fontSize: 12,
+        fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
       },
     },
-  },
-  color: [
-    LINEAR_COLORS.blue,
-    LINEAR_COLORS.sky,
-    LINEAR_COLORS.green,
-    LINEAR_COLORS.amber,
-    LINEAR_COLORS.teal,
-    LINEAR_COLORS.pink,
-    LINEAR_COLORS.purple,
-    LINEAR_COLORS.orange,
-    LINEAR_COLORS.red,
-  ],
-});
+    yAxis: {
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: {
+        color: muted,
+        fontSize: 12,
+        fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+      },
+      splitLine: {
+        show: true,
+        lineStyle: {
+          type: 'dotted' as const,
+          color: border,
+        },
+      },
+    },
+    color: [...LINEAR_SERIES_ORDER],
+  };
+}

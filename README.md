@@ -144,30 +144,17 @@ flowchart LR
 
 ---
 
-## Starship Control Integration
+## Starship Control Integration *(Preview Bridge Module)*
 
 Net Watch Pro is a self-contained monitoring application. You can watch live bandwidth graphs, check per-app totals, and inspect active connections without any extra software.
 
-When you want conversational network checks, Net Watch Pro connects cleanly with [Starship Control](https://github.com/zvirox/starship-control) ([Releases](https://github.com/zvirox/starship-control/releases)), the optional Linux desktop AI assistant.
+A standalone JSON-RPC integration bridge module (`crates/netwatch-api/src/starship_bridge.rs` built on `starship-plugin`) is included in the workspace for connecting with [Starship Control](https://github.com/zvirox/starship-control) ([Releases](https://github.com/zvirox/starship-control/releases)). Note: daemon startup spawning and live SQLite telemetry wiring inside `netwatchd` remain queued in `PLAN.md` Phase 12 (`P12.2`–`P12.3`).
 
-### Why It Exists
+### Target Capabilities (Phase 12)
 
-Whenever a system update, container pull, or background sync slows down a call, hunting across terminal tools wastes time. Pairing Net Watch Pro with Starship Control lets you ask normal questions in plain English and get instant answers right from your desktop.
-
-### Real-World Use Cases
-
-- **Instant Bandwidth Diagnosis**: Ask Starship Control *"Which program is using the most upload or download bandwidth right now?"*
-- **Quick Daily Totals**: Ask *"How much network data did my browser transfer today?"*
-- **Proactive Traffic Alerts**: Have Starship Control notify you when a background app suddenly spikes traffic while you work.
-
-### How Connection Works
-
-Setup runs automatically on your machine:
-
-1. **Local Discovery**: Net Watch Pro writes its read-only tool manifest to `$XDG_DATA_HOME/starship/plugins/nwp.json`.
-2. **Private Unix Socket**: Communication travels across `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock`.
-3. **Kernel Peer Verification**: Every message checks Linux `SO_PEERCRED` credentials so only programs running under your exact Linux user ID can query usage stats. No network ports open.
-4. **Instant Assistant Access**: Press `Super+Shift+Space` to ask Starship Control about your network anytime. For downloads and setup details, visit the [Starship Control repository](https://github.com/zvirox/starship-control) and [releases](https://github.com/zvirox/starship-control/releases).
+- **Instant Bandwidth Diagnosis**: Query active top talkers and recent packet/flow summaries over `$XDG_RUNTIME_DIR/starship/bridges/nwp.sock`.
+- **Quick Daily Totals**: Query per-app usage totals directly from local SQLite rollups.
+- **Strict Local Privilege Boundary**: Manifest discovery via `$XDG_DATA_HOME/starship/plugins/nwp.json` paired with Linux `SO_PEERCRED` peer-credential checks so only processes running under your UID can connect — zero network ports opened.
 
 ---
 
@@ -196,7 +183,7 @@ To build directly from source, install Rust stable, Node.js 22+, `bpf-linker`, a
 git clone https://github.com/zvirox/net-watch-pro.git
 cd net-watch-pro
 cargo run -p xtask -- bpf
-cd app && npm install --legacy-peer-deps && npm run build && cd ..
+cd app && npm ci && npm run build && cd ..
 cargo build --release -p netwatch-app -p netwatchd
 ```
 
@@ -212,9 +199,9 @@ Official Linux releases ship exclusively as native `.deb`, `.rpm`, and `.pkg.tar
 | :--- | :--- | :--- |
 | **Background Daemon** | Rust + Tokio + Aya eBPF (`netwatchd`) | Low-overhead socket byte accounting and local SQLite persistence |
 | **Desktop Shell** | Tauri 2 (`netwatch-app`) | Unprivileged desktop window, tray indicator, and socket client |
-| **Frontend UI** | React 19 + TypeScript + Tailwind CSS v4 | Matte dark dashboard with accessible high-contrast tokens |
+| **Frontend UI** | React 19 + TypeScript + Tailwind CSS v4 | Final & locked Linear Design System (`DESIGN.md` v3.0; dark `#050505` & light `#F3F4F6`) |
 | **Charts and State** | Apache ECharts 6 + Zustand | Smooth 1 Hz throughput charts and reactive usage tables |
-| **Automation Bridge** | `starship-plugin` SDK | Read-only local socket tools for Starship Control |
+| **Automation Bridge** | `starship-plugin` SDK *(prototype module)* | JSON-RPC bridge module in `netwatch-api` (daemon wiring tracked in `PLAN.md` Phase 12) |
 
 ---
 

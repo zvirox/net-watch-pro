@@ -1,9 +1,9 @@
 # MCP.md — AI Assistant Tooling via Model Context Protocol
 
-**Version:** 1.1 · **Date:** 2026-11-15  
-**Related:** `AGENTS.md` (assistant behavior rulebook) · `ARCHITECTURE.md` §8.3 (env vars) · `DATABASE.md` (schema the DB tools may read) · `docs/decisions.md` (owner decisions D1–D7)
+**Version:** 1.2 · **Date:** 2026-11-25
+**Related:** `AGENTS.md` (assistant behavior rulebook) · `ARCHITECTURE.md` §8.3 (env vars) · `DATABASE.md` (schema the DB tools may read) · `docs/decisions.md` (owner decisions D1–D14)
 
-**Version history:** 1.1 (2026-11-15): no product-transport changes (MCP is dev tooling only); version bumped for consistency with plan-fix effort.
+**Version history:** 1.1 (2026-11-15): MCP dev tooling only. 1.2 (2026-11-25): updated stack to React 19 / Tailwind CSS v4 / Linear UI and noted prototype Starship Control bridge status.
 
 > **Important distinction:** the *product* Net Watch Pro makes zero outbound connections (PRD, AGENTS.md §5). MCP servers here are **developer tooling for the assistant working on the repo**, not part of the product — they never ship in the app, never run as root, and never touch `/var/lib/netwatch-pro` except through the explicitly allowed read-only DB connection below.
 
@@ -27,7 +27,7 @@
 | **sqlite** | Inspect schema/seed/accuracy data against `netwatch.db` copies; verify DATABASE.md ↔ schema conformance | Core (post-P2.4) |
 | **github** | Issues, PRs, release tracking for the PLAN.md/CHECKLIST.md release flow | Recommended |
 | **browser (Playwright)** | Drive the Tauri webview/dev URL to verify DESIGN.md §7/§8 states (loading/empty/error) against the running app | Recommended (post-P0.4) |
-| **docs / context7** | Up-to-date library docs for Tauri 2, Svelte 5, Aya, sqlx — reduces hallucinated APIs | Optional |
+| **docs / context7** | Up-to-date library docs for Tauri 2, React 19, Tailwind CSS v4, Aya, sqlx — reduces hallucinated APIs | Optional |
 
 Explicitly **not recommended** here (one-line reasons): generic shell/exec servers (the assistant already has a sandboxed shell; a second execution path doubles risk), Slack/Google servers (no workflow need), anything requiring broad account scopes.
 
@@ -52,7 +52,7 @@ Standard `mcpServers` JSON — works in any MCP-compatible client (OpenCode, Cla
   }
 }
 ```
-- `${PROJECT_ROOT}` = absolute path to `/home/zvirox/Projects/net-watch-pro` (set in the client env, never hardcoded here).
+- `${PROJECT_ROOT}` = absolute path to your local `net-watch-pro` checkout (set in the client env, never hardcoded here).
 - **Allowed tools:** `read_file`, `read_multiple_files`, `list_directory`, `directory_tree`, `search_files`, `get_file_info`, `list_allowed_directories`.
 - **Blocked tools:** `write_file`, `edit_file`, `create_directory`, `move_file`, `copy_file`, `list_directory_with_sizes` *(if exposed)* — the assistant writes through its own reviewed tooling with user visibility, not a side channel.
 - **Why this scope:** one root only; reads are safe; writes belong to the audited editor workflow (AGENTS.md §6 small-diffs rule).
@@ -127,7 +127,7 @@ Standard `mcpServers` JSON — works in any MCP-compatible client (OpenCode, Cla
 }
 ```
 - **Allowed tools:** `resolve-library-id`, `get-library-docs`. **Blocked:** none exist beyond those two.
-- **Why:** pinned-versions docs for Tauri 2 / Svelte 5 runes / Aya / sqlx — the mandated stack's APIs are recent and change fast.
+- **Why:** pinned-versions docs for Tauri 2 / React 19 / Tailwind CSS v4 / Aya / sqlx — the mandated stack's APIs are recent and change fast.
 
 ---
 

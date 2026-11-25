@@ -1,9 +1,9 @@
 # FEATURES.md — MVP Feature Build Guides
 
-**Version:** 1.2 · **Date:** 2026-11-19
-**Sources:** `PRD.md` §6.1 (the 10 MVP features) · `PLAN.md`/`CHECKLIST.md` (task mapping) · `DESIGN.md` (UI) · `API.md`/`DATABASE.md` (contracts) · `docs/decisions.md` (owner decisions D1–D7)
+**Version:** 1.3 · **Date:** 2026-11-25
+**Sources:** `PRD.md` §6.1 (the 10 MVP features + F11) · `PLAN.md`/`CHECKLIST.md` (task mapping) · `DESIGN.md` v3.0 (Final & Locked Linear UI) · `API.md`/`DATABASE.md` (contracts) · `docs/decisions.md` (owner decisions D1–D14)
 
-**Version history:** 1.1 (2026-11-15): apply plan-fix findings — Unix-socket + peer-credential (F-06/D1a), endpoint-day aggregates (F-02/D2a), interface-counter totals + Unattributed row (F-03/D3a), 15m rollup grain + timezone/cycle (F-04/D4a), cgroup-first identity (F-05/D5a), budgets/alerts in MVP free tier (D6a). 1.2 (2026-11-19): add F11 live throughput with Phase A tasks (PC speed, `net.rates`, `speed_unit`, honest status) from `docs/LIVE-THROUGHPUT-PLAN.md`.
+**Version history:** 1.1 (2026-11-15): apply plan-fix findings. 1.2 (2026-11-19): add F11 live throughput (`docs/LIVE-THROUGHPUT-PLAN.md`). 1.3 (2026-11-25): synchronize status tracker with `v0.9.2-beta.5` implementation + locked Linear UI.
 
 > **Working agreement (binding):**
 > 1. Build **one feature at a time**, top to bottom in the order below.
@@ -29,23 +29,21 @@
 | F10 | Updates & packaging | §6.1 #10 | Phase 8', 11 | `GET /health` (version) | `schema_migrations` | Onboarding, About |
 | F11 | Live throughput | §6.1 #11 | new Phase A–D (`docs/LIVE-THROUGHPUT-PLAN.md`) | `WS net.rates`, `WS live.apps` (Phase C), `speed_unit` | derived from `/sys/class/net` counters | Dashboard (Network now), Apps |
 
-Phase 1 status note: Phase S (eBPF spike) and Phase D (doc fixes) are in progress before Phase 1' code resumes. F6 remains not started pending socket + peer-credential implementation (D1a).
-
-Status tracker (update after each confirmed feature):
+Current implementation status (`v0.9.2-beta.5`, Linear UI locked per `DESIGN.md` v3.0; UI design & navigation across all 9 React screens complete; host-root eBPF validation & G1–G8 stabilization gates tracked in `docs/ROADMAP.md` and `CHECKLIST.md`):
 
 | # | Feature | Status |
 |---|---|---|
-| F1 | Live Connections view | ☐ not started |
-| F2 | Per-app usage accounting | ☐ not started |
-| F3 | Dashboard | ☐ not started |
-| F4 | App detail page | ☐ not started |
-| F5 | Local history | ☐ not started |
-| F6 | Daemon + install experience | ☐ not started (skeleton exists from Phase 1) |
-| F7 | Tray integration | ☐ not started |
-| F8 | Settings (lean) | ☐ not started |
-| F9 | Freemium mechanics | ☐ not started |
-| F10 | Updates & packaging | ☐ not started |
-| F11 | Live throughput | ☐ Phase A in progress (per `docs/LIVE-THROUGHPUT-PLAN.md`) |
+| F1 | Live Connections view | `[x]` Implemented (daemon `FLOWS` map IPv4 episodes + `live.connections` WS/REST + Linear `Live.tsx` screen) |
+| F2 | Per-app usage accounting | `[x]` Implemented (cgroup `BYTES` eBPF counters + 15m rollups + sysfs totals + Unattributed row; G1/G5/IPv6 spikes open in `docs/ROADMAP.md`) |
+| F3 | Dashboard | `[x]` Implemented (KPI StatCards + sparklines, Throughput line chart, App Usage Split donut, Top Apps, Interfaces & Cycle Budgets in `Dashboard.tsx`) |
+| F4 | App detail page | `[x]` Implemented (`AppDetail.tsx`: Overview/Connections/Endpoints tabs, confidence badge, soft-delete handling) |
+| F5 | Local history | `[x]` Implemented (`History.tsx`: keyset pagination, multi-filter Free/Pro gating, 15m bar timeline, 90/365d pruning) |
+| F6 | Daemon + install experience | `[x]` Implemented (Polkit `enable-monitoring` helper, `SO_PEERCRED` allowlist, `Onboarding.tsx` + Demo mode + `Diagnostics.tsx`; live host root re-check tracked in Stage 0 G3–G5) |
+| F7 | Tray integration | `[x]` Implemented (`app/src-tauri` system tray menu + tooltip + daemon stop option; DE runtime behavior tested on Linux host) |
+| F8 | Settings (lean) | `[x]` Implemented (`Settings.tsx`: 7 tabs, budgets, interface policies, retention, daemon control; ThemeToggle intentionally in `TitleBar` only per locked `DESIGN.md` v3.0) |
+| F9 | Freemium mechanics | `[x]` Implemented (offline Ed25519 `NWP1-` key verifier, `Upgrade.tsx` modal, CSV/JSON export with formula escaping; G8 expiry recheck scheduled before paid keys) |
+| F10 | Updates & packaging | `[x]` Implemented (`packaging/nfpm.yaml` for `.deb`/`.rpm`/`.pkg.tar.zst` + CI release & container smoke; signed releases & manual host matrix tests tracked in Stage 0/`v0.9.3`) |
+| F11 | Live throughput | `[x]` Implemented (1 Hz `/sys/class/net` EMA engine, `net.rates`, `live.apps`, 60-sample rate history, `speed_unit` toggle) |
 
 ---
 
@@ -483,7 +481,7 @@ N/A for UI beyond About/onboarding captions; failure states live in F6's paths.
 
 **Data contracts:** `?range=` on U1/U2/U3/A1/A3; automatic `15m`/`hour`/`day` buckets; `range_default` setting (migration 0006); U1 `range`/`cycle` fields. No new stream channels.
 
-**Build order:** docs first (DESIGN.md 1.4 with §8.10 Apps wireframe, ARCHITECTURE.md 1.7, DATABASE.md 1.4, API.md 1.8 + api-contract) → range resolver + timezone/cycle tests in `calendar.rs` → range-aware endpoints → shared `range.svelte.ts` store → Dashboard selector/cards/bar chart/cycle card → new Apps screen and range-aware App detail → F12 tests.
+**Build order (completed in `v0.9.2-beta.5` + locked Linear UI):** docs (`DESIGN.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md` + `api-contract.md`) -> range resolver + timezone/cycle tests in `calendar.rs` -> range-aware endpoints -> `useDaemonStore` shared `rangePreset` -> `Dashboard.tsx` selector/cards/charts/cycle card -> `Apps.tsx` ranking and range-aware `AppDetail.tsx` -> F12 tests.
 
 ---
 
