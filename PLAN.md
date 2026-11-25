@@ -25,24 +25,20 @@
 | 5 | Apps slice | Cgroup-based identity (F-05), App detail | `v0.5.0-alpha.5` | ~40 h |
 | 6 | Freemium slice (reduced) | License verify + simple gating (F-07) | `v0.6.0-alpha.6` | ~40 h |
 | 7 | System slice | Tray, settings, retention/pruning | `v0.7.0-alpha.7` | ~40 h |
-| 8' | Packaging (reduced) | GitHub Releases `.deb`/`.rpm`, AUR `-git`; hosted repos deferred (F-10) | `v0.8.0-alpha.8` | ~40 h |
+| 8' | Packaging (uniform) | Locked `nfpm` GitHub Releases (`.deb`, `.rpm`, `.pkg.tar.zst` + `SHA256SUMS` / `.sig`) | `v0.8.0-alpha.8` | ~40 h |
 | 9 | Diagnostics & a11y | All degraded states + accessibility pass | `v0.9.0-beta.1` | ~40 h |
-| 10' | Hardening | Kernel VM matrix, perf budgets, external review (F-08) | `v0.9.x-beta.N` | ~80 h |
-| 11 | Launch | Stable 1.0 GA + repos live | `v1.0.0` | ~40 h |
+| 10' | Hardening | Container package smoke tests, perf budgets, external review | `v0.9.x-beta.N` | ~80 h |
+| 11 | Launch | Stable 1.0 GA (`.deb`, `.rpm`, `.pkg.tar.zst` locked) | `v1.0.0` | ~40 h |
 
 **Tag format:** `vMAJOR.MINOR.PATCH-alpha.N` / `-beta.N` during pre-releases; plain `v1.0.0` at GA. Within a phase, patch bumps (`v0.3.1-alpha.3`) mark internal fixes worth tagging. Feature phases are MINOR bumps; the phase *number maps loosely* — the alpha/beta suffix is the real maturity signal.
 
-### Packaging matrix (what ships at each release stage)
+### Packaging matrix (Locked Final Manifest)
 
 | Stage | Artifacts | Channels |
 |---|---|---|
-| Alpha (`v0.*.0-alpha.N`) | GitHub tarballs + `.deb` + `.rpm` (unpolished) | GitHub Releases only, "expect breakage" banner |
-| Beta (`v0.9.0-beta.N`) | Signed `.deb` + apt repo, `.rpm` + dnf repo, AUR `net-watch-pro-git` (dev channel) | GitHub Releases + beta repo subdomain; testers wanted |
-| Stable (`v1.0.0`) | Signed `.deb` (apt repo), `.rpm` (dnf repo), AUR `net-watch-pro` + `net-watch-pro-bin` | PRD §6.1 #10 complete |
+| Alpha / Beta / Stable (`v1.0.0`) | **Exclusively** `.deb`, `.rpm`, `.pkg.tar.zst` via `packaging/nfpm.yaml` + `SHA256SUMS` (+ `.sig`) | GitHub Releases (`zvirox/release-workflows`) |
 
-**Packaging deferral (F-10):** self-hosted apt/dnf repos and signing keys are deferred until after beta. Alpha/beta ship GitHub Releases artifacts + AUR `-git`; prefer hosted build services (COPR, PPA, openSUSE Build Service) over running repo infrastructure alone. External security review before 1.0, not in the first-alpha path.
-
-**Flatpak:** decision (owner, 2026-11-18; PRD 1.2) — **deferred until after Phase 11 (v1.0.0)**. A sandboxed Flatpak cannot host the root systemd daemon; it would be a UI-only wrapper plus a separate host install, breaking the one-command install promise. **AUR stays the Arch/CachyOS install path at Phase 8** (`net-watch-pro-git`, then `-`/`-bin` at GA). Any Flatpak work needs a new PRD/PLAN update and owner go-ahead.
+**Locked Packaging & Testing Policy:** All release tags ship **strictly** the three native x86_64 packages (`.deb`, `.rpm`, `.pkg.tar.zst`) plus `SHA256SUMS` (+ GPG signature `SHA256SUMS.sig`). AppImage, Flatpak, tarballs, AUR packages, and hosted apt/dnf repos are permanently retired and excluded from future milestones. Release package verification uses automated CI clean containers (`ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest`); VM test requirements for release packages are permanently removed.
 
 ---
 
@@ -271,11 +267,11 @@
 | P10.1 | Accuracy harness: daemon vs interface counters (≥95% attributed, totals equal kernel counters) | `tests/accuracy/` | CI job green over synthetic 50-conn load; moved into spike then Phase 2 | P4.2 |
 | P10.2 | Perf budget test: ≤3% CPU / ≤150 MB RSS p95 | `tests/integration/` | budget assertions in CI | P10.1 |
 | P10.3 | 1-year retention soak: size < 1.5 GB | `tests/integration/` | seeded volume profile matches ARCHITECTURE.md §9 | P7.1 |
-| P10.4 | Distro matrix smoke tests in CI **containers** (Arch, Ubuntu, Fedora) — **owner-approved deviation**: the plan required VMs, containers cannot validate kernel variance, so this is labelled a smoke test, not the VM matrix. Owner runs the real matrix from `docs/vm-matrix-runbook.md` | `.github/workflows/`, `docs/vm-matrix-runbook.md` | container jobs green; real VM matrix evidence pasted into CHECKLIST.md | P8.2, P8.3 |
+| P10.4 | Distro matrix smoke tests in CI **containers** (`ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest`) verifying `.deb`, `.rpm`, and `.pkg.tar.zst` install, desktop validation, and uninstall cleanly. *(VM matrix requirement for release packages removed.)* | `.github/workflows/release.yml`, `zvirox/release-workflows` | container smoke jobs green | P8.2, P8.3 |
 | P10.5 | Security review: unit sandbox, socket peer-credential, API surface | daemon | review findings fixed/closed | P8.1 |
 | P10.6 | Beta feedback fixes (buffer; scope-tight only) | as needed | each fix tagged patch `v0.9.x-beta.N` | P9 |
 
-**DoD:** PRD §11 Definition of Done items #1–#8 all satisfied; crash-free ≥ 99.5% in beta; final beta tag `v0.9.2-beta.4` (owner-approved continuation of the existing beta sequence, replacing the plan's `v0.9.9-beta.N` placeholder). P10.4 container smoke does **not** satisfy the VM-matrix part of DoD #1.
+**DoD:** PRD §11 Definition of Done items satisfied; crash-free ≥ 99.5% in beta; final beta tag `v0.9.2-beta.5`+ passes locked `nfpm` container smoke tests without manual VM gates.
 
 ---
 
@@ -283,7 +279,7 @@
 
 | ID | Task | Files | Verify | Deps |
 |---|---|---|---|---|
-| P11.1 | Stable repos live: apt + dnf via hosted build services (COPR/PPA), AUR `net-watch-pro`/`-bin` | `packaging/*`, workflows | clean-VM repo installs on all 3 | P10.4 |
+| P11.1 | Locked GA GitHub Release artifacts: `.deb`, `.rpm`, `.pkg.tar.zst` (`nfpm`) + `SHA256SUMS` / `SHA256SUMS.sig` *(AUR/PPA/COPR retired)* | `packaging/nfpm.yaml`, `.github/workflows/release.yml` | CI container smoke tests pass on all 3 distro families | P10.4 |
 | P11.2 | Final QA sweep against PRD §11 checklist | — | every DoD item signed off | P10.6 |
 | P11.3 | README screenshots + docs site/landing copy | `README.md`, `docs/` | no placeholders left | P9 |
 | P11.4 | Tag `v1.0.0` + release notes (zero-outbound claim verifiable) | release | GA artifacts published | P11.1–P11.3 |

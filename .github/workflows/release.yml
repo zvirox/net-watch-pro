@@ -12,7 +12,7 @@ jobs:
   release:
     uses: zvirox/release-workflows/.github/workflows/linux-release.yml@v1
     with:
-      app_name: net-watch-pro
+      app_name: ${{ github.event.repository.name }}
       frontend_dir: app
       extra_binaries_cmd: |
         rustup component add rust-src

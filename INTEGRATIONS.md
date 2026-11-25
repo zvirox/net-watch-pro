@@ -20,7 +20,7 @@
 | **Analytics / telemetry** | **N/A** | Explicitly a product promise (PRD §1); verifiable via the app's own Live view. |
 | **Update check service** | **Deferred — PRD OQ3/OQ4 decision** | Updates flow through package managers (F10); any in-app update-metadata check needs a PRD decision first. |
 | **License purchase handoff** | **Active (out-of-app)** | See §2 — the one real customer-facing seam. |
-| **Package repos (deb / rpm / AUR)** | **Active (build-time)** | See §3 — distribution is the "hosting" (ARCHITECTURE.md §2). |
+| **GitHub Releases (`nfpm` packages)** | **Active (build-time)** | See §3 — locked native packages (`.deb`, `.rpm`, `.pkg.tar.zst`) via GitHub Releases (ARCHITECTURE.md §2). |
 
 ---
 
@@ -42,21 +42,21 @@
 
 ---
 
-## 3. Integration 2 — Package Repositories (build-time)
+## 3. Integration 2 — Locked GitHub Release Packages (build-time)
 
-**Why:** distribution *is* the hosting (ARCHITECTURE.md §2); PRD §6.1 #10 mandates AUR + apt repo + dnf repo with signed updates. Users' machines talk to repos via their package manager — the app itself still makes zero outbound calls.
+**Why:** PRD §6.1 #10 locks release distribution to three native `nfpm` packages (`.deb`, `.rpm`, `.pkg.tar.zst`) plus `SHA256SUMS` and `SHA256SUMS.sig` published on GitHub Releases (`zvirox/release-workflows`). The app itself makes zero outbound calls, and AUR / AppImage / Flatpak / hosted apt-dnf repos are retired.
 
 | Aspect | Detail |
 |---|---|
-| **Env variables (CI/release only)** | `DEB_SIGNING_KEY` (GPG private key id/passphrase via CI secrets), `RPM_SIGNING_KEY`, `APT_REPO_HOST`, `RPM_REPO_HOST`, `AUR_SSH_KEY` — all placeholders resolved in CI secrets; **never in the repo** (AUTH_SECURITY.md §8). |
-| **SDK / tooling** | No SDK — standard packaging tools: `dpkg-deb`/`aptly` (or `reprepro`), `rpmbuild`/`createrepo_c`, `makepkg` (PKGBUILD), wired by `xtask` + the release workflow (PLAN P8.2–P8.8). |
-| **Setup steps** | 1) `xtask` builds per-distro artifacts · 2) CI signs .deb (debsigs) and .rpm (rpmsign) · 3) Publish to repo hosts + `createrepo_c`/aptly metadata refresh · 4) AUR: push PKGBUILD update · 5) Verify signatures on clean VMs. |
-| **Wrapper files** | `packaging/deb/`, `packaging/rpm/`, `packaging/arch/PKGBUILD`, `.github/workflows/release.yml`, `xtask` — all release infra; no product code depends on repo reachability. |
-| **Webhooks / retries / idempotency** | N/A (static file distribution). Repo metadata refresh is idempotent; failed publish → re-run workflow (artifacts are immutable once tagged). |
-| **Errors** | Publish failure blocks the release tag (CI gate), never ships unsigned; signature verification failure on user side = package-manager-level block (documented in F10). |
-| **Cost / rate limits** | Repo hosting: a small VPS/object storage, dollars/month; no API rate limits. |
-| **Fallback if down** | GitHub Releases always carries the same signed artifacts (PLAN §1 packaging matrix); AUR builds from source need no repo. |
-| **Sandbox / test** | CI dry-run builds + clean-VM install matrix (P10.4); signature verification tested with the CI public key before rotating to production keys. |
+| **Env variables (CI/release only)** | `SIGNING_KEY`, `SIGNING_KEY_ID`, `SIGNING_PASSPHRASE` (GPG signing secrets via GitHub Actions; **never in the repo**, AUTH_SECURITY.md §8). |
+| **SDK / tooling** | `nfpm` (`packaging/nfpm.yaml`) wired into reusable `zvirox/release-workflows/.github/workflows/linux-release.yml@v1`. |
+| **Setup steps** | 1) Cargo builds `net-watch-pro` + embedded-eBPF `netwatchd` · 2) `nfpm` outputs `.deb`, `.rpm`, `.pkg.tar.zst` · 3) CI writes `SHA256SUMS` and GPG-signs `SHA256SUMS.sig` · 4) Clean containers verify install & uninstall (`ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest`) · 5) Publish GitHub Release. |
+| **Wrapper files** | `packaging/nfpm.yaml`, `packaging/scripts/{postinstall,preremove}.sh`, `.github/workflows/release.yml` — all release infra; no product code depends on repo reachability. |
+| **Webhooks / retries / idempotency** | N/A (static release asset distribution). Failed tag workflow → inspect logs before re-tagging. |
+| **Errors** | Container smoke test failure blocks GitHub Release creation cleanly. |
+| **Cost / rate limits** | Zero hosting cost (GitHub Releases static assets). |
+| **Fallback if down** | Source build via `cargo build --release` works completely offline once dependencies are fetched. |
+| **Sandbox / test** | CI clean-container install/uninstall smoke tests (`ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest`) + `hardening.yml` maintainer-script smoke tests (`packaging/tests/test-*.sh`). Manual VM package test gates are retired. |
 
 ---
 
@@ -102,7 +102,7 @@ If a future version legitimately needs a third-party API (e.g. an opt-in update-
 |---|---|
 | App zero-outbound claim | Final-build test: the app's own Live view shows only loopback sockets (AUTH_SECURITY.md §11; FEATURES.md F10). |
 | License activation matrix | Vendor test keys (valid / expired / tampered / malformed) → expected 200/403/409 per API.md §2.8 — no network involved. |
-| Package repos | CI dry-run + clean-VM install on all 3 distro families (PLAN P10.4); signature verify before key rotation. |
+| Release packages | CI clean-container install/uninstall smoke matrix (`zvirox/release-workflows`) + `hardening.yml` script tests; GPG signature verification (`SHA256SUMS.sig`). |
 | Any future provider | §4.1 pattern + §4.2 webhook/idempotency test; **plus** a CI job that builds with provider env unset and asserts full app functionality (fallback path is the default). |
 
 ---

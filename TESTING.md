@@ -269,10 +269,10 @@ The real-host row is `[VERIFIED]` only after an owner run; unit/integration test
 | Accuracy | seeded interface + app rollups over synthetic load | total equals kernel-counter sum by construction; attributed ≥ 95% on the reference profile |
 | Perf budget | daemon under seeded REST/DB load, sampled from `/proc` | CPU p95 ≤ 3%, RSS p95 ≤ 150 MB; eBPF-path overhead stays owner-verified from the spike report |
 | Retention soak | seeded 1-year profile from ARCHITECTURE.md §9 | DB file < 1.5 GiB; pruner keeps the free/Pro ceilings |
-| Distro smoke | CI containers: Arch, Ubuntu, Fedora | packages install, unit present/disabled, daemon starts and answers `/health` — labelled container smoke, NOT the VM matrix |
+| Distro smoke | CI containers: `ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest` | Locked `.deb`, `.rpm`, and `.pkg.tar.zst` packages install cleanly, desktop file validates, and uninstall completes cleanly |
 | Security review | unit, peer-cred auth, API surface, CSP/capabilities | findings documented in `docs/security-review.md`; P1/P2 findings fixed or explicitly accepted by owner |
 
-The container matrix is an owner-approved deviation from PLAN P10.4 and does not satisfy DoD #1; real VM results remain pending.
+*(Note: Separate VM release-package test requirements are retired; container smoke tests in `zvirox/release-workflows` + `hardening.yml` maintainer-script checks are the authoritative release verification.)*
 
 ### F16 — Owner dev-license testing
 

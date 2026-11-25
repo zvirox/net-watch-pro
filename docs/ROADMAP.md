@@ -69,7 +69,7 @@ Every proposed feature is evaluated against four ordered questions. If a feature
 
 | Priority | Meaning | Example Features | Target Release |
 |---|---|---|---|
-| **P0** | Essential fixes to current plan | Stage 0 gaps G1–G8 (IPv6 accuracy, VM matrix, upload spike) | v0.9.2-beta.5, beta.6 |
+| **P0** | Essential fixes to current plan | Stage 0 gaps (IPv6 accuracy, upload spike, locked packaging alignment) | v0.9.2-beta.5, beta.6 |
 | **P1** | Trustworthy v1.0 daily monitor | Budgets, forecasting, alerts, connection explorer, heatmaps, CLI | v0.10, v0.11 |
 | **P2** | Standout intelligence (each adds 1 data source) | Anomaly detection, idle investigator, domain intelligence, health | v1.1 to v1.4 |
 | **P3** | Platform reach and UI polish | Desktop adapters, panel widgets, custom dashboards | v1.5, v2.0 |
@@ -96,12 +96,12 @@ All dates listed below are planning **targets, not commitments**.
 | Milestone | Target Window | Focus & Primary Deliverable |
 |---|---|---|
 | **Stage 0 (beta.5)** | Target Dec 6, 2026 | Truth in docs, Stage 0 gaps G1, G2, G5, G7, G8, attribution harness |
-| **Stage 0 (beta.6)** | Target Dec 13, 2026 | G4 upload GSO spike outcome, G6 multi-distro VM matrix |
+| **Stage 0 (beta.6)** | Target Dec 13, 2026 | G4 upload GSO spike outcome, locked `nfpm` release parity |
 | **v0.9.3 "Trust"** | Target Dec 20, 2026 | Monitoring health, self-diagnostics, data attribution transparency |
 | **v0.10 "Plan"** | Target Jan 24, 2027 | Budgets, forecasting, desktop alerts, heatmaps, leaderboard, CLI |
 | **v0.11 "Explore"** | Target Mar 7, 2027 | Connection explorer, app profiles, comparison studio, smart archive |
-| **v1.0.0-rc.1** | Target Apr 4, 2027 | Feature freeze, distro packaging (.deb, .rpm, PKGBUILD), soak tests |
-| **v1.0.0 Stable** | Target Apr 25, 2027 | Stable general availability, signed repositories, full user documentation |
+| **v1.0.0-rc.1** | Target Apr 4, 2027 | Feature freeze, locked `nfpm` distro packaging (`.deb`, `.rpm`, `.pkg.tar.zst`), soak tests |
+| **v1.0.0 Stable** | Target Apr 25, 2027 | Stable general availability, signed GitHub Releases, full user documentation |
 | **v1.1 "Insight"** | Target Jun 2027 | Local baselines, anomaly alerts, idle activity investigator, scores |
 | **v1.2 "Destinations"** | Target Aug 2027 | Passive DNS observation, domain tracking, offline destination mapping |
 | **v1.3 "Network Health"** | Target Oct 2027 | Active latency/jitter/loss probes, link stats, full network profiles |
@@ -137,7 +137,7 @@ All dates listed below are planning **targets, not commitments**.
 **Goal:** Give users total visibility into how Net Watch Pro measures their system and why local counters may differ from routers or ISPs.
 
 **Scope:**
-- **G4 & G6 resolution:** Incorporate GSO segment spike outcome for upload accounting and publish the completed VM matrix across Arch, Ubuntu LTS, Fedora, and Debian.
+- **G4 resolution:** Incorporate GSO segment spike outcome for upload accounting and verify locked `nfpm` container smoke tests across Ubuntu LTS, Fedora, and Arch. *(Manual VM release-package testing removed from planning.)*
 - **Monitoring Health and Self-Diagnostics (Catalogue 23):** Expand the Diagnostics modal into a dedicated screen reporting collector status, attach mode, capability drops, kernel BTF status, and actionable remediation steps.
 - **Data Attribution Transparency (Catalogue 23):** In-app documentation view explaining how packets are measured at socket boundaries, loopback exclusions, GSO effects, and router vs. host discrepancies.
 - **Data Integrity Validation (Catalogue 22):** Implement `nwp check` CLI diagnostic command verifying SQLite rollups consistency against raw counters.
@@ -192,10 +192,7 @@ All dates listed below are planning **targets, not commitments**.
 
 **Scope:**
 - **Strict Feature Freeze:** Zero new feature additions after v1.0.0-rc.1.
-- **Native Packaging:** Tested distribution packages:
-  - Arch Linux: AUR `net-watch-pro` and `net-watch-pro-bin` with automated systemd unit installation.
-  - Debian/Ubuntu: `.deb` package with signed repository and proper maintainer scripts.
-  - Fedora: `.rpm` package signed and tested against current Fedora versions.
+- **Native Packaging (Final & Locked Manifest):** Exclusively `.deb`, `.rpm`, and `.pkg.tar.zst` via `packaging/nfpm.yaml` + `zvirox/release-workflows`, with `SHA256SUMS` and `SHA256SUMS.sig` verified in CI clean containers (`ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest`). AUR, Flatpak, AppImage, tarballs, and VM tests are permanently retired.
 - **Endurance Testing:** 14-day continuous soak test on physical hardware with eBPF collector running, monitoring for memory leaks or sqlite lock contention.
 - **Performance Budget Compliance:** Verified daemon overhead under heavy network saturation: CPU usage <= 3.0% single core, RSS memory <= 150 MiB.
 - **Documentation & Security Audit:** Updated `docs/security-review.md`, finalized User Guide, comprehensive offline troubleshooting manual.

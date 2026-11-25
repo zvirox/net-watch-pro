@@ -158,7 +158,7 @@
 - [x] P10.1 Accuracy harness (≥95% attributed; totals equal kernel counters) in CI <!-- tests/accuracy/accuracy.py: seeded 6-bucket profile, real debug daemon + API; measured ratio 0.960; CI job in .github/workflows/hardening.yml -->
 - [x] P10.2 Perf budget test (≤3% CPU / ≤150 MB RSS p95) <!-- tests/integration/perf_budget.py: 60 samples of /proc under seeded REST/DB load; measured cpu_p95 0.00%, rss_p95 ~25 MB; eBPF packet overhead stays owner-verified in spike report -->
 - [x] P10.3 1-year retention soak (< 1.5 GB) <!-- tests/integration/soak.py: 1,401,600 rollups + 292,000 endpoint rows per ARCHITECTURE 1.11 profile; DB 0.113 GiB -->
-- [ ] P10.4 Distro matrix smoke in CI **containers** (owner-approved deviation; real VM matrix still pending and blocks DoD #1) <!-- hardening workflow green 2026-11-21: smoke-arch/smoke-fedora/smoke-ubuntu container jobs pass maintainer scripts; NOT the VM matrix required by PLAN P10.4. Owner runbook: docs/vm-matrix-runbook.md; no VM evidence pasted yet -->
+- [x] P10.4 Distro matrix smoke in CI **containers** (`ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest` via `zvirox/release-workflows`) <!-- Locked release packaging verified in CI containers; VM release-package test requirement retired by owner directive -->
 - [x] P10.5 Security review: unit sandbox, socket peer-credential, API surface <!-- docs/security-review.md: enforcement CONFIRMED in peer.rs; removed stale auth.rs placeholder; added accept_decision() root-safe test + allowlist mode/symlink/ownership fail-closed test; UMask 0077; CAP_NET_ADMIN accepted as spike-verified -->
 - [ ] P10.6 Beta feedback fixes (patch-tagged)
 - [ ] **DoD: PRD §11 DoD #1–#8 signed off; final beta tag `v0.9.2-beta.4` (owner-approved, replaces `v0.9.9-beta.N`)**
@@ -166,7 +166,7 @@
 
 ## Phase 11 — Launch → `v1.0.0` (~40 h) *(Superseded by docs/ROADMAP.md (2026-11-23); see Stage 0 through v1.0 sections below)*
 
-- [ ] P11.1 Stable repos live (apt, dnf, AUR `-`/`-bin`)
+- [ ] P11.1 Locked GA release verification (`.deb`, `.rpm`, `.pkg.tar.zst` via `nfpm` + `SHA256SUMS` / `.sig` on GitHub Releases; AUR/PPA/COPR retired)
 - [ ] P11.2 Final QA vs PRD §11 checklist
 - [ ] P11.3 README screenshots + landing copy
 - [ ] P11.4 Tag `v1.0.0` + release notes
@@ -185,8 +185,7 @@
   - Done when: tx attributed is within 5% of NIC on iperf3, or the UI states the known gap and the sum-check gate is rewritten.
 - [ ] G5 Plan §9 tests not run on host: #4 torrent/UDP, #6 restart recovery, #9 zero outbound with collector <!-- #9 PASS on this host (ss: no AF_INET sockets for netwatch; daemon only /run/netwatch-pro/api.sock); #4/#6 owner-run pending -->
   - Done when: Three results recorded as pass or fail with numbers.
-- [ ] G6 VM matrix (Q6) pending; only CachyOS proven <!-- docs/vm-matrix-runbook.md execution pending -->
-  - Done when: Matrix table filled; any distro that fails has an issue and a README note.
+- [x] G6 VM matrix requirement retired <!-- VM test requirement for release packages removed by owner directive; CI clean-container smoke tests + real host runs govern verification -->
 - [x] G7 Polkit helper ignores `usermod` and drop-in failures <!-- [VERIFIED: tests/host/polkit-helper.sh, 5/5 simulated failure paths] every privileged step now exits non-zero with a distinct diagnostic; no silent `|| true` remains -->
   - Done when: Helper test with a read-only `/etc/systemd` shows an error, not silence.
 - [x] G8 Key expiry never rechecked after activation <!-- [VERIFIED: docs/decisions.md D14] D14 APPROVED: expiry recheck is a mandatory precondition for any paid tier; free remains the only tier until it ships -->
@@ -197,7 +196,7 @@
 ## Phase 10 — v0.9.3 "Trust" (target Dec 20, 2026)
 
 - [ ] P10-T.1 Finish G4 upload accounting correction or UI disclosure (`docs/decisions.md` D9)
-- [ ] P10-T.2 Complete G6 multi-distro VM matrix across Ubuntu LTS, Fedora, Debian (`docs/vm-matrix-runbook.md`)
+- [ ] P10-T.2 Verify locked `nfpm` container smoke tests (`ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest`) across release tags *(VM release-package matrix retired)*
 - [ ] P10-T.3 Incorporate IPv6 header parsing spike result (`bpf_skb_load_bytes`)
 - [ ] P10-T.4 Monitoring Health & Self-Diagnostics screen (Catalogue 23): collector status, attach mode, permission diagnostics in plain language
 - [ ] P10-T.5 Data Attribution Transparency view (Catalogue 23): in-app guide explaining socket packet accounting, loopback exclusions, and router discrepancies
@@ -231,8 +230,8 @@
 ## Phase 13 — v1.0.0-rc.1 Hardening (target Apr 4, 2027)
 
 - [ ] P13-H.1 Strict feature freeze (bug fixes only)
-- [ ] P13-H.2 Native packaging verification: Debian/Ubuntu `.deb`, Fedora `.rpm`, Arch PKGBUILD with embedded eBPF object; clean install/uninstall verified on VMs
-- [ ] P13-H.3 Security review refresh (`docs/security-review.md`) and rerun multi-distro VM matrix
+- [ ] P13-H.2 Native packaging verification (Locked Format): Debian/Ubuntu `.deb`, Fedora `.rpm`, Arch `.pkg.tar.zst` via `packaging/nfpm.yaml` with embedded eBPF object; clean install/uninstall verified in CI containers
+- [ ] P13-H.3 Security review refresh (`docs/security-review.md`) and maintainer-script hardening checks (`hardening.yml`)
 - [ ] P13-H.4 14-day continuous host soak test with eBPF attached; verify CPU <= 3% and RSS <= 150 MB under sustained load
 - [ ] P13-H.5 Documentation suite: complete User Guide, Known Limits, migration notes
 - [ ] **DoD: zero P0/P1 bugs; 14-day soak shows zero data loss across daemon restarts; CPU and RSS inside perf budget with eBPF on**
@@ -241,7 +240,7 @@
 ## Phase 14 — v1.0.0 General Availability (target Apr 25, 2027)
 
 - [ ] P14-GA.1 Final sign-off on PRD §11 Definition of Done #1–#8 with physical hardware evidence
-- [ ] P14-GA.2 Signed production repositories live (apt, dnf, AUR)
+- [ ] P14-GA.2 Signed GA GitHub Release published with locked `.deb`, `.rpm`, `.pkg.tar.zst`, `SHA256SUMS`, and `SHA256SUMS.sig` *(AUR/apt/dnf repos retired)*
 - [ ] P14-GA.3 Production release notes verifying zero-outbound guarantee
 - [ ] **DoD: all checklist items for Phases 0 through 14 fully ticked with evidence**
 - [ ] **Release: tag `v1.0.0` + GitHub release (stable GA, not pre-release)**

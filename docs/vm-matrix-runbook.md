@@ -1,4 +1,8 @@
-# VM matrix runbook — Phase 10 P10.4
+# VM matrix runbook — [RETIRED / SUPERSEDED]
+
+> **Status: RETIRED (2026-11-25).** Per owner directive and the Uniform Linux Release & Packaging Policy, the VM test requirement for release packages is permanently removed across all Zvirox Linux repositories. Release packages are locked to `.deb`, `.rpm`, and `.pkg.tar.zst` (`packaging/nfpm.yaml`) and verified automatically via clean CI containers (`ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest`) in `zvirox/release-workflows` plus `hardening.yml` maintainer-script smoke tests. The legacy checklist below is retained for historical reference only and does not gate any release.
+
+# VM matrix runbook — Phase 10 P10.4 (Archived)
 
 **Purpose:** produce the evidence required by PRD §11 DoD #1 and PLAN P10.4:
 Net Watch Pro installs, onboards, monitors, degrades and uninstalls correctly on

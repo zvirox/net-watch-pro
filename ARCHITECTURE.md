@@ -33,9 +33,9 @@
 | IPC transport | **Unix domain socket** | Peer-credential (`SO_PEERCRED`) UID allowlist; replaces loopback TCP + bearer token (D1a). No CORS/Origin/CSRF surface. |
 | Database | **SQLite (WAL)** | Single-file, zero-admin, durable local history at 90+ days; the most documented embedded DB that exists. |
 | DB access (daemon) | **sqlx (Rust)** | Compile-time-checked SQL with plain SQLite — no ORM magic, migrations built in. |
-| Distribution | **AUR + .deb repo + .rpm repo** | The package manager is the "hosting": users install/update with tools they already trust (PRD §6.1 #10). |
-| Hosting | **None (local-only product)** | Everything runs on-device per PRD non-goals; repos + offline-signed license keys replace any server dependency. |
-| CI | **GitHub Actions + Earthly-style recipes** | One build definition produces the Linux binaries + packages and runs the 3-distro test matrix on **VMs** (PRD DoD; containers share the host kernel — F-08). |
+| Distribution | **Locked `.deb` / `.rpm` / `.pkg.tar.zst` (`nfpm`)** | Released uniformly on GitHub Releases (`zvirox/release-workflows`) with `SHA256SUMS` (+ `.sig`); AUR, Flatpak, AppImage, and tarballs permanently retired. |
+| Hosting | **None (local-only product)** | Everything runs on-device per PRD non-goals; GitHub Releases + offline-signed license keys replace any server dependency. |
+| CI | **GitHub Actions + `nfpm` + Container Smoke** | Shared `zvirox/release-workflows` builds Linux binaries + packages and runs install/uninstall smoke tests on `ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, and `archlinux:latest` containers (VM release-package tests retired). |
 
 Explicitly **not** used (avoid over-engineering): Kubernetes/any server, GraphQL, gRPC (local WS + JSON is enough), Redis/queues (Tokio channels suffice), ORM entities, micro-frontends, Electron.
 
@@ -50,7 +50,7 @@ Explicitly **not** used (avoid over-engineering): Kubernetes/any server, GraphQL
 | UI process | Tauri 2 + React 19 | user | All screens per DESIGN.md §8; connects to daemon Unix socket; tray; no root ever |
 | SQLite DB | file (WAL) | root-owned | Connections history, usage rollups (hour/day/15m + endpoint-day), app registry, settings cache, schema migrations |
 | IPC socket | `/run/netwatch-pro/api.sock` | root-owned dir, socket `0660` owned by `netwatch` group | Peer-credential check vs allowed-UID list at `/etc/netwatch-pro/allowed-uids` (one numeric UID per line, root-owned `0644`); written by the one-time onboarding pkexec step, none per launch |
-| Packaging | PKGBUILD / deb / rpm + systemd unit | installer | Registers hardened unit (ProtectSystem, PrivateTmp, RestrictAddressFamilies), installs DB dir `/var/lib/netwatch-pro` |
+| Packaging | Unified `packaging/nfpm.yaml` (`.deb`, `.rpm`, `.pkg.tar.zst`) + systemd unit | installer | Registers hardened unit (ProtectSystem, PrivateTmp, RestrictAddressFamilies), installs DB dir `/var/lib/netwatch-pro` |
 
 ---
 

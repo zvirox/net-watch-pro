@@ -54,9 +54,7 @@ removed — `peer.rs` is the single authorization authority.
 
 ## Residual risk
 
-The distro matrix currently runs in CI **containers** (owner-approved deviation
-from PLAN P10.4). Containers cannot validate kernel/BPF variance; the real VM
-matrix (Arch/CachyOS, Ubuntu LTS, Fedora) remains pending and blocks DoD #1.
+The locked release packaging matrix runs in clean CI **containers** (`ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest` via `zvirox/release-workflows`). Containers share the host kernel and verify package installation, desktop entries, and removal cleanly; separate manual VM release-package test requirements are retired.
 
 ## Future privileged components
 

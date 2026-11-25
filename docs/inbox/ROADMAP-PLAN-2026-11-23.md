@@ -27,7 +27,7 @@ Estimates in this doc are planning figures for one developer plus agents, based 
 | G3 | `accuracy.py`, `perf_budget.py`, `soak.py` run with eBPF off on seeded data | New `tests/host/attribution.py` (needs root, eBPF on): iperf3 and curl of known size, compare per-app bytes and NIC counters. Keep the old tests, rename them `synthetic_*` | Report prints attributed % and unattributed %; CPU and RSS measured with the collector running | 3 days |
 | G4 | Upload undercount: NIC counts about 42 B/packet more than `cgroup_skb` (tx 57–66% attributed) | Spike first (below), then either correct in the daemon or show it openly in the UI. Record as decision D9 | tx attributed is within 5% of NIC on iperf3, or the UI states the known gap and the sum-check gate is rewritten | 2–3 days |
 | G5 | Plan §9 tests not run on host: #4 torrent/UDP, #6 restart recovery, #9 zero outbound with collector | Run on the CachyOS host, paste output into the spike report | Three results recorded as pass or fail with numbers | 1 day |
-| G6 | VM matrix (Q6) pending; only CachyOS proven | Run `docs/vm-matrix-runbook.md` on Ubuntu 24.04 LTS, Fedora (current), Debian stable. Arch/Cachy already done | Matrix table filled; any distro that fails has an issue and a README note | 3 days |
+| G6 | VM matrix (Q6) *(RETIRED)* | Replaced by CI clean-container smoke tests for locked `.deb`, `.rpm`, `.pkg.tar.zst` (`zvirox/release-workflows`) | Container smoke tests green | Retired |
 | G7 | Polkit helper ignores `usermod` and drop-in failures | Report each failed step with a clear message and non-zero exit; keep idempotence | Helper test with a read-only `/etc/systemd` shows an error, not silence | 0.5 day |
 | G8 | Key expiry never rechecked after activation | Not needed while NWP is free. Log in `docs/decisions.md` as a precondition for any paid tier | Entry exists | 15 min |
 
@@ -130,7 +130,7 @@ The first 14 days are repair work, the next two releases add what makes the data
 
 ### v0.9.3 "Trust" (target Dec 20, 2026)
 
-- Finish G4 (upload accounting), G6 (VM matrix), and the IPv6 flow spike result.
+- Finish G4 (upload accounting), locked `nfpm` container smoke verification (G6 VM test retired), and the IPv6 flow spike result.
 - Monitoring Health and Self-Diagnostics (catalogue 23): collector status, attach mode, permission problems, gaps, in plain language.
 - Data Attribution Transparency (23): a page explaining how bytes are measured and where totals can differ from the router or ISP.
 - Data Integrity Validation (22): a `check` command that verifies rollups against totals.
@@ -160,8 +160,8 @@ The first 14 days are repair work, the next two releases add what makes the data
 ### v1.0.0-rc.1 (target Apr 4) and v1.0.0 (target Apr 25, 2027)
 
 - Feature freeze at rc.1. Only fixes after that.
-- Packaging for Debian/Ubuntu (`.deb`), Fedora (`.rpm`) and Arch (PKGBUILD) with the eBPF object included, install and uninstall tested on clean VMs.
-- Refresh `docs/security-review.md`, rerun VM matrix, run a 14-day soak on your own machine with eBPF on, record CPU and RSS.
+- Packaging locked exclusively to `nfpm` (`packaging/nfpm.yaml`): Debian/Ubuntu (`.deb`), Fedora (`.rpm`), and Arch (`.pkg.tar.zst`) with the eBPF object included, install/uninstall verified in clean CI containers (`ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest`). *(AUR, Flatpak, AppImage, tarballs, and VM tests permanently retired.)*
+- Refresh `docs/security-review.md`, run maintainer-script hardening checks, run a 14-day soak on your own machine with eBPF on, record CPU and RSS.
 - Docs: user guide, known limits page, upgrade and migration notes from beta schema.
 - **v1.0 accept when:** the soak shows no data loss across daemon restarts, CPU and memory stay inside the perf budget measured with eBPF on, zero open P0 or P1 bugs, and every CHECKLIST line for Phases A–D and 10 is ticked with evidence.
 

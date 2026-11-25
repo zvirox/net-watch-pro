@@ -427,11 +427,11 @@ Upgrade modal: idle → validating (loading state on Activate) → success (moda
 ## 10. F10 — Updates & Packaging
 
 ### What & story
-AUR package, .deb + apt repo, .rpm + dnf repo; signed updates; clean uninstall with opt-in data retention (PRD §6.1 #10).
-Covers: *"As a user, I want to install once with a package manager and never think about permissions again"* (PRD §7).
-**Design note:** updates flow through package managers (repos), not an in-app updater — this preserves the zero-outbound promise (deliberate contrast to the REAPM.md reference app's in-app updater).
+Exclusively three native `nfpm` Linux packages (`.deb`, `.rpm`, `.pkg.tar.zst`) plus `SHA256SUMS` and `SHA256SUMS.sig` distributed via GitHub Releases; clean uninstall with opt-in data retention (PRD §6.1 #10).
+Covers: *"As a user, I want to install once with my system package tool and never think about permissions again"* (PRD §7).
+**Design note:** updates flow through GitHub Releases / native packages, not an in-app updater — this preserves the zero-outbound promise (deliberate contrast to the REAPM.md reference app's in-app updater).
 
-**Packaging decision (2026-11-18, PRD 1.2):** AUR remains the Arch/CachyOS path; Flatpak is deferred until after Phase 11 because it cannot ship the root systemd daemon (UI-only wrapper + separate host install would break one-command install).
+**Locked Packaging Policy:** Releases are permanently locked to `.deb`, `.rpm`, and `.pkg.tar.zst` (`nfpm` via `zvirox/release-workflows`). Flatpak, AppImage, tarballs, AUR packages, and hosted apt/dnf repos are retired and excluded from all future milestones.
 
 ### Screens & components
 - **Onboarding** (§8.2) reuse for post-update first-run notes; **About section** (F8): version (mono), licenses, no-telemetry statement.
@@ -442,11 +442,11 @@ Covers: *"As a user, I want to install once with a package manager and never thi
 - **API:** `GET /health` version line; diagnostics DB size/version.
 
 ### Build order
-1. Hardened unit + packages (mostly F6): .deb, .rpm, AUR `-git` (PLAN P8.1–P8.4)
-2. Repo signing + release workflow (P8.8)
-3. Stable repos + AUR `-`/`-bin` (P11.1)
-4. Upgrade path: package update → migration run → health re-check (P10.4 validates)
-5. Uninstall completeness test (P8.7)
+1. Hardened unit + locked `nfpm` manifest (`.deb`, `.rpm`, `.pkg.tar.zst`)
+2. GPG signing (`SHA256SUMS.sig`) + shared `zvirox/release-workflows`
+3. Container smoke tests (`ubuntu:22.04`, `ubuntu:24.04`, `fedora:latest`, `archlinux:latest`)
+4. Upgrade path: package update → migration run → health re-check (`hardening.yml`)
+5. Uninstall completeness test (`packaging/tests/test-uninstall.sh`)
 
 ### Edge cases & validation
 - **Version skew UI vs daemon:** UI shows "Updating…" honest state if `/health` version < UI expectation; refuse destructive ops on mismatch.
@@ -459,7 +459,7 @@ Covers: *"As a user, I want to install once with a package manager and never thi
 N/A for UI beyond About/onboarding captions; failure states live in F6's paths.
 
 ### Acceptance criteria
-- [ ] Clean-VM install via each channel → working app (all 3 distro families)
+- [ ] CI clean-container smoke tests pass for `.deb`, `.rpm`, and `.pkg.tar.zst` *(VM release-package tests retired)*
 - [ ] Package upgrade runs migrations forward-only; history intact
 - [ ] Uninstall removes all service files; data opt-in honored
 - [ ] Repos + artifacts signed; CI matrix green on all 3
