@@ -47,7 +47,7 @@ Exception: if the docs contradict each other, the priority order in §2 decides 
 
 ### 4.2 Reuse & Locked UI
 - **Reuse existing components before writing new ones.** Check `app/src/lib/components/linear/` and `app/src/lib/components/` first; a second button variant or a third table implementation is a bug.
-- **Linear UI Style Is Final & Locked (`DESIGN.md` v3.0):** All UI components must preserve the flat, opaque Linear design system (`app/src/tailwind.css` tokens, `1px` hairline borders, zero blur/translucency/glow/dark-shadow) and pass `npm --prefix app run check:linear` and `python3 tests/a11y/contrast.py`. Never inline hex values, raw font names, or magic spacing.
+- **Linear UI Style Is Final & Locked (`DESIGN.md` v3.1):** All UI components must preserve the shared flat Linear design system (`app/src/styles/linear-theme.css`, `app/src/styles/app-accent.css`, `app/src/tailwind.css`, `1px` hairline borders, zero blur/glow/dark-translucent surface fills, Royal blue primary `#346AFE`/`#2563EB`, sky `#2FADFF`/`#0284C7` positive, zero green/teal) and pass `npm --prefix app run check:linear` and `python3 tests/a11y/contrast.py`. Never inline hex values, raw font names, or magic spacing.
 - Shared types go in `netwatch-common`; never copy types between crates or between TS and Rust by hand-editing two sources (ARCHITECTURE.md §4).
 
 ### 4.3 Code quality

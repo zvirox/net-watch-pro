@@ -112,7 +112,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
                     onClick={handleMinimize}
                     aria-label="Minimize window"
                     title="Minimize"
-                    className="size-7 inline-flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-surface-2)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] cursor-pointer"
+                    className="size-7 inline-flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] cursor-pointer"
                 >
                     <Minus className="size-3.5" aria-hidden="true" />
                 </button>
@@ -122,7 +122,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
                     onClick={handleToggleMaximize}
                     aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
                     title={isMaximized ? 'Restore' : 'Maximize'}
-                    className="size-7 inline-flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-surface-2)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] cursor-pointer"
+                    className="size-7 inline-flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] cursor-pointer"
                 >
                     {isMaximized ? (
                         <Copy className="size-3" aria-hidden="true" />
@@ -136,7 +136,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
                     onClick={handleClose}
                     aria-label="Close window"
                     title="Close"
-                    className="size-7 inline-flex items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--close-hover)] hover:text-[var(--on-accent)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] cursor-pointer"
+                    className="size-7 inline-flex items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--close-hover)] hover:text-[var(--primary-fg)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] cursor-pointer"
                 >
                     <X className="size-3.5" aria-hidden="true" />
                 </button>

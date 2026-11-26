@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Check DESIGN.md §9.1 contrast pairs against the frozen Linear token values.
+"""Check WCAG 2.2 contrast pairs against linear-theme.css and app-accent.css.
 
-No dependencies: parses app/src/tailwind.css with the standard library
+No dependencies: parses the two frozen Linear token files with the standard library
 and computes WCAG 2.2 relative luminance. Run from the repo root:
 
     python3 tests/a11y/contrast.py
@@ -16,23 +16,33 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TOKENS = ROOT / "app" / "src" / "tailwind.css"
+THEME_CSS = ROOT / "app" / "src" / "styles" / "linear-theme.css"
+ACCENT_CSS = ROOT / "app" / "src" / "styles" / "app-accent.css"
 
 PAIRS: list[tuple[str, str, float]] = [
-    ("text", "bg-app", 12.0),
-    ("text", "bg-surface", 12.0),
+    ("text", "bg-surface", 4.5),
+    ("text-secondary", "bg-surface", 4.5),
     ("text-muted", "bg-surface", 4.5),
-    ("on-accent", "accent-blue", 4.5),
-    ("tint-blue-fg", "bg-surface", 4.5),
-    ("tint-blue-fg", "tint-blue", 4.5),
-    ("tint-green-fg", "bg-surface", 4.5),
-    ("tint-green-fg", "tint-green", 4.5),
-    ("tint-red-fg", "bg-surface", 4.5),
-    ("tint-red-fg", "tint-red", 4.5),
-    ("tint-amber-fg", "bg-surface", 4.5),
-    ("tint-amber-fg", "tint-amber", 4.5),
-    ("tint-sky-fg", "bg-surface", 4.5),
-    ("tint-teal-fg", "bg-surface", 4.5),
+    ("text-muted", "bg-surface-2", 4.5),
+    ("text-muted", "bg-active", 4.5),
+    ("text-faint", "bg-surface", 3.0),
+    ("text-faint", "bg-surface-2", 3.0),
+    ("sky-text", "bg-surface", 4.5),
+    ("sky-text", "chip-sky", 4.5),
+    ("red-text", "chip-red", 4.5),
+    ("sky", "bg-surface", 3.0),
+    ("amber", "bg-surface", 3.0),
+    ("pink", "bg-surface", 3.0),
+    ("purple", "bg-surface", 3.0),
+    ("orange", "bg-surface", 3.0),
+    ("red", "bg-surface", 3.0),
+    ("blue", "bg-surface", 3.0),
+    ("primary-fg", "primary", 4.5),
+    ("primary-fg", "primary-hover", 4.5),
+    ("primary", "bg-surface", 3.0),
+    ("primary-text", "bg-surface", 4.5),
+    ("primary-text", "bg-surface-2", 4.5),
+    ("primary-text", "primary-tint", 4.5),
 ]
 
 
@@ -57,11 +67,18 @@ def ratio(a: str, b: str) -> float:
 
 
 def main() -> int:
-    text = TOKENS.read_text(encoding="utf-8")
-    shared = parse_block(text, ":root {")
+    theme_text = THEME_CSS.read_text(encoding="utf-8")
+    accent_text = ACCENT_CSS.read_text(encoding="utf-8")
+
     themes = {
-        "dark": {**shared, **parse_block(text, "[data-theme='dark'],\n:root.dark {")},
-        "light": {**shared, **parse_block(text, "[data-theme='light'],\n:root.light {")},
+        "dark": {
+            **parse_block(theme_text, '[data-theme="dark"] {'),
+            **parse_block(accent_text, '[data-theme="dark"] {'),
+        },
+        "light": {
+            **parse_block(theme_text, ':root, [data-theme="light"] {'),
+            **parse_block(accent_text, ':root, [data-theme="light"] {'),
+        },
     }
     failures = 0
     for theme, tokens in themes.items():
@@ -80,7 +97,7 @@ def main() -> int:
             if not ok:
                 failures += 1
     if failures:
-        print(f"\n{failures} contrast pair(s) failed — DESIGN.md §9.1")
+        print(f"\n{failures} contrast pair(s) failed — COLOR-MIGRATION §8")
     return 1 if failures else 0
 
 

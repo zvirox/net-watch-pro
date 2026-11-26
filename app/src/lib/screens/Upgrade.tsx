@@ -52,7 +52,7 @@ export const Upgrade: React.FC = () => {
                         </p>
                     </div>
                     {error && (
-                        <p className="text-xs text-[var(--tint-red-fg)]" role="alert">
+                        <p className="text-xs text-[var(--red-text)]" role="alert">
                             {error}
                         </p>
                     )}
@@ -76,7 +76,7 @@ export const Upgrade: React.FC = () => {
                             'Extended local SQLite retention up to 365 days',
                         ].map((item) => (
                             <li key={item} className="flex items-center gap-2">
-                                <span className="size-4 rounded bg-[var(--tint-green)] text-[var(--tint-green-fg)] flex items-center justify-center shrink-0">
+                                <span className="size-4 rounded bg-[var(--chip-sky)] text-[var(--sky-text)] flex items-center justify-center shrink-0">
                                     <Check className="size-3" aria-hidden="true" />
                                 </span>
                                 <span>{item}</span>
@@ -96,7 +96,7 @@ export const Upgrade: React.FC = () => {
                             placeholder="NWP1-..."
                             autoComplete="off"
                             spellCheck={false}
-                            className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--accent-blue)]"
+                            className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--primary-text)]"
                         />
                         <span className="block text-[var(--text-muted)]">
                             Verified locally against the embedded Ed25519 public key.
@@ -104,7 +104,7 @@ export const Upgrade: React.FC = () => {
                     </label>
 
                     {error && (
-                        <p className="text-xs text-[var(--tint-red-fg)]" role="alert">
+                        <p className="text-xs text-[var(--red-text)]" role="alert">
                             {error}
                         </p>
                     )}

@@ -2,7 +2,7 @@ import React, { useId } from 'react';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { LinearCard } from './LinearCard';
 
-export type TintTone = 'blue' | 'sky' | 'green' | 'red' | 'amber' | 'teal' | 'purple' | 'orange';
+export type TintTone = 'blue' | 'sky' | 'red' | 'amber' | 'purple' | 'orange';
 
 export interface StatCardProps {
     title: string;
@@ -21,14 +21,12 @@ export interface StatCardProps {
 }
 
 const TONE_CLASSES: Record<TintTone, string> = {
-    blue: 'bg-[var(--tint-blue)] text-[var(--tint-blue-fg)]',
-    sky: 'bg-[var(--tint-sky)] text-[var(--tint-sky-fg)]',
-    green: 'bg-[var(--tint-green)] text-[var(--tint-green-fg)]',
-    red: 'bg-[var(--tint-red)] text-[var(--tint-red-fg)]',
-    amber: 'bg-[var(--tint-amber)] text-[var(--tint-amber-fg)]',
-    teal: 'bg-[var(--tint-teal)] text-[var(--tint-teal-fg)]',
-    purple: 'bg-[var(--tint-purple)] text-[var(--tint-purple-fg)]',
-    orange: 'bg-[var(--tint-orange)] text-[var(--tint-orange-fg)]',
+    blue: 'bg-[var(--primary-tint)] text-[var(--primary-text)]',
+    sky: 'bg-[var(--chip-sky)] text-[var(--sky-text)]',
+    red: 'bg-[var(--chip-red)] text-[var(--red-text)]',
+    amber: 'bg-[var(--bg-surface-2)] text-[var(--amber)] border border-[var(--border)]',
+    purple: 'bg-[var(--bg-surface-2)] text-[var(--purple)] border border-[var(--border)]',
+    orange: 'bg-[var(--bg-surface-2)] text-[var(--orange)] border border-[var(--border)]',
 };
 
 function buildSparklinePaths(points: number[]): { line: string; area: string } | null {
@@ -62,7 +60,9 @@ export const StatCard: React.FC<StatCardProps> = ({
 }) => {
     const gradId = useId();
     const paths = sparkline ? buildSparklinePaths(sparkline) : null;
-    const sparkStroke = sparklineDirection === 'down' ? 'var(--accent-red)' : 'var(--accent-green)';
+    const isDown = sparklineDirection === 'down';
+    const sparkStroke = isDown ? 'var(--red)' : 'var(--sky)';
+    const sparkFade = isDown ? 'var(--chart-fade-down)' : 'var(--chart-fade-up)';
 
     return (
         <LinearCard level={1} className={`p-5 flex flex-col justify-between ${className}`}>
@@ -100,7 +100,7 @@ export const StatCard: React.FC<StatCardProps> = ({
                     >
                         <defs>
                             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor={sparkStroke} stopOpacity={0.28} />
+                                <stop offset="0%" stopColor={sparkFade} stopOpacity={1} />
                                 <stop offset="100%" stopColor={sparkStroke} stopOpacity={0} />
                             </linearGradient>
                         </defs>
@@ -122,8 +122,8 @@ export const StatCard: React.FC<StatCardProps> = ({
                     <span
                         className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-medium tabular-nums shrink-0 ${
                             delta.positive
-                                ? 'bg-[var(--tint-green)] text-[var(--tint-green-fg)]'
-                                : 'bg-[var(--tint-red)] text-[var(--tint-red-fg)]'
+                                ? 'bg-[var(--chip-sky)] text-[var(--sky-text)]'
+                                : 'bg-[var(--chip-red)] text-[var(--red-text)]'
                         }`}
                     >
                         {delta.positive ? (

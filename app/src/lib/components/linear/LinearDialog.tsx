@@ -45,7 +45,7 @@ export const LinearDialog: React.FC<LinearDialogProps> = ({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-app)]"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--scrim)]"
             role="presentation"
             onClick={(e) => {
                 if (e.target === e.currentTarget) onClose();
@@ -57,7 +57,7 @@ export const LinearDialog: React.FC<LinearDialogProps> = ({
                 aria-modal="true"
                 aria-labelledby={titleId}
                 tabIndex={-1}
-                className={`w-full ${maxWidthClass} max-h-[85vh] flex flex-col rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] shadow-[var(--shadow-card)] dark:shadow-none overflow-hidden focus:outline-none`}
+                className={`w-full ${maxWidthClass} max-h-[85vh] flex flex-col rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] shadow-card overflow-hidden focus:outline-none`}
             >
                 <header className="px-5 py-4 border-b border-[var(--border)] flex items-start justify-between gap-4 shrink-0">
                     <div>
@@ -74,7 +74,7 @@ export const LinearDialog: React.FC<LinearDialogProps> = ({
                         type="button"
                         onClick={onClose}
                         aria-label="Close dialog"
-                        className="size-7 rounded-md inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-surface-2)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] cursor-pointer"
+                        className="size-7 rounded-md inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] cursor-pointer"
                     >
                         <X className="size-4" aria-hidden="true" />
                     </button>

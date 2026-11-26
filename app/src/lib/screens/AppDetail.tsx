@@ -147,7 +147,7 @@ export const AppDetail: React.FC = () => {
             header: 'Download',
             align: 'right',
             render: (r) => (
-                <span className="text-[var(--tint-blue-fg)] tabular-nums">
+                <span className="text-[var(--primary-text)] tabular-nums">
                     {formatBytes(r.bytes_down)}
                 </span>
             ),
@@ -157,7 +157,7 @@ export const AppDetail: React.FC = () => {
             header: 'Upload',
             align: 'right',
             render: (r) => (
-                <span className="text-[var(--tint-sky-fg)] tabular-nums">
+                <span className="text-[var(--sky-text)] tabular-nums">
                     {formatBytes(r.bytes_up)}
                 </span>
             ),
@@ -228,7 +228,7 @@ export const AppDetail: React.FC = () => {
                         <span>Apps</span>
                     </LinearButton>
 
-                    <span className="size-9 rounded bg-[var(--tint-blue)] text-[var(--tint-blue-fg)] font-semibold flex items-center justify-center shrink-0">
+                    <span className="size-9 rounded bg-[var(--primary-tint)] text-[var(--primary-text)] font-semibold flex items-center justify-center shrink-0">
                         {detail.name.charAt(0).toUpperCase()}
                     </span>
 
@@ -274,8 +274,8 @@ export const AppDetail: React.FC = () => {
                         onClick={() => setTab(item.id)}
                         className={`pb-2.5 text-[13px] font-medium border-b-2 transition-colors duration-150 cursor-pointer ${
                             tab === item.id
-                                ? 'border-[var(--accent-blue)] text-[var(--text)]'
-                                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'
+                                ? 'border-[var(--primary-text)] text-[var(--text)]'
+                                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                         }`}
                     >
                         {item.label}
@@ -289,7 +289,7 @@ export const AppDetail: React.FC = () => {
                         <StatCard
                             title="First seen"
                             value={formatDateTime(detail.first_seen_at)}
-                            tone="teal"
+                            tone="amber"
                         />
                         <StatCard
                             title="Last active"

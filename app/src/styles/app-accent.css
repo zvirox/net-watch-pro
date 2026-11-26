@@ -1,0 +1,15 @@
+/* src/styles/app-accent.css : Net Watch Pro (Royal blue). The only styling file that differs between apps. */
+:root, [data-theme="light"] {
+  --primary: #2563EB;
+  --primary-hover: #2157CF;
+  --primary-fg: #FFFFFF;
+  --primary-text: #2563EB;
+  --primary-tint: #F0F4FE;
+}
+[data-theme="dark"] {
+  --primary: #346AFE;
+  --primary-hover: #2E5DE0;
+  --primary-fg: #FFFFFF;
+  --primary-text: #6B9BFF;
+  --primary-tint: #1F273C;
+}

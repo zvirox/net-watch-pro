@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
 import {
-    LINEAR_COLORS,
-    LINEAR_SERIES_ORDER,
+    LINEAR_SERIES_TOKENS,
+    getCssToken,
+    getLinearSeriesOrder,
     getLinearTooltipConfig,
 } from './linear/echarts-linear-theme';
 import { DonutLegend, type DonutLegendItem } from './linear/DonutLegend';
@@ -36,20 +37,32 @@ export const AppUsageChart: React.FC<AppUsageChartProps> = ({
     useEffect(() => {
         const onTheme = () => setIsDark(detectDarkTheme());
         window.addEventListener('theme-changed', onTheme);
-        return () => window.removeEventListener('theme-changed', onTheme);
+        const observer =
+            typeof MutationObserver !== 'undefined'
+                ? new MutationObserver(() => setIsDark(detectDarkTheme()))
+                : null;
+        observer?.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-theme'],
+        });
+        return () => {
+            window.removeEventListener('theme-changed', onTheme);
+            observer?.disconnect();
+        };
     }, []);
 
     const computedTotal =
         totalBytes ?? slices.reduce((sum, slice) => sum + Math.max(0, slice.bytes), 0);
 
+    const legendCssVars = [...LINEAR_SERIES_TOKENS, '--gray'];
     const legendItems: DonutLegendItem[] = slices.map((slice, idx) => {
-        const color = LINEAR_SERIES_ORDER[idx % LINEAR_SERIES_ORDER.length] ?? LINEAR_COLORS.blue;
+        const token = legendCssVars[idx % legendCssVars.length] ?? '--primary';
         const pct = computedTotal > 0 ? Math.round((slice.bytes / computedTotal) * 100) : 0;
         return {
             label: slice.name,
             value: formatBytes(slice.bytes),
             subValue: `${pct}%`,
-            color,
+            color: `var(${token})`,
         };
     });
 
@@ -61,15 +74,16 @@ export const AppUsageChart: React.FC<AppUsageChartProps> = ({
             instanceRef.current = echarts.init(el);
         }
         const chart = instanceRef.current;
-        const tickColor = isDark ? LINEAR_COLORS.borderDark : LINEAR_COLORS.borderLight;
-        const textColor = isDark ? LINEAR_COLORS.textDark : LINEAR_COLORS.textLight;
-        const mutedColor = isDark ? LINEAR_COLORS.mutedDark : LINEAR_COLORS.mutedLight;
+        const tickColor = getCssToken('--bg-track');
+        const textColor = getCssToken('--text');
+        const mutedColor = getCssToken('--text-muted');
+        const palette = [...getLinearSeriesOrder(), getCssToken('--gray')];
 
         const option: echarts.EChartsCoreOption = {
             animation: false,
             backgroundColor: 'transparent',
             tooltip: {
-                ...getLinearTooltipConfig(isDark),
+                ...getLinearTooltipConfig(),
                 trigger: 'item',
                 formatter: (params: unknown) => {
                     const item = params as { name?: string; value?: number; percent?: number };
@@ -129,7 +143,7 @@ export const AppUsageChart: React.FC<AppUsageChartProps> = ({
                         },
                     },
                     labelLine: { show: false },
-                    color: [...LINEAR_SERIES_ORDER],
+                    color: palette,
                     data: slices.map((slice) => ({
                         name: slice.name,
                         value: slice.bytes,

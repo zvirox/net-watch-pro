@@ -90,7 +90,7 @@ export const Diagnostics: React.FC = () => {
             {diagnosticsError && (
                 <LinearCard
                     level={1}
-                    className="p-4 border-[var(--accent-red)] bg-[var(--tint-red)] flex items-center gap-2 text-xs text-[var(--tint-red-fg)]"
+                    className="p-4 border-[var(--red)] bg-[var(--chip-red)] flex items-center gap-2 text-xs text-[var(--red-text)]"
                     role="alert"
                 >
                     <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
@@ -176,18 +176,18 @@ export const Diagnostics: React.FC = () => {
                                 <span
                                     className={`px-1.5 py-0.5 rounded text-[11px] uppercase shrink-0 ${
                                         ev.level === 'error'
-                                            ? 'bg-[var(--tint-red)] text-[var(--tint-red-fg)]'
+                                            ? 'bg-[var(--chip-red)] text-[var(--red-text)]'
                                             : ev.level === 'warn'
-                                              ? 'bg-[var(--tint-amber)] text-[var(--tint-amber-fg)]'
-                                              : 'bg-[var(--tint-green)] text-[var(--tint-green-fg)]'
+                                              ? 'bg-[var(--bg-surface-2)] text-[var(--amber)] border border-[var(--border)]'
+                                              : 'bg-[var(--chip-sky)] text-[var(--sky-text)]'
                                     }`}
                                 >
                                     {ev.level}
                                 </span>
-                                <span className="text-[var(--tint-blue-fg)] shrink-0">
+                                <span className="text-[var(--primary-text)] shrink-0">
                                     {ev.code}
                                 </span>
-                                <span className="text-[var(--text)]">{ev.message}</span>
+                                <span className="text-[var(--text-secondary)]">{ev.message}</span>
                             </div>
                         ))
                     )}

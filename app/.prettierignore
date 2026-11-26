@@ -1,3 +1,6 @@
 # Build output and generated Tauri capability schemas are not source files.
 dist/
 src-tauri/gen/
+# Frozen byte-identical token files verified by check:linear
+src/styles/linear-theme.css
+src/styles/app-accent.css

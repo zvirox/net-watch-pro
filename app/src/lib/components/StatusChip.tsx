@@ -56,7 +56,7 @@ export const StatusChip: React.FC<StatusChipProps> = ({ className = '', onClick 
                 onClick={onClick}
                 title={tooltip}
                 aria-label={tooltip}
-                className={`w-full text-left rounded cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] ${className}`}
+                className={`w-full text-left rounded cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] ${className}`}
             >
                 <StatusPill
                     label={getLabel()}

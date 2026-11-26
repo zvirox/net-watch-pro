@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
 import {
-    LINEAR_COLORS,
+    getCssToken,
     getLinearEChartsOption,
     lineAreaGradient,
 } from './linear/echarts-linear-theme';
@@ -51,7 +51,18 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
     useEffect(() => {
         const onTheme = () => setIsDark(detectDarkTheme());
         window.addEventListener('theme-changed', onTheme);
-        return () => window.removeEventListener('theme-changed', onTheme);
+        const observer =
+            typeof MutationObserver !== 'undefined'
+                ? new MutationObserver(() => setIsDark(detectDarkTheme()))
+                : null;
+        observer?.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-theme'],
+        });
+        return () => {
+            window.removeEventListener('theme-changed', onTheme);
+            observer?.disconnect();
+        };
     }, []);
 
     useEffect(() => {
@@ -63,9 +74,12 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
         }
         const chart = instanceRef.current;
 
-        const base = getLinearEChartsOption(isDark);
+        const base = getLinearEChartsOption();
         const labels = data.map((d) => d.label);
-        const idleColor = isDark ? LINEAR_COLORS.idleDark : LINEAR_COLORS.idleLight;
+        const primaryColor = getCssToken('--primary');
+        const uploadColor = getCssToken('--orange');
+        const dotColor = getCssToken('--sky');
+        const idleColor = getCssToken('--bg-bar-idle');
         const highlightIdx =
             activeBarIndex !== undefined ? activeBarIndex : Math.max(0, data.length - 1);
 
@@ -77,9 +91,9 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
                           type: 'line',
                           smooth: false,
                           showSymbol: false,
-                          lineStyle: { width: 2, color: LINEAR_COLORS.blue },
-                          itemStyle: { color: LINEAR_COLORS.blue },
-                          areaStyle: { color: lineAreaGradient(LINEAR_COLORS.blue) },
+                          lineStyle: { width: 2, color: primaryColor },
+                          itemStyle: { color: primaryColor },
+                          areaStyle: { color: lineAreaGradient(primaryColor) },
                           data: data.map((d) => d.down),
                       },
                       {
@@ -87,9 +101,9 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
                           type: 'line',
                           smooth: false,
                           showSymbol: false,
-                          lineStyle: { width: 2, color: LINEAR_COLORS.sky },
-                          itemStyle: { color: LINEAR_COLORS.sky },
-                          areaStyle: { color: lineAreaGradient(LINEAR_COLORS.sky) },
+                          lineStyle: { width: 2, color: uploadColor },
+                          itemStyle: { color: uploadColor },
+                          areaStyle: { color: lineAreaGradient(uploadColor) },
                           data: data.map((d) => d.up),
                       },
                   ]
@@ -101,7 +115,7 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
                           data: data.map((d, idx) => ({
                               value: d.down,
                               itemStyle: {
-                                  color: idx === highlightIdx ? LINEAR_COLORS.blue : idleColor,
+                                  color: idx === highlightIdx ? primaryColor : idleColor,
                                   borderRadius: [4, 4, 0, 0],
                               },
                           })),
@@ -113,7 +127,7 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
                           data: data.map((d, idx) => ({
                               value: d.up,
                               itemStyle: {
-                                  color: idx === highlightIdx ? LINEAR_COLORS.sky : idleColor,
+                                  color: idx === highlightIdx ? uploadColor : idleColor,
                                   borderRadius: [4, 4, 0, 0],
                               },
                           })),
@@ -132,7 +146,7 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
                     const list = Array.isArray(params) ? params : [];
                     if (list.length === 0) return '';
                     const first = list[0] as { axisValueLabel?: string };
-                    const header = `<div style="font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;"><span style="width:6px;height:6px;border-radius:9999px;background:${LINEAR_COLORS.green};display:inline-block;"></span><span>${first.axisValueLabel ?? ''}</span></div>`;
+                    const header = `<div style="font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;"><span style="width:6px;height:6px;border-radius:9999px;background:${dotColor};display:inline-block;"></span><span>${first.axisValueLabel ?? ''}</span></div>`;
                     const rows = list
                         .map((entry) => {
                             const item = entry as {

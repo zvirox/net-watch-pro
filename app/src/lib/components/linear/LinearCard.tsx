@@ -11,7 +11,7 @@ export const LinearCard = forwardRef<HTMLDivElement, LinearCardProps>(
         return (
             <div
                 ref={ref}
-                className={`rounded-lg border border-[var(--border)] shadow-[var(--shadow-card)] dark:shadow-none transition-colors duration-150 ease-out text-[var(--text)] ${surfaceClass} ${className}`}
+                className={`rounded-lg border border-[var(--border)] shadow-card transition-colors duration-150 ease-out text-[var(--text)] ${surfaceClass} ${className}`}
                 {...props}
             >
                 {children}

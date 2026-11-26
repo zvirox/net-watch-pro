@@ -104,7 +104,7 @@ export const App: React.FC = () => {
                             rightSlot={
                                 demoMode ? (
                                     <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 rounded bg-[var(--tint-blue)] text-[var(--tint-blue-fg)] text-xs font-medium">
+                                        <span className="px-2 py-0.5 rounded bg-[var(--primary-tint)] text-[var(--primary-text)] text-xs font-medium">
                                             Demo mode
                                         </span>
                                         <LinearButton variant="ghost" size="sm" onClick={exitDemo}>
@@ -119,12 +119,12 @@ export const App: React.FC = () => {
                             <div className="px-5 pt-4 shrink-0">
                                 <LinearCard
                                     level={1}
-                                    className="px-4 py-3 border-[var(--accent-amber)] bg-[var(--tint-amber)] flex flex-wrap items-center justify-between gap-3"
+                                    className="px-4 py-3 border-[var(--amber)] bg-[var(--bg-surface-2)] flex flex-wrap items-center justify-between gap-3"
                                     role="alert"
                                 >
                                     <div className="flex items-center gap-2 text-xs text-[var(--text)]">
                                         <AlertTriangle
-                                            className="size-4 text-[var(--tint-amber-fg)] shrink-0"
+                                            className="size-4 text-[var(--amber)] shrink-0"
                                             aria-hidden="true"
                                         />
                                         <span>

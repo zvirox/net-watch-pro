@@ -114,7 +114,7 @@ export const Live: React.FC = () => {
             header: 'Down Rate',
             align: 'right',
             render: (row) => (
-                <span className="text-[var(--tint-blue-fg)] font-medium tabular-nums">
+                <span className="text-[var(--primary-text)] font-medium tabular-nums">
                     {formatRateText(row.rate_down_bps, speedUnit)}
                 </span>
             ),
@@ -124,7 +124,7 @@ export const Live: React.FC = () => {
             header: 'Up Rate',
             align: 'right',
             render: (row) => (
-                <span className="text-[var(--tint-sky-fg)] font-medium tabular-nums">
+                <span className="text-[var(--sky-text)] font-medium tabular-nums">
                     {formatRateText(row.rate_up_bps, speedUnit)}
                 </span>
             ),
@@ -155,7 +155,7 @@ export const Live: React.FC = () => {
                     <div>
                         <h1 className="text-sm font-semibold text-[var(--text)]">Live Bandwidth</h1>
                         <p className="text-xs text-[var(--text-muted)]">
-                            Real-time throughput stream (blue download, sky upload)
+                            Real-time throughput stream (blue download, orange upload)
                         </p>
                     </div>
                     <RangeTabs
@@ -177,13 +177,10 @@ export const Live: React.FC = () => {
             {collectorMissing && (
                 <LinearCard
                     level={1}
-                    className="px-4 py-3 border-[var(--accent-amber)] bg-[var(--tint-amber)] flex items-center gap-2 text-xs text-[var(--text)]"
+                    className="px-4 py-3 border-[var(--amber)] bg-[var(--bg-surface-2)] flex items-center gap-2 text-xs text-[var(--text)]"
                     role="status"
                 >
-                    <Info
-                        className="size-4 text-[var(--tint-amber-fg)] shrink-0"
-                        aria-hidden="true"
-                    />
+                    <Info className="size-4 text-[var(--amber)] shrink-0" aria-hidden="true" />
                     <span>
                         No eBPF collector attached ({ebpf}). Live per-connection rows are
                         unavailable until monitoring is active.
@@ -205,7 +202,7 @@ export const Live: React.FC = () => {
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Search app, IP, or host..."
                             aria-label="Filter active connections"
-                            className="w-full h-8 pl-8 pr-3 rounded-md bg-[var(--bg-surface)] border border-[var(--border-strong)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--accent-blue)]"
+                            className="w-full h-8 pl-8 pr-3 rounded-md bg-[var(--bg-surface)] border border-[var(--border-strong)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--primary-text)]"
                         />
                     </div>
 
@@ -213,7 +210,7 @@ export const Live: React.FC = () => {
                         aria-label="Filter by protocol"
                         value={protocol}
                         onChange={(e) => setProtocol(e.target.value as typeof protocol)}
-                        className="h-8 px-2.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border-strong)] text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent-blue)]"
+                        className="h-8 px-2.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border-strong)] text-xs text-[var(--text)] focus:outline-none focus:border-[var(--primary-text)]"
                     >
                         <option value="all">All protocols</option>
                         <option value="tcp">TCP</option>

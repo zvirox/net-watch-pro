@@ -5,8 +5,7 @@ import {
     LinearCard,
     ProgressRow,
     RangeTabs,
-    LINEAR_COLORS,
-    LINEAR_SERIES_ORDER,
+    LINEAR_SERIES_TOKENS,
     type DataTableColumn,
 } from '$lib/components/linear';
 import { useDaemonStore, type AppUsageRow, type RangePreset } from '$lib/stores/useDaemonStore';
@@ -36,7 +35,7 @@ function MiniRowSpark({ seed }: { seed: number }) {
             <path
                 d={`M ${pts}`}
                 fill="none"
-                stroke="var(--accent-green)"
+                stroke="var(--sky)"
                 strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -91,7 +90,7 @@ export const Apps: React.FC = () => {
                 return (
                     <div className="flex items-center gap-2.5">
                         <span
-                            className="size-7 rounded bg-[var(--tint-blue)] text-[var(--tint-blue-fg)] text-xs font-semibold flex items-center justify-center shrink-0"
+                            className="size-7 rounded bg-[var(--primary-tint)] text-[var(--primary-text)] text-xs font-semibold flex items-center justify-center shrink-0"
                             aria-hidden="true"
                         >
                             {initial}
@@ -116,7 +115,7 @@ export const Apps: React.FC = () => {
             header: 'Received',
             align: 'right',
             render: (row) => (
-                <span className="text-[var(--tint-blue-fg)] font-medium tabular-nums">
+                <span className="text-[var(--primary-text)] font-medium tabular-nums">
                     {formatBytes(row.usage.range.down)}
                 </span>
             ),
@@ -126,7 +125,7 @@ export const Apps: React.FC = () => {
             header: 'Sent',
             align: 'right',
             render: (row) => (
-                <span className="text-[var(--tint-sky-fg)] font-medium tabular-nums">
+                <span className="text-[var(--sky-text)] font-medium tabular-nums">
                     {formatBytes(row.usage.range.up)}
                 </span>
             ),
@@ -141,14 +140,14 @@ export const Apps: React.FC = () => {
                     totalRangeBytes > 0
                         ? Math.min(100, Math.max(0, (bytes / totalRangeBytes) * 100))
                         : 0;
-                const color =
-                    LINEAR_SERIES_ORDER[idx % LINEAR_SERIES_ORDER.length] ?? LINEAR_COLORS.blue;
+                const colorToken =
+                    LINEAR_SERIES_TOKENS[idx % LINEAR_SERIES_TOKENS.length] ?? '--primary';
                 return (
                     <ProgressRow
                         label=""
                         value={pct}
                         displayValue={`${Math.round(pct)}%`}
-                        colorVar={color}
+                        colorVar={`var(${colorToken})`}
                     />
                 );
             },
@@ -204,7 +203,7 @@ export const Apps: React.FC = () => {
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search apps..."
                         aria-label="Search applications"
-                        className="w-full h-8 pl-8 pr-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--accent-blue)]"
+                        className="w-full h-8 pl-8 pr-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--primary-text)]"
                     />
                 </div>
 

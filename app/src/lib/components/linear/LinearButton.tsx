@@ -21,17 +21,17 @@ export const LinearButton: React.FC<LinearButtonProps> = ({
 
     const variantStyles = {
         primary:
-            'bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)] active:bg-[var(--accent-blue-active)] text-[var(--on-accent)] font-medium border border-[var(--accent-blue)]',
+            'bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-fg)] font-medium border border-[var(--primary)]',
         secondary:
-            'bg-[var(--bg-surface-2)] hover:bg-[var(--bg-bar-idle)] text-[var(--text)] font-medium border border-[var(--border)] hover:border-[var(--border-strong)] shadow-[var(--shadow-card)] dark:shadow-none',
-        ghost: 'bg-transparent hover:bg-[var(--bg-surface-2)] text-[var(--text-muted)] hover:text-[var(--text)] font-medium border border-transparent',
-        danger: 'bg-[var(--tint-red)] hover:border-[var(--accent-red)] text-[var(--tint-red-fg)] font-medium border border-[var(--border-strong)]',
+            'bg-[var(--bg-surface-2)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text)] font-medium border border-[var(--border)] hover:border-[var(--border-strong)] shadow-card',
+        ghost: 'bg-transparent hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text)] font-medium border border-transparent',
+        danger: 'bg-[var(--chip-red)] hover:bg-[var(--red)] hover:text-[var(--primary-fg)] text-[var(--red-text)] font-medium border border-[var(--red)]',
     }[variant];
 
     return (
         <button
             type={type}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-md font-sans transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)] disabled:opacity-50 disabled:pointer-events-none cursor-pointer ${sizeStyles} ${variantStyles} ${className}`}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-md font-sans transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary-text)] disabled:opacity-50 disabled:pointer-events-none cursor-pointer ${sizeStyles} ${variantStyles} ${className}`}
             {...props}
         >
             {children}
