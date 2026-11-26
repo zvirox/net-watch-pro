@@ -10,6 +10,16 @@ Categories: Added / Changed / Fixed / Removed / Security.
 
 ## [Unreleased]
 
+## [v0.9.2-beta.7] — 2026-11-26
+
+### Changed
+- **Shared Linear Palette & Royal Blue Accent (`DESIGN.md` v3.1)**: Migrated all surfaces, borders, semantic chips, ECharts series, and modal backdrops to the shared Linear token sheet (`app/src/styles/linear-theme.css`, `#1C1C1C` dark charcoal / `#F8F9FA` light) paired with Net Watch Pro's Royal blue primary accent (`app/src/styles/app-accent.css`, `#346AFE` dark / `#2563EB` light).
+- **Zero Green/Teal & Dynamic Runtime Charts**: Replaced all green/teal tokens with `--sky` / `--sky-text` / `--chip-sky` across status indicators, set download/upload chart colors to `--primary` / `--orange`, ordered per-app chart series (`--primary`, `--sky`, `--amber`, `--pink`, `--gray`), enabled `.shadow-card` across dark and light cards, and wired `MutationObserver` on `data-theme` in ECharts components for live theme switching without hex literals.
+- **Automated Design & Contrast Gates**: Updated `app/scripts/check-linear.mjs` to enforce the frozen `linear-theme.css` checksum, Royal blue `app-accent.css`, green-hue (`75°–170°`) and retired/foreign-color bans, `.shadow-card` rule, and allowed alpha tokens; updated `tests/a11y/contrast.py` to verify all 23 WCAG 2.2 pairs in dark and light themes (`46/46` passing).
+
+### Documentation
+- Added pre-migration color inventory (`docs/color-audit.md`) and updated `DESIGN.md` (v3.1) and `AGENTS.md` palette rules.
+
 ## [v0.9.2-beta.6] — 2026-11-25
 
 ### Added / Changed

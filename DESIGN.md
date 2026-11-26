@@ -96,7 +96,7 @@ Automated verification: `python3 tests/a11y/contrast.py` validates all 23 WCAG 2
 Configured in `app/src-tauri/tauri.conf.json` and `app/src-tauri/capabilities/default.json`:
 
 - **Window Geometry:** `1280 x 800` default (16:10), `1024 x 640` minimum, `decorations: false`, `transparent: false`, `shadow: true`, `resizable: true`.
-- **Custom Title Bar (`app/src/lib/components/linear/TitleBar.tsx`):** `40px` (`h-10`), `data-tauri-drag-region`, displays `/logo.png` icon, `"Net Watch Pro"`, dynamic `__NWP_VERSION__` chip (`v0.9.2-beta.6`), `ThemeToggle`, and Minimize / Maximize-Restore / Close window buttons.
+- **Custom Title Bar (`app/src/lib/components/linear/TitleBar.tsx`):** `40px` (`h-10`), `data-tauri-drag-region`, displays `/logo.png` icon, `"Net Watch Pro"`, dynamic `__NWP_VERSION__` chip (`v0.9.2-beta.7`), `ThemeToggle`, and Minimize / Maximize-Restore / Close window buttons.
 - **Theme Switching (`ThemeToggle.tsx` & `app/index.html`):** Persists under `localStorage.getItem('ui-theme')`, pre-painted before hydration, placed strictly in the Title Bar.
 - **Collapsible Sidebar (`Sidebar.tsx`):** `240px` (`w-60`) expanded / `56px` (`w-14`) collapsed on `--bg-sidebar` with workspace indicator, 6 nav items, License button, `StatusChip`, and collapse toggle.
 - **Breadcrumb Bar (`BreadcrumbBar.tsx`):** `40px` (`h-10`), clickable route trail + Demo Mode indicator and exit button.
