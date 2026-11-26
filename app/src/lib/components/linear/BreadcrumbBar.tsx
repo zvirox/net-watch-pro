@@ -36,7 +36,7 @@ export const BreadcrumbBar: React.FC<BreadcrumbBarProps> = ({
                                 <button
                                     type="button"
                                     onClick={seg.onClick}
-                                    className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors duration-150 truncate cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] rounded px-1 -mx-1"
+                                    className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors duration-150 truncate cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] rounded px-1 -mx-1"
                                 >
                                     {seg.label}
                                 </button>

@@ -10,9 +10,9 @@ type SettingsTab = (typeof TABS)[number];
 const APP_VERSION = typeof __NWP_VERSION__ === 'string' ? `v${__NWP_VERSION__}` : 'v0.9.2-beta.5';
 
 function budgetColorVar(level: string): string {
-    if (level === 'breach' || level === 'critical') return 'var(--accent-red)';
-    if (level === 'warning') return 'var(--accent-amber)';
-    return 'var(--accent-green)';
+    if (level === 'breach' || level === 'critical') return 'var(--red)';
+    if (level === 'warning') return 'var(--amber)';
+    return 'var(--sky)';
 }
 
 export const Settings: React.FC = () => {
@@ -60,7 +60,7 @@ export const Settings: React.FC = () => {
                     </p>
                 </div>
                 {savedNote && (
-                    <span className="text-xs text-[var(--tint-green-fg)] font-medium" role="status">
+                    <span className="text-xs text-[var(--sky-text)] font-medium" role="status">
                         {savedNote}
                     </span>
                 )}
@@ -80,8 +80,8 @@ export const Settings: React.FC = () => {
                         onClick={() => setTab(t)}
                         className={`pb-2.5 text-[13px] font-medium border-b-2 transition-colors duration-150 cursor-pointer ${
                             tab === t
-                                ? 'border-[var(--accent-blue)] text-[var(--text)]'
-                                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'
+                                ? 'border-[var(--primary-text)] text-[var(--text)]'
+                                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                         }`}
                     >
                         {t}
@@ -92,7 +92,7 @@ export const Settings: React.FC = () => {
             {settingsError && (
                 <LinearCard
                     level={1}
-                    className="p-3 border-[var(--accent-red)] bg-[var(--tint-red)] text-xs text-[var(--tint-red-fg)]"
+                    className="p-3 border-[var(--red)] bg-[var(--chip-red)] text-xs text-[var(--red-text)]"
                     role="alert"
                 >
                     {settingsError}
@@ -180,7 +180,7 @@ export const Settings: React.FC = () => {
                                 onBlur={(e) =>
                                     void handleSave('retention_days', Number(e.target.value))
                                 }
-                                className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] tabular-nums focus:outline-none focus:border-[var(--accent-blue)]"
+                                className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] tabular-nums focus:outline-none focus:border-[var(--primary-text)]"
                             />
                             <span className="block text-[var(--text-muted)]">
                                 Free tier max 90 days; Pro allows up to 365 days.
@@ -199,7 +199,7 @@ export const Settings: React.FC = () => {
                                 onBlur={(e) =>
                                     void handleSave('billing_cycle_day', Number(e.target.value))
                                 }
-                                className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] tabular-nums focus:outline-none focus:border-[var(--accent-blue)]"
+                                className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] tabular-nums focus:outline-none focus:border-[var(--primary-text)]"
                             />
                         </label>
 
@@ -211,7 +211,7 @@ export const Settings: React.FC = () => {
                                 type="text"
                                 defaultValue={String(settingsMap.timezone ?? 'UTC')}
                                 onBlur={(e) => void handleSave('timezone', e.target.value)}
-                                className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent-blue)]"
+                                className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] focus:outline-none focus:border-[var(--primary-text)]"
                             />
                         </label>
                     </div>
@@ -239,7 +239,7 @@ export const Settings: React.FC = () => {
                                             Number(e.target.value),
                                         )
                                     }
-                                    className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] tabular-nums focus:outline-none focus:border-[var(--accent-blue)]"
+                                    className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] tabular-nums focus:outline-none focus:border-[var(--primary-text)]"
                                 />
                             </label>
                             <label className="space-y-1.5 text-xs">
@@ -256,7 +256,7 @@ export const Settings: React.FC = () => {
                                             Number(e.target.value),
                                         )
                                     }
-                                    className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] tabular-nums focus:outline-none focus:border-[var(--accent-blue)]"
+                                    className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] tabular-nums focus:outline-none focus:border-[var(--primary-text)]"
                                 />
                             </label>
                             <label className="space-y-1.5 text-xs">
@@ -271,7 +271,7 @@ export const Settings: React.FC = () => {
                                     onBlur={(e) =>
                                         void handleSave('budget_warn_pct', Number(e.target.value))
                                     }
-                                    className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] tabular-nums focus:outline-none focus:border-[var(--accent-blue)]"
+                                    className="w-full h-9 px-3 rounded-md bg-[var(--bg-surface-2)] border border-[var(--border-strong)] text-xs text-[var(--text)] tabular-nums focus:outline-none focus:border-[var(--primary-text)]"
                                 />
                             </label>
                         </div>

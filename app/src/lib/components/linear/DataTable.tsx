@@ -41,13 +41,13 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
     if (error) {
         return (
-            <LinearCard level={1} className="p-5 border-[var(--accent-red)] bg-[var(--tint-red)]">
+            <LinearCard level={1} className="p-5 border-[var(--red)] bg-[var(--chip-red)]">
                 <div className="flex items-center justify-between gap-4">
                     <div className="space-y-1">
-                        <h3 className="text-sm font-semibold text-[var(--tint-red-fg)]">
+                        <h3 className="text-sm font-semibold text-[var(--red-text)]">
                             Could not load data
                         </h3>
-                        <p className="text-xs text-[var(--text)]">{error}</p>
+                        <p className="text-xs text-[var(--text-secondary)]">{error}</p>
                     </div>
                     {onRetry && (
                         <LinearButton variant="secondary" size="sm" onClick={onRetry}>
@@ -117,9 +117,9 @@ export function DataTable<T>({
                                           }
                                         : undefined
                                 }
-                                className={`transition-colors duration-150 ease-out hover:bg-[var(--bg-surface-2)] ${
+                                className={`transition-colors duration-150 ease-out hover:bg-[var(--bg-hover)] ${
                                     onRowClick
-                                        ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--accent-blue)]'
+                                        ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--primary-text)]'
                                         : ''
                                 }`}
                             >

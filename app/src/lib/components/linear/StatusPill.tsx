@@ -8,10 +8,10 @@ export interface StatusPillProps {
 }
 
 const statusDotColor = {
-    online: 'bg-[var(--accent-green)]',
-    active: 'bg-[var(--accent-blue)]',
-    warning: 'bg-[var(--accent-amber)]',
-    alert: 'bg-[var(--accent-red)]',
+    online: 'bg-[var(--sky)]',
+    active: 'bg-[var(--primary)]',
+    warning: 'bg-[var(--amber)]',
+    alert: 'bg-[var(--red)]',
     idle: 'bg-[var(--text-faint)]',
 } as const;
 

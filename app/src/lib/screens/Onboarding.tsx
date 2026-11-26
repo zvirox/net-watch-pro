@@ -8,19 +8,19 @@ const INFO_CARDS = [
         title: 'What we collect',
         body: 'Connection timestamps, owning application, remote endpoints, and byte counters. Never packet payloads.',
         icon: Shield,
-        toneClass: 'bg-[var(--tint-blue)] text-[var(--tint-blue-fg)]',
+        toneClass: 'bg-[var(--primary-tint)] text-[var(--primary-text)]',
     },
     {
         title: 'Where it stays',
         body: 'A root-owned SQLite database on this machine. Zero cloud servers, zero telemetry, zero outbound calls.',
         icon: Database,
-        toneClass: 'bg-[var(--tint-teal)] text-[var(--tint-teal-fg)]',
+        toneClass: 'bg-[var(--chip-sky)] text-[var(--sky-text)]',
     },
     {
         title: 'How to remove it',
         body: 'Uninstall the native package anytime. System units and socket configs clean up cleanly.',
         icon: Trash2,
-        toneClass: 'bg-[var(--tint-amber)] text-[var(--tint-amber-fg)]',
+        toneClass: 'bg-[var(--bg-surface-2)] text-[var(--amber)] border border-[var(--border)]',
     },
 ];
 
@@ -72,14 +72,16 @@ export const Onboarding: React.FC = () => {
                 {enableError && (
                     <LinearCard
                         level={1}
-                        className="p-4 border-[var(--accent-red)] bg-[var(--tint-red)] text-left flex flex-wrap items-center justify-between gap-4"
+                        className="p-4 border-[var(--red)] bg-[var(--chip-red)] text-left flex flex-wrap items-center justify-between gap-4"
                         role="alert"
                     >
                         <div className="space-y-1">
-                            <strong className="text-xs font-semibold text-[var(--tint-red-fg)]">
+                            <strong className="text-xs font-semibold text-[var(--red-text)]">
                                 Monitoring could not be enabled
                             </strong>
-                            <p className="text-xs text-[var(--text)] font-mono">{enableError}</p>
+                            <p className="text-xs text-[var(--text-secondary)] font-mono">
+                                {enableError}
+                            </p>
                         </div>
                         <LinearButton
                             variant="secondary"

@@ -51,10 +51,10 @@ export const RangeTabs: React.FC<RangeTabsProps> = ({
                         aria-pressed={isActive}
                         onClick={() => onChange(tab.id)}
                         onKeyDown={(e) => handleKeyDown(e, idx)}
-                        className={`px-2.5 py-1 text-xs rounded font-medium transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] cursor-pointer ${
+                        className={`px-2.5 py-1 text-xs rounded font-medium transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] cursor-pointer ${
                             isActive
-                                ? 'bg-[var(--bg-surface)] text-[var(--text)] border border-[var(--border)] shadow-[var(--shadow-card)] dark:shadow-none'
-                                : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-bar-idle)] border border-transparent'
+                                ? 'bg-[var(--bg-active)] text-[var(--text)] border border-[var(--border-strong)] shadow-card'
+                                : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)] border border-transparent'
                         }`}
                     >
                         {tab.label}

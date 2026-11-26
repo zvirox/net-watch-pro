@@ -58,7 +58,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '', onTogg
             onClick={handleToggle}
             aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
             title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            className={`size-7 inline-flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-surface-2)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] cursor-pointer ${className}`}
+            className={`size-7 inline-flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] cursor-pointer ${className}`}
         >
             {theme === 'dark' ? (
                 <Sun className="size-3.5" aria-hidden="true" />

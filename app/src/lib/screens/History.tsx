@@ -154,7 +154,7 @@ export const History: React.FC = () => {
             header: 'Download',
             align: 'right',
             render: (row) => (
-                <span className="text-[var(--tint-blue-fg)] font-medium tabular-nums">
+                <span className="text-[var(--primary-text)] font-medium tabular-nums">
                     {formatBytes(row.bytes_down)}
                 </span>
             ),
@@ -164,7 +164,7 @@ export const History: React.FC = () => {
             header: 'Upload',
             align: 'right',
             render: (row) => (
-                <span className="text-[var(--tint-sky-fg)] font-medium tabular-nums">
+                <span className="text-[var(--sky-text)] font-medium tabular-nums">
                     {formatBytes(row.bytes_up)}
                 </span>
             ),
@@ -234,7 +234,7 @@ export const History: React.FC = () => {
                         onChange={(e) => setAppSearch(e.target.value)}
                         placeholder="Search by app name..."
                         aria-label="Search history by application"
-                        className="w-full h-8 pl-8 pr-3 rounded-md bg-[var(--bg-surface)] border border-[var(--border-strong)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--accent-blue)]"
+                        className="w-full h-8 pl-8 pr-3 rounded-md bg-[var(--bg-surface)] border border-[var(--border-strong)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--primary-text)]"
                     />
                 </div>
 
@@ -246,7 +246,7 @@ export const History: React.FC = () => {
                             onChange={(e) => setRemoteHost(e.target.value)}
                             placeholder="Remote host..."
                             aria-label="Filter by remote host"
-                            className="h-8 px-2.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border-strong)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--accent-blue)]"
+                            className="h-8 px-2.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border-strong)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--primary-text)]"
                         />
                         <input
                             type="text"
@@ -254,7 +254,7 @@ export const History: React.FC = () => {
                             onChange={(e) => setRemotePort(e.target.value)}
                             placeholder="Port"
                             aria-label="Filter by remote port"
-                            className="w-20 h-8 px-2.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border-strong)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--accent-blue)]"
+                            className="w-20 h-8 px-2.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border-strong)] text-xs text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-[var(--primary-text)]"
                         />
                         <select
                             value={protocol}

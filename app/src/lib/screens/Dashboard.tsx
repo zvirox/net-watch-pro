@@ -5,8 +5,7 @@ import {
     ProgressRow,
     RangeTabs,
     StatCard,
-    LINEAR_COLORS,
-    LINEAR_SERIES_ORDER,
+    LINEAR_SERIES_TOKENS,
 } from '$lib/components/linear';
 import { AppUsageChart, TrafficChart } from '$lib/components/charts';
 import { budgetsStore } from '$lib/stores/budgets';
@@ -29,9 +28,9 @@ function splitBytesValue(bytes: number): { value: string; unit: string } {
 }
 
 function budgetColorVar(level: string): string {
-    if (level === 'breach' || level === 'critical') return 'var(--accent-red)';
-    if (level === 'warning') return 'var(--accent-amber)';
-    return 'var(--accent-green)';
+    if (level === 'breach' || level === 'critical') return 'var(--red)';
+    if (level === 'warning') return 'var(--amber)';
+    return 'var(--sky)';
 }
 
 export const Dashboard: React.FC = () => {
@@ -119,13 +118,10 @@ export const Dashboard: React.FC = () => {
             {collectorMissing && (
                 <LinearCard
                     level={1}
-                    className="px-4 py-3 border-[var(--accent-amber)] bg-[var(--tint-amber)] flex items-center gap-2.5 text-xs text-[var(--text)]"
+                    className="px-4 py-3 border-[var(--amber)] bg-[var(--bg-surface-2)] flex items-center gap-2.5 text-xs text-[var(--text)]"
                     role="status"
                 >
-                    <Info
-                        className="size-4 text-[var(--tint-amber-fg)] shrink-0"
-                        aria-hidden="true"
-                    />
+                    <Info className="size-4 text-[var(--amber)] shrink-0" aria-hidden="true" />
                     <span>
                         eBPF collector is not attached ({ebpf}). Whole-PC speed and interface totals
                         continue via sysfs; per-app attribution is paused.
@@ -139,7 +135,7 @@ export const Dashboard: React.FC = () => {
                     title="Download rate"
                     value={liveDown.value}
                     unit={liveDown.unit}
-                    tone="green"
+                    tone="sky"
                     icon={<ArrowDown className="size-4" />}
                     sparkline={downSpark.length >= 2 ? downSpark : [0, 0]}
                     sparklineDirection="up"
@@ -157,7 +153,7 @@ export const Dashboard: React.FC = () => {
                     title="Upload rate"
                     value={liveUp.value}
                     unit={liveUp.unit}
-                    tone="sky"
+                    tone="orange"
                     icon={<ArrowUp className="size-4" />}
                     sparkline={upSpark.length >= 2 ? upSpark : [0, 0]}
                     sparklineDirection="up"
@@ -185,7 +181,7 @@ export const Dashboard: React.FC = () => {
                     title={`Used (${rangePreset})`}
                     value={totalSplit.value}
                     unit={totalSplit.unit}
-                    tone={attribPct >= 90 ? 'teal' : 'amber'}
+                    tone={attribPct >= 90 ? 'sky' : 'amber'}
                     icon={<Database className="size-4" />}
                     delta={{
                         value: formatBytes(rangeTotals.unattributed),
@@ -209,11 +205,11 @@ export const Dashboard: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
                             <span className="inline-flex items-center gap-1.5">
-                                <span className="size-2 rounded-full bg-[var(--accent-blue)]" />
+                                <span className="size-2 rounded-full bg-[var(--primary)]" />
                                 Download
                             </span>
                             <span className="inline-flex items-center gap-1.5">
-                                <span className="size-2 rounded-full bg-[var(--accent-sky)]" />
+                                <span className="size-2 rounded-full bg-[var(--orange)]" />
                                 Upload
                             </span>
                         </div>
@@ -274,21 +270,21 @@ export const Dashboard: React.FC = () => {
                             topApps.map((app, idx) => {
                                 const pct =
                                     topAppsMax > 0 ? (app.bytes_total / topAppsMax) * 100 : 0;
-                                const colorHex =
-                                    LINEAR_SERIES_ORDER[idx % LINEAR_SERIES_ORDER.length] ??
-                                    LINEAR_COLORS.blue;
+                                const colorToken =
+                                    LINEAR_SERIES_TOKENS[idx % LINEAR_SERIES_TOKENS.length] ??
+                                    '--primary';
                                 return (
                                     <button
                                         key={app.id}
                                         type="button"
                                         onClick={() => openAppDetail(app.id)}
-                                        className="w-full text-left rounded-md p-1.5 -mx-1.5 hover:bg-[var(--bg-surface-2)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] cursor-pointer"
+                                        className="w-full text-left rounded-md p-1.5 -mx-1.5 hover:bg-[var(--bg-hover)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] cursor-pointer"
                                     >
                                         <ProgressRow
                                             label={app.name}
                                             value={pct}
                                             displayValue={formatBytes(app.bytes_total)}
-                                            colorVar={colorHex}
+                                            colorVar={`var(${colorToken})`}
                                         />
                                     </button>
                                 );
@@ -333,7 +329,7 @@ export const Dashboard: React.FC = () => {
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <span className="size-6 rounded bg-[var(--bg-surface-2)] border border-[var(--border)] flex items-center justify-center shrink-0">
                                                     {iface.kind === 'wifi' ? (
-                                                        <Wifi className="size-3.5 text-[var(--accent-sky)]" />
+                                                        <Wifi className="size-3.5 text-[var(--sky)]" />
                                                     ) : (
                                                         <HardDrive className="size-3.5 text-[var(--text-muted)]" />
                                                     )}
@@ -344,7 +340,7 @@ export const Dashboard: React.FC = () => {
                                                             {iface.name}
                                                         </span>
                                                         {iface.is_metered && (
-                                                            <span className="px-1.5 py-0.5 rounded bg-[var(--tint-amber)] text-[var(--tint-amber-fg)] text-[11px]">
+                                                            <span className="px-1.5 py-0.5 rounded bg-[var(--bg-surface-2)] text-[var(--amber)] border border-[var(--border)] text-[11px]">
                                                                 Metered
                                                             </span>
                                                         )}

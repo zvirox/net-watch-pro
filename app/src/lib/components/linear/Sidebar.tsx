@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
         <aside
             aria-label="Primary navigation"
-            className={`border-r border-[var(--border)] bg-[var(--bg-app)] flex flex-col justify-between p-2 select-none shrink-0 transition-[width] duration-150 ease-out ${
+            className={`border-r border-[var(--border)] bg-[var(--bg-sidebar)] flex flex-col justify-between p-2 select-none shrink-0 transition-[width] duration-150 ease-out ${
                 collapsed ? 'w-14' : 'w-60'
             }`}
         >
@@ -65,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     title="Local host monitor"
                 >
                     <span
-                        className="size-5 rounded bg-[var(--tint-blue)] text-[var(--tint-blue-fg)] flex items-center justify-center shrink-0"
+                        className="size-5 rounded bg-[var(--primary-tint)] text-[var(--primary-text)] flex items-center justify-center shrink-0"
                         aria-hidden="true"
                     >
                         <Shield className="size-3.5" />
@@ -95,18 +95,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 aria-label={collapsed ? item.label : undefined}
                                 title={collapsed ? item.label : undefined}
                                 onClick={() => onSelectScreen(item.id)}
-                                className={`w-full h-9 flex items-center gap-2.5 rounded-md text-[13px] font-medium transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] cursor-pointer ${
+                                className={`w-full h-9 flex items-center gap-2.5 rounded-md text-[13px] font-medium transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] cursor-pointer ${
                                     collapsed ? 'justify-center px-0' : 'px-2.5'
                                 } ${
                                     isActive
-                                        ? 'bg-[var(--bg-surface-2)] text-[var(--text)] border border-[var(--border)]'
-                                        : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-surface-2)] border border-transparent'
+                                        ? 'bg-[var(--bg-active)] text-[var(--text)] border border-[var(--border)]'
+                                        : 'text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)] border border-transparent'
                                 }`}
                             >
                                 <Icon
                                     className={`size-4 shrink-0 ${
                                         isActive
-                                            ? 'text-[var(--accent-blue)]'
+                                            ? 'text-[var(--primary-text)]'
                                             : 'text-[var(--text-muted)]'
                                     }`}
                                 />
@@ -124,7 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onClick={onOpenUpgrade}
                     aria-label={collapsed ? (isPro ? 'Pro license' : 'License') : undefined}
                     title={collapsed ? (isPro ? 'Pro active' : 'Activate license') : undefined}
-                    className={`w-full h-9 flex items-center gap-2.5 rounded-md text-[13px] font-medium text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-surface-2)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] cursor-pointer ${
+                    className={`w-full h-9 flex items-center gap-2.5 rounded-md text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] cursor-pointer ${
                         collapsed ? 'justify-center px-0' : 'px-2.5 justify-between'
                     }`}
                 >
@@ -136,7 +136,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <span
                             className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${
                                 isPro
-                                    ? 'bg-[var(--tint-blue)] text-[var(--tint-blue-fg)]'
+                                    ? 'bg-[var(--primary-tint)] text-[var(--primary-text)]'
                                     : 'bg-[var(--bg-surface-2)] text-[var(--text-muted)] border border-[var(--border)]'
                             }`}
                         >
@@ -159,7 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onClick={onToggleCollapse}
                     aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                     title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                    className={`w-full h-8 flex items-center gap-2 rounded-md text-xs text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-surface-2)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)] cursor-pointer ${
+                    className={`w-full h-8 flex items-center gap-2 rounded-md text-xs text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[var(--primary-text)] cursor-pointer ${
                         collapsed ? 'justify-center px-0' : 'px-2.5 justify-between'
                     }`}
                 >
